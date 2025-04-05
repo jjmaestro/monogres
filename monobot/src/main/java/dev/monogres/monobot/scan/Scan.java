@@ -2,6 +2,7 @@ package dev.monogres.monobot.scan;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.monogres.monobot.config.Config;
+import dev.monogres.monobot.fetch.Fetch;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.io.IOException;
@@ -40,6 +41,6 @@ public class Scan {
 
   public void run() throws IOException {
     var path = Path.of(rootPath);
-    scanConfigPaths(path).forEach(this::parseComponentConfig);
+    scanConfigPaths(path).stream().map(this::parseComponentConfig).forEach(Fetch::fetch);
   }
 }
