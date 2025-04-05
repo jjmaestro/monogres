@@ -1,8 +1,10 @@
 package dev.monogres.monobot.main;
 
+import dev.monogres.monobot.scan.Scan;
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.QuarkusApplication;
 import io.quarkus.runtime.annotations.QuarkusMain;
+import jakarta.inject.Inject;
 
 @QuarkusMain
 public class Main {
@@ -11,9 +13,11 @@ public class Main {
   }
 
   public static class MyApp implements QuarkusApplication {
+    @Inject Scan scan;
+
     @Override
     public int run(String... args) throws Exception {
-      System.out.println("Do startup logic here");
+      scan.run();
       Quarkus.waitForExit();
       return 0;
     }
