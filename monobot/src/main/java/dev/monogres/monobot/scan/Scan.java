@@ -1,6 +1,9 @@
 package dev.monogres.monobot.scan;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.monogres.monobot.config.Config;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import java.io.IOException;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
@@ -16,6 +19,8 @@ public class Scan {
   @ConfigProperty(name = "rootPath")
   String rootPath;
 
+  @Inject ObjectMapper objectMapper;
+
   private List<Path> scanConfigPaths(Path root) throws IOException {
     try (var filesStream =
         Files.walk(root, FileVisitOption.FOLLOW_LINKS)
@@ -25,8 +30,16 @@ public class Scan {
     }
   }
 
+  private Config parseComponentConfig(Path componentPath) {
+    try {
+      return objectMapper.readValue(componentPath.toFile(), Config.class);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   public void run() throws IOException {
     var path = Path.of(rootPath);
-    scanConfigPaths(path).forEach(System.out::println);
+    scanConfigPaths(path).forEach(this::parseComponentConfig);
   }
 }
