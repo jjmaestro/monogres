@@ -1,5 +1,5 @@
 package dev.monogres.monobot.config.output;
 
-import java.util.HashMap;
+import java.util.TreeMap;
 
-public class VersionContext extends HashMap<String, VersionContextVariable> {}
+public class VersionContext extends TreeMap<String, VersionContextVariable> {}

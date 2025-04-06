@@ -1,0 +1,57 @@
+package dev.monogres.monobot.fetch;
+
+import dev.monogres.monobot.digest.DigestUtils;
+import io.vertx.core.Vertx;
+import io.vertx.core.file.AsyncFile;
+import io.vertx.core.file.OpenOptions;
+import io.vertx.ext.web.client.WebClient;
+import io.vertx.ext.web.codec.BodyCodec;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import java.io.IOException;
+import java.net.URL;
+import java.nio.channels.FileChannel;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import org.jboss.logging.Logger;
+
+@ApplicationScoped
+public class SourceArchive {
+  private static final Logger LOG = Logger.getLogger(SourceArchive.class);
+
+  @Inject Vertx vertx;
+
+  @Inject WebClient webClient;
+
+  private AsyncFile writableAsyncFile(Path path) {
+    return vertx.fileSystem().openBlocking(path.toString(), new OpenOptions());
+  }
+
+  private void downloadFile(URL url, Path path) {
+    var writeStream = writableAsyncFile(path);
+
+    webClient
+        .get(
+            "https".equals(url.getProtocol()) ? 443 : 80,
+            url.getHost(),
+            null == url.getQuery() ? url.getPath() : url.getPath() + "?" + url.getQuery())
+        .ssl(true)
+        .as(BodyCodec.pipe(writeStream))
+        .send()
+        .onSuccess(res -> LOG.infov("Successfully downloaded {0}", url))
+        .onFailure(err -> LOG.warnv(err, "Failure downloading {0}", url));
+  }
+
+  public String sha256UrlFile(URL url, Path downloadPath) {
+    downloadFile(url, downloadPath);
+
+    try (var fc = FileChannel.open(downloadPath, StandardOpenOption.READ)) {
+      var buffer = fc.map(FileChannel.MapMode.READ_ONLY, 0L, fc.size());
+
+      return DigestUtils.sha256sum(buffer);
+    } catch (IOException e) {
+      LOG.warnv("I/O error while computing digest of {0}", downloadPath.toString());
+      throw new RuntimeException(e);
+    }
+  }
+}

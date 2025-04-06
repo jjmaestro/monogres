@@ -2,6 +2,7 @@ package dev.monogres.monobot.scan;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.monogres.monobot.config.input.RepoBotConfig;
+import dev.monogres.monobot.config.input.RepoBotConfigFile;
 import dev.monogres.monobot.fetch.Fetch;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -22,6 +23,8 @@ public class Scan {
 
   @Inject ObjectMapper objectMapper;
 
+  @Inject Fetch fetch;
+
   private List<Path> scanConfigPaths(Path root) throws IOException {
     try (var filesStream =
         Files.walk(root, FileVisitOption.FOLLOW_LINKS)
@@ -41,6 +44,8 @@ public class Scan {
 
   public void run() throws IOException {
     var path = Path.of(rootPath);
-    scanConfigPaths(path).stream().map(this::parseComponentConfig).forEach(Fetch::fetch);
+    scanConfigPaths(path).stream()
+        .map(p -> new RepoBotConfigFile(parseComponentConfig(p), p))
+        .forEach(fetch::fetch);
   }
 }

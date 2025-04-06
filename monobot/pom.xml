@@ -46,9 +46,19 @@
             <artifactId>quarkus-jackson</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-vertx</artifactId>
+        </dependency>
+
+        <dependency>
             <groupId>io.quarkiverse.jgit</groupId>
             <artifactId>quarkus-jgit</artifactId>
             <version>3.3.3</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-web-client</artifactId>
         </dependency>
 
         <dependency>
