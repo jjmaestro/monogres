@@ -1,0 +1,70 @@
+package dev.monogres.monobot.git;
+
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URL;
+import java.text.MessageFormat;
+
+public class GithubRepo extends AbstractOrgNameRepo {
+  private static String parseUrlItem(URL url, int item) {
+    var paths = url.getPath().replaceFirst("^/", "").split("/");
+    if (paths.length != 2) {
+      throw new IllegalArgumentException("Invalid repo URL " + url);
+    }
+
+    return paths[item];
+  }
+
+  private static String parseOrganization(URL url) {
+    return parseUrlItem(url, 0);
+  }
+
+  private static String parseName(URL url) {
+    return parseUrlItem(url, 1);
+  }
+
+  public GithubRepo(URL url) {
+    super(url, parseOrganization(url), parseName(url));
+  }
+
+  @Override
+  public ForgeType getForgeType() {
+    return ForgeType.GITHUB;
+  }
+
+  /**
+   * Github supports multiple URLs to download archives. You could be tempted to use the "public"
+   * URLs used in the Releases but those are "by tag" and tags can be changed to point to different
+   * commits. Github itself recommends:
+   *
+   * <blockquote>
+   * If you rely on stable archives only for reproducibility (ensuring you always get identical
+   * files inside your archive), then we recommend you download source archives using the source
+   * archives REST API with a commit ID for the :ref parameter.
+   * </blockquote>
+   *
+   * <p>For more info, check this links:
+   *
+   * <p>Update on the future stability of source code archives and hashes:
+   * https://github.blog/open-source/git/update-on-the-future-stability-of-source-code-archives-and-hashes/
+   *
+   * <p>GH REST API-Download a repository archive(tar):
+   * https://docs.github.com/en/rest/repos/contents?apiVersion=2022-11-28#download-a-repository-archive-tar
+   *
+   * <p>So, we will use the REST URL and we will use the commit id from the tag. If the commit
+   * changes, the SHA256 will change and we will see a failure that should be investigated.
+   */
+  @Override
+  public URL getArchiveUrl(GitTag gitTag) {
+    var uri = URI.create("https://" + getForgeType().getApiDomain());
+    var path =
+        MessageFormat.format(
+            "repos/{0}/{1}/tarball/{2}", getOrganization(), getName(), gitTag.commit().name());
+
+    try {
+      return uri.resolve(path).toURL();
+    } catch (MalformedURLException e) {
+      throw new RuntimeException(e);
+    }
+  }
+}

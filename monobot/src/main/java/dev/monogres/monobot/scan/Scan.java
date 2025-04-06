@@ -1,7 +1,7 @@
 package dev.monogres.monobot.scan;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.monogres.monobot.config.Config;
+import dev.monogres.monobot.config.input.RepoBotConfig;
 import dev.monogres.monobot.fetch.Fetch;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -31,9 +31,9 @@ public class Scan {
     }
   }
 
-  private Config parseComponentConfig(Path componentPath) {
+  private RepoBotConfig parseComponentConfig(Path componentPath) {
     try {
-      return objectMapper.readValue(componentPath.toFile(), Config.class);
+      return objectMapper.readValue(componentPath.toFile(), RepoBotConfig.class);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

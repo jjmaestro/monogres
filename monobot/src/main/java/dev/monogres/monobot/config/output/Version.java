@@ -1,4 +1,4 @@
-package dev.monogres.monobot.config;
+package dev.monogres.monobot.config.output;
 
 import com.fasterxml.jackson.annotation.JsonValue;
 
