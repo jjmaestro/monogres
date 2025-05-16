@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "name": "sslutils",
+  "vcs": "git",
+  "git": {
+    "url": "https://github.com/EnterpriseDB/sslutils"
+  }
+}

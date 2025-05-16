@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "name": "noset",
+  "vcs": "git",
+  "git": {
+    "url": "https://gitlab.com/ongresinc/extensions/noset"
+  }
+}
