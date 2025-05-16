@@ -1,35 +1,43 @@
 package dev.monogres.monobot.config.output;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.monogres.monobot.config.Metadata;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.SortedMap;
-import java.util.TreeMap;
 
 public class RepoConfig {
   private static final String FILENAME = "repo.json";
 
-  private final Version version;
-  private final SortedMap<String, VersionContext> versions;
+  @JsonProperty("version")
+  private final RepoConfigVersion repoConfigVersion;
 
-  public RepoConfig(Version version, SortedMap<String, VersionContext> versions) {
-    this.version = version;
+  private final Sources sources;
+  private final Versions versions;
+  private final Metadata metadata;
+
+  public RepoConfig(
+      RepoConfigVersion repoConfigVersion, Sources sources, Versions versions, Metadata metadata) {
+    this.repoConfigVersion = repoConfigVersion;
+    this.sources = sources;
     this.versions = versions;
+    this.metadata = metadata;
   }
 
-  public RepoConfig(SortedMap<String, VersionContext> versions) {
-    this(Version.V1, versions);
+  public RepoConfig(Sources sources, Versions versions, Metadata metadata) {
+    this(RepoConfigVersion.V1, sources, versions, metadata);
   }
 
   public RepoConfig() {
-    this(Version.V1, new TreeMap<>());
+    this(RepoConfigVersion.V1, new Sources(), new Versions(), new Metadata());
   }
 
-  public Version getVersion() {
-    return version;
+  public RepoConfigVersion getVersion() {
+    return repoConfigVersion;
   }
 
-  public SortedMap<String, VersionContext> getVersions() {
+  public SortedMap<Version, VersionContext> getVersions() {
     return versions;
   }
 

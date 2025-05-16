@@ -19,6 +19,9 @@ public class Main {
     public int run(String... args) throws Exception {
       scan.run();
 
+      // TODO: scan.run() will eventually call Vertx on a separate thread, and we should wait for it
+      // to finish
+
       return 0;
     }
   }

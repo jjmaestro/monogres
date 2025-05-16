@@ -1,10 +1,10 @@
 package dev.monogres.monobot.fetch;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.monogres.monobot.config.input.RepoBotConfigFile;
+import dev.monogres.monobot.config.input.MonobotConfigFile;
 import dev.monogres.monobot.config.output.RepoConfig;
+import dev.monogres.monobot.config.output.Version;
 import dev.monogres.monobot.config.output.VersionContext;
-import dev.monogres.monobot.config.output.VersionContextVariable;
 import dev.monogres.monobot.git.ForgeType;
 import dev.monogres.monobot.git.GitTag;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -42,8 +42,8 @@ public class Fetch {
         .toArray(GitTag[]::new);
   }
 
-  public void fetch(RepoBotConfigFile repoBotConfigFile) {
-    var repoBotConfig = repoBotConfigFile.repoBotConfig();
+  public void fetch(MonobotConfigFile monobotConfigFile) {
+    var repoBotConfig = monobotConfigFile.monobotConfig();
     var repoUrl = repoBotConfig.git().url();
     var forgeType = ForgeType.getByRepoUrl(repoUrl);
 
@@ -51,8 +51,7 @@ public class Fetch {
       var repoConfig = new RepoConfig();
 
       for (var tag : getTags(repoUrl)) {
-        var version = tag.name(); // TODO: version should not be tag name
-        var versionContext = new VersionContext();
+        var version = new Version(tag.name());
 
         var repo = forgeType.newRepo(repoUrl);
         var sha256 =
@@ -61,14 +60,12 @@ public class Fetch {
                 Path.of(
                     workdir, DIR_ARCHIVES, repoBotConfig.name(), tag.commit().name() + ".tar.gz"));
 
-        var versionContextVariable = new VersionContextVariable();
-        versionContextVariable.put(forgeType.getDomain(), sha256);
-        versionContext.put("sha256", versionContextVariable);
+        var versionContext = new VersionContext(tag, sha256);
 
         repoConfig.getVersions().put(version, versionContext);
       }
 
-      repoConfig.writeRepoConfig(repoBotConfigFile.configFile().getParent(), objectMapper);
+      repoConfig.writeRepoConfig(monobotConfigFile.configFile().getParent(), objectMapper);
     } catch (GitAPIException e) {
       LOG.warnv(
           "[{0}]: Error while fetching metadata from repo {1}",
