@@ -21,6 +21,8 @@ import org.jboss.logging.Logger;
 public class Fetch {
   private static final Logger LOG = Logger.getLogger(Fetch.class);
 
+  private static final String DIR_ARCHIVES = "archives";
+
   @ConfigProperty(name = "workdir")
   String workdir;
 
@@ -57,7 +59,7 @@ public class Fetch {
             sourceArchive.sha256UrlFile(
                 repo.getArchiveUrl(tag),
                 Path.of(
-                    workdir, "archives", repoBotConfig.name(), tag.commit().name() + ".tar.gz"));
+                    workdir, DIR_ARCHIVES, repoBotConfig.name(), tag.commit().name() + ".tar.gz"));
 
         var versionContextVariable = new VersionContextVariable();
         versionContextVariable.put(forgeType.getDomain(), sha256);

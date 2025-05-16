@@ -11,6 +11,7 @@ import jakarta.inject.Inject;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.channels.FileChannel;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import org.jboss.logging.Logger;
@@ -23,8 +24,19 @@ public class SourceArchive {
 
   @Inject WebClient webClient;
 
+  private void createDownloadDir(Path path) {
+    var downloadDir = path.getParent();
+    try {
+      Files.createDirectories(downloadDir);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   private AsyncFile writableAsyncFile(Path path) {
-    return vertx.fileSystem().openBlocking(path.toString(), new OpenOptions());
+    createDownloadDir(path);
+
+    return vertx.fileSystem().openBlocking(path.toString(), new OpenOptions().setCreate(true));
   }
 
   private void downloadFile(URL url, Path path) {
