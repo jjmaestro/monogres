@@ -9,6 +9,7 @@ import dev.monogres.monobot.git.ForgeType;
 import dev.monogres.monobot.git.GitTag;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.util.Collections;
@@ -22,6 +23,7 @@ public class Fetch {
   private static final Logger LOG = Logger.getLogger(Fetch.class);
 
   private static final String DIR_ARCHIVES = "archives";
+  private static final String FILENAME_VERSIONS_JSON = "versions.json";
 
   @ConfigProperty(name = "workdir")
   String workdir;
@@ -49,10 +51,9 @@ public class Fetch {
 
     try {
       var repoConfig = new RepoConfig();
+      var versions = repoConfig.getVersions();
 
       for (var tag : getTags(repoUrl)) {
-        var version = new Version(tag.name());
-
         var repo = forgeType.newRepo(repoUrl);
         var sha256 =
             sourceArchive.sha256UrlFile(
@@ -60,16 +61,23 @@ public class Fetch {
                 Path.of(
                     workdir, DIR_ARCHIVES, repoBotConfig.name(), tag.commit().name() + ".tar.gz"));
 
-        var versionContext = new VersionContext(tag, sha256);
-
-        repoConfig.getVersions().put(version, versionContext);
+        versions.put(new Version(tag.name()), new VersionContext(tag, sha256));
       }
 
-      repoConfig.writeRepoConfig(monobotConfigFile.configFile().getParent(), objectMapper);
+      var configDir = monobotConfigFile.configFile().getParent();
+      writeConfigFile(configDir, FILENAME_VERSIONS_JSON, versions);
     } catch (GitAPIException e) {
       LOG.warnv(
           "[{0}]: Error while fetching metadata from repo {1}",
           repoBotConfig.name(), repoBotConfig.git().url());
+    }
+  }
+
+  public void writeConfigFile(Path configDir, String filename, Object object) {
+    try {
+      objectMapper.writeValue(configDir.resolve(filename).toFile(), object);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
     }
   }
 }

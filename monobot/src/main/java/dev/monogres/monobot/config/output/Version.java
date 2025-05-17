@@ -14,12 +14,18 @@ public record Version(String tag) implements Comparable<Version> {
     return normalizeFromTag(tag);
   }
 
-  @Override
-  public int compareTo(Version o) {
+  // We want versions to be ordered in reverse order
+  // TODO: implement semantic versioning ordering instead of alphabetical
+  private int reverseCompareTo(Version o) {
     if (o == null) {
       return 1;
     }
 
     return tag.compareTo(o.tag());
+  }
+
+  @Override
+  public int compareTo(Version o) {
+    return -reverseCompareTo(o);
   }
 }

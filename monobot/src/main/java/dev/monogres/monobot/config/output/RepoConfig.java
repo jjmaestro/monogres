@@ -1,15 +1,10 @@
 package dev.monogres.monobot.config.output;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.monogres.monobot.config.Metadata;
-import java.io.IOException;
-import java.nio.file.Path;
 import java.util.SortedMap;
 
 public class RepoConfig {
-  private static final String FILENAME = "repo.json";
-
   @JsonProperty("version")
   private final RepoConfigVersion repoConfigVersion;
 
@@ -39,17 +34,5 @@ public class RepoConfig {
 
   public SortedMap<Version, VersionContext> getVersions() {
     return versions;
-  }
-
-  public void writeRepoConfig(Path configDir, ObjectMapper objectMapper) {
-    try {
-      // TODO: we want the keys to be serialized in the order they are given
-      // .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS) should help, but it isn't
-      objectMapper
-          .writerWithDefaultPrettyPrinter()
-          .writeValue(configDir.resolve(FILENAME).toFile(), this);
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
   }
 }
