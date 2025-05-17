@@ -1,11 +1,5 @@
 package dev.monogres.monobot.config;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.TreeMap;
 
-public record Metadata(@JsonProperty("compatible_with") Map<String, String> compatibleWith) {
-  public Metadata() {
-    this(new HashMap<>());
-  }
-}
+public class Metadata extends TreeMap<String, MetadataContext> {}

@@ -38,4 +38,8 @@ public class RepoConfig {
   public Sources getSources() {
     return sources;
   }
+
+  public Metadata getMetadata() {
+    return metadata;
+  }
 }

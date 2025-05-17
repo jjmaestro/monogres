@@ -36,9 +36,9 @@ public class Fetch {
 
   @Inject ObjectMapper objectMapper;
 
-  private void fetchAndPopulate(MonobotConfig monobotConfig, Repo repo, Versions storedVersions) {
+  private void fetchVersionsByTag(MonobotConfig monobotConfig, Repo repo, Versions storedVersions) {
     try {
-      for (var tag : GitTag.getTags(monobotConfig.git().url())) {
+      for (var tag : GitTag.getTags(monobotConfig.repoUrl())) {
         var version = new Version(tag.name());
         if (storedVersions.containsKey(version)) {
           continue;
@@ -54,7 +54,7 @@ public class Fetch {
     } catch (GitAPIException e) {
       LOG.warnv(
           "[{0}]: Error while fetching metadata from repo {1}",
-          monobotConfig.name(), monobotConfig.git().url());
+          monobotConfig.name(), monobotConfig.repoUrl());
     }
   }
 
@@ -64,16 +64,17 @@ public class Fetch {
     var configDir = monobotConfigFile.configFile().getParent();
     var storedVersions = readVersionsFromConfigFile(configDir);
 
-    var repoUrl = monobotConfig.git().url();
+    var repoUrl = monobotConfig.repoUrl();
     var repo = ForgeType.getByRepoUrl(repoUrl).newRepo(repoUrl);
-    fetchAndPopulate(monobotConfig, repo, storedVersions);
+    fetchVersionsByTag(monobotConfig, repo, storedVersions);
 
     writeConfigFile(configDir, FILENAME_VERSIONS_JSON, storedVersions);
 
     var sources = new Sources();
     var sourcesContext = new SourceContext(repo.getArchiveUrlRaw("{commit}"));
     sources.put(repo.getForgeType().getDomain(), sourcesContext);
-    var repoConfig = new RepoConfig(sources, storedVersions, null);
+    var metadata = monobotConfig.metadata();
+    var repoConfig = new RepoConfig(sources, storedVersions, metadata);
     writeConfigFile(configDir, FILENAME_REPO_JSON, repoConfig);
   }
 
