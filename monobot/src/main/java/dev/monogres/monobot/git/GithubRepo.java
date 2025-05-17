@@ -64,4 +64,10 @@ public class GithubRepo extends AbstractOrgNameRepo {
         getName(),
         gitTag);
   }
+
+  @Override
+  public String getArchiveStripPrefix(GitTag gitTag) {
+    return MessageFormat.format(
+        "{0}-{1}-{2}", getOrganization(), getName(), ObjectIdUtils.shortCommit(gitTag.commit()));
+  }
 }

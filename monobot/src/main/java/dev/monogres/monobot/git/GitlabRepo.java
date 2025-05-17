@@ -47,4 +47,9 @@ public class GitlabRepo extends AbstractOrgNameRepo {
         getApiId(),
         gitTag);
   }
+
+  @Override
+  public String getArchiveStripPrefix(GitTag gitTag) {
+    return MessageFormat.format("{0}-{1}-{1}", getName(), gitTag.commit().name());
+  }
 }

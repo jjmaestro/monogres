@@ -34,4 +34,8 @@ public class RepoConfig {
   public Versions getVersions() {
     return versions;
   }
+
+  public Sources getSources() {
+    return sources;
+  }
 }

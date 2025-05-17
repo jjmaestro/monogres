@@ -14,4 +14,6 @@ public interface Repo {
   URL getArchiveUrl(GitTag gitTag);
 
   URL getArchiveUrl(String gitTag);
+
+  String getArchiveStripPrefix(GitTag gitTag);
 }
