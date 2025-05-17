@@ -1,13 +1,14 @@
 package dev.monogres.monobot.git;
 
-import java.net.MalformedURLException;
-import java.net.URI;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.text.MessageFormat;
 
 public class GitlabRepo extends AbstractOrgNameRepo {
+  private static final String ARCHIVE_URL_PATH_MESSAGE_FORMAT_TEMPLATE =
+      "https://{0}/api/v4/projects/{1}/repository/archive.tar.gz?sha={2}";
+
   private static String parseOrganization(URL url) {
     var name = parseName(url);
 
@@ -39,17 +40,11 @@ public class GitlabRepo extends AbstractOrgNameRepo {
   }
 
   @Override
-  public URL getArchiveUrl(GitTag gitTag) {
-    var uri = URI.create("https://" + getForgeType().getApiDomain());
-    var path =
-        MessageFormat.format(
-            "api/v4/projects/{0}/repository/archive.tar.gz?sha={1}",
-            getApiId(), gitTag.commit().name());
-
-    try {
-      return uri.resolve(path).toURL();
-    } catch (MalformedURLException e) {
-      throw new RuntimeException(e);
-    }
+  public String getArchiveUrlRaw(String gitTag) {
+    return MessageFormat.format(
+        ARCHIVE_URL_PATH_MESSAGE_FORMAT_TEMPLATE,
+        getForgeType().getApiDomain(),
+        getApiId(),
+        gitTag);
   }
 }
