@@ -1,4 +1,4 @@
-package dev.monogres.monobot.config;
+package dev.monogres.monobot.json;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;

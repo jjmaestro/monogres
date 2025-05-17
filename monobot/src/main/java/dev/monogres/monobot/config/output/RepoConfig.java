@@ -2,7 +2,6 @@ package dev.monogres.monobot.config.output;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import dev.monogres.monobot.config.Metadata;
-import java.util.SortedMap;
 
 public class RepoConfig {
   @JsonProperty("version")
@@ -32,7 +31,7 @@ public class RepoConfig {
     return repoConfigVersion;
   }
 
-  public SortedMap<Version, VersionContext> getVersions() {
+  public Versions getVersions() {
     return versions;
   }
 }

@@ -1,6 +1,7 @@
 package dev.monogres.monobot.config.output;
 
 import com.fasterxml.jackson.annotation.JsonValue;
+import java.util.Objects;
 
 public record Version(String tag) implements Comparable<Version> {
   public static String normalizeFromTag(String tag) {
@@ -21,11 +22,27 @@ public record Version(String tag) implements Comparable<Version> {
       return 1;
     }
 
-    return tag.compareTo(o.tag());
+    return normalizeFromTag(tag).compareTo(o.tag());
   }
 
   @Override
   public int compareTo(Version o) {
     return -reverseCompareTo(o);
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+
+    var version = (Version) o;
+
+    return Objects.equals(tag, version.tag);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hashCode(tag);
   }
 }
