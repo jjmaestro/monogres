@@ -16,6 +16,7 @@ import dev.monogres.monobot.git.Repo;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
 import org.eclipse.jgit.api.errors.GitAPIException;
@@ -27,7 +28,6 @@ public class Fetch {
   private static final Logger LOG = Logger.getLogger(Fetch.class);
 
   private static final String DIR_ARCHIVES = "archives";
-  private static final String FILENAME_VERSIONS_JSON = "versions.json";
   private static final String FILENAME_REPO_JSON = "repo.json";
 
   @ConfigProperty(name = "workdir")
@@ -66,22 +66,22 @@ public class Fetch {
 
   public void fetch(MonobotConfigFile monobotConfigFile) {
     var monobotConfig = monobotConfigFile.monobotConfig();
-    var metadata = monobotConfig.metadata() == null ? new Metadata() : monobotConfig.metadata();
-
     var configDir = monobotConfigFile.configFile().getParent();
-    var storedVersions = readVersionsFromConfigFile(configDir);
+    var storedRepo = readOrCreateRepoConfig(configDir.resolve(FILENAME_REPO_JSON).toFile());
+    var versions = storedRepo.getVersions() == null ? new Versions() : storedRepo.getVersions();
+    var metadata = storedRepo.getMetadata() == null ? new Metadata() : storedRepo.getMetadata();
 
     var repoUrl = monobotConfig.repoUrl();
     var repo = ForgeType.getByRepoUrl(repoUrl).newRepo(repoUrl);
-    fetchVersionsByTag(monobotConfig, repo, storedVersions, metadata);
-
-    writeConfigFile(configDir, FILENAME_VERSIONS_JSON, storedVersions);
+    fetchVersionsByTag(monobotConfig, repo, versions, metadata);
 
     var sources = new Sources();
     var sourcesContext = new SourceContext(repo.getArchiveUrlRaw("{commit}"));
     sources.put(repo.getForgeType().getDomain(), sourcesContext);
 
-    var repoConfig = new RepoConfig(sources, storedVersions, metadata.isEmpty() ? null : metadata);
+    var repoConfig =
+        new RepoConfig(
+            sources, versions.isEmpty() ? null : versions, metadata.isEmpty() ? null : metadata);
     writeConfigFile(configDir, FILENAME_REPO_JSON, repoConfig);
   }
 
@@ -93,17 +93,19 @@ public class Fetch {
     }
   }
 
+  private RepoConfig readOrCreateRepoConfig(File repoConfigFile) {
+    var repoConfig = readConfigFile(repoConfigFile, RepoConfig.class);
+
+    return repoConfig == null ? new RepoConfig() : repoConfig;
+  }
+
   private <T> T readConfigFile(File configFile, Class<T> clazz) {
     try {
       return objectMapper.readValue(configFile, clazz);
+    } catch (FileNotFoundException e) {
+      return null;
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
-  }
-
-  private Versions readVersionsFromConfigFile(Path configDir) {
-    var configFile = configDir.resolve(FILENAME_VERSIONS_JSON).toFile();
-
-    return configFile.exists() ? readConfigFile(configFile, Versions.class) : new Versions();
   }
 }

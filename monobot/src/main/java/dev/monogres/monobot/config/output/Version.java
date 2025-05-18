@@ -4,15 +4,15 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import java.util.Objects;
 
 public record Version(String tag) implements Comparable<Version> {
-  public static String normalizeFromTag(String tag) {
+  public static String normalize(String tag) {
     return tag
         // Remove "v" prefix when followed by number, as what follows is the version "string"
         .replaceFirst("^v([0-9])", "$1");
   }
 
   @JsonValue
-  public String toString() {
-    return normalizeFromTag(tag);
+  public String normalize() {
+    return normalize(tag);
   }
 
   // We want versions to be ordered in reverse order
@@ -22,7 +22,7 @@ public record Version(String tag) implements Comparable<Version> {
       return 1;
     }
 
-    return normalizeFromTag(tag).compareTo(o.tag());
+    return normalize().compareTo(normalize(o.tag()));
   }
 
   @Override
@@ -38,11 +38,11 @@ public record Version(String tag) implements Comparable<Version> {
 
     var version = (Version) o;
 
-    return Objects.equals(tag, version.tag);
+    return Objects.equals(normalize(), normalize(version.tag));
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(tag);
+    return Objects.hashCode(normalize());
   }
 }

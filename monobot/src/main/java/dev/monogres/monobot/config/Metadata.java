@@ -1,5 +1,5 @@
 package dev.monogres.monobot.config;
 
-import java.util.TreeMap;
+import java.util.HashMap;
 
-public class Metadata extends TreeMap<String, MetadataContext> {}
+public class Metadata extends HashMap<String, MetadataContext> {}

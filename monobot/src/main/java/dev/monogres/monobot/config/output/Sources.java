@@ -1,5 +1,5 @@
 package dev.monogres.monobot.config.output;
 
-import java.util.TreeMap;
+import java.util.HashMap;
 
-public class Sources extends TreeMap<String, SourceContext> {}
+public class Sources extends HashMap<String, SourceContext> {}

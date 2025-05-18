@@ -69,7 +69,7 @@ public class ArchiveMetadataExtractor {
               metadata.containsKey(PGXN_META_JSON_FILENAME)
                   ? metadata.get(PGXN_META_JSON_FILENAME)
                   : new MetadataContext();
-          metadataContext.put(version.toString(), metaJson);
+          metadataContext.put(version.normalize(), metaJson);
           metadata.put(PGXN_META_JSON_FILENAME, metadataContext);
         }
       }
