@@ -1,6 +1,7 @@
 package dev.monogres.monobot.fetch;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.monogres.monobot.config.Metadata;
 import dev.monogres.monobot.config.input.MonobotConfig;
 import dev.monogres.monobot.config.input.MonobotConfigFile;
 import dev.monogres.monobot.config.output.RepoConfig;
@@ -36,20 +37,25 @@ public class Fetch {
 
   @Inject ObjectMapper objectMapper;
 
-  private void fetchVersionsByTag(MonobotConfig monobotConfig, Repo repo, Versions storedVersions) {
+  @Inject ArchiveMetadataExtractor archiveMetadataExtractor;
+
+  private void fetchVersionsByTag(
+      MonobotConfig monobotConfig, Repo repo, Versions versions, Metadata metadata) {
     try {
       for (var tag : GitTag.getTags(monobotConfig.repoUrl())) {
         var version = new Version(tag.name());
-        if (storedVersions.containsKey(version)) {
+        if (versions.containsKey(version)) {
           continue;
         }
 
         var archivePath =
             Path.of(workdir, DIR_ARCHIVES, monobotConfig.name(), tag.commit().name() + ".tar.gz");
         var sha256 = sourceArchive.sha256UrlFile(repo.getArchiveUrl(tag), archivePath);
-        storedVersions.put(
+        versions.put(
             version,
             new VersionContext(tag.name(), tag.commit(), sha256, repo.getArchiveStripPrefix(tag)));
+
+        archiveMetadataExtractor.addFromArchive(version, archivePath, metadata);
       }
     } catch (GitAPIException e) {
       LOG.warnv(
@@ -60,21 +66,22 @@ public class Fetch {
 
   public void fetch(MonobotConfigFile monobotConfigFile) {
     var monobotConfig = monobotConfigFile.monobotConfig();
+    var metadata = monobotConfig.metadata() == null ? new Metadata() : monobotConfig.metadata();
 
     var configDir = monobotConfigFile.configFile().getParent();
     var storedVersions = readVersionsFromConfigFile(configDir);
 
     var repoUrl = monobotConfig.repoUrl();
     var repo = ForgeType.getByRepoUrl(repoUrl).newRepo(repoUrl);
-    fetchVersionsByTag(monobotConfig, repo, storedVersions);
+    fetchVersionsByTag(monobotConfig, repo, storedVersions, metadata);
 
     writeConfigFile(configDir, FILENAME_VERSIONS_JSON, storedVersions);
 
     var sources = new Sources();
     var sourcesContext = new SourceContext(repo.getArchiveUrlRaw("{commit}"));
     sources.put(repo.getForgeType().getDomain(), sourcesContext);
-    var metadata = monobotConfig.metadata();
-    var repoConfig = new RepoConfig(sources, storedVersions, metadata);
+
+    var repoConfig = new RepoConfig(sources, storedVersions, metadata.isEmpty() ? null : metadata);
     writeConfigFile(configDir, FILENAME_REPO_JSON, repoConfig);
   }
 

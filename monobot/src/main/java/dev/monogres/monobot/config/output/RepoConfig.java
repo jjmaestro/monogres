@@ -1,5 +1,6 @@
 package dev.monogres.monobot.config.output;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import dev.monogres.monobot.config.Metadata;
 
@@ -9,6 +10,8 @@ public class RepoConfig {
 
   private final Sources sources;
   private final Versions versions;
+
+  @JsonInclude(JsonInclude.Include.NON_NULL)
   private final Metadata metadata;
 
   public RepoConfig(
