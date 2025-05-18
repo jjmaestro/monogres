@@ -55,7 +55,8 @@ public class Fetch {
             version,
             new VersionContext(tag.name(), tag.commit(), sha256, repo.getArchiveStripPrefix(tag)));
 
-        archiveMetadataExtractor.addFromArchive(version, archivePath, metadata);
+        archiveMetadataExtractor.addFromArchive(
+            monobotConfig.name(), version, archivePath, metadata);
       }
     } catch (GitAPIException e) {
       LOG.warnv(

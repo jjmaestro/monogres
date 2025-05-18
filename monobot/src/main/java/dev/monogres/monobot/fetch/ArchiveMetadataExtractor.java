@@ -1,10 +1,11 @@
 package dev.monogres.monobot.fetch;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.monogres.monobot.config.Metadata;
 import dev.monogres.monobot.config.MetadataContext;
 import dev.monogres.monobot.config.output.Version;
+import dev.monogres.monobot.postgres.extensions.control.Control;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import java.io.BufferedInputStream;
@@ -22,9 +23,11 @@ import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 @Singleton
 public class ArchiveMetadataExtractor {
   public static final String PGXN_META_JSON_FILENAME = "META.json";
+  public static final String POSTGRES_CONTROL_FILE_EXTENSION = ".control";
 
-  // Defensive programming. We should never expect a META.json this large
-  private static final int PGXN_META_JSON_MAX_SIZE_BYTES = 16 * 1_024;
+  // Defensive programming. We should never expect files this large
+  private static final int MAX_SIZE_BYTES_PGXN_META_JSON = 16 * 1_024;
+  private static final int MAX_SIZE_BYTES_POSTGRES_CONTROL = 1 * 1_024;
 
   @Inject ObjectMapper objectMapper;
 
@@ -39,20 +42,61 @@ public class ArchiveMetadataExtractor {
     return out.toByteArray();
   }
 
-  private JsonNode extractMetaJsonFromArchive(TarArchiveInputStream tarIn, String name, long size) {
-    if (size > PGXN_META_JSON_MAX_SIZE_BYTES) {
+  private byte[] extractFromArchive(
+      TarArchiveInputStream tarIn, TarArchiveEntry entry, int maxSizeBytes) {
+    if (entry.getRealSize() > maxSizeBytes) {
       throw new RuntimeException(
-          MessageFormat.format("META.json entry {0} too large ({1} bytes)", name, size));
+          MessageFormat.format(
+              "Entry {0} too large ({1} bytes)", entry.getName(), entry.getRealSize()));
     }
 
     try {
-      return objectMapper.readTree(extractTarEntryBytes(tarIn));
+      return extractTarEntryBytes(tarIn);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
   }
 
-  public void addFromArchive(Version version, Path archivePath, Metadata metadata) {
+  private MetadataContext extractPostgresControlFromArchive(
+      Version version, TarArchiveInputStream tarIn, TarArchiveEntry entry, Metadata metadata) {
+    var metadataContext =
+        metadata.containsKey(POSTGRES_CONTROL_FILE_EXTENSION)
+            ? metadata.get(POSTGRES_CONTROL_FILE_EXTENSION)
+            : new MetadataContext();
+
+    var controlBytes = extractFromArchive(tarIn, entry, MAX_SIZE_BYTES_POSTGRES_CONTROL);
+    var control = Control.fromBytes(controlBytes);
+    try {
+      // It is simpler to use mapper.readTree(control). But it does not respect null serialization
+      // preferences
+      var controlJsonNode = objectMapper.readTree(objectMapper.writeValueAsString(control));
+      metadataContext.put(version.normalize(), controlJsonNode);
+    } catch (JsonProcessingException e) {
+      throw new RuntimeException(e);
+    }
+
+    return metadataContext;
+  }
+
+  private MetadataContext extractMetaJsonFromArchive(
+      Version version, TarArchiveInputStream tarIn, TarArchiveEntry entry, Metadata metadata) {
+    var metadataContext =
+        metadata.containsKey(PGXN_META_JSON_FILENAME)
+            ? metadata.get(PGXN_META_JSON_FILENAME)
+            : new MetadataContext();
+
+    try {
+      var jsonNode =
+          objectMapper.readTree(extractFromArchive(tarIn, entry, MAX_SIZE_BYTES_PGXN_META_JSON));
+      metadataContext.put(version.normalize(), jsonNode);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+
+    return metadataContext;
+  }
+
+  public void addFromArchive(String name, Version version, Path archivePath, Metadata metadata) {
     try (var fis = new FileInputStream(archivePath.toFile());
         var bis = new BufferedInputStream(fis);
         var gzipIn = new GzipCompressorInputStream(bis);
@@ -61,16 +105,13 @@ public class ArchiveMetadataExtractor {
 
       while ((entry = tarIn.getNextEntry()) != null) {
         var entryFile = new File(entry.getName());
-        if (PGXN_META_JSON_FILENAME.equals(entryFile.getName())) {
-          var metaJsonSize = entry.getRealSize();
-
-          var metaJson = extractMetaJsonFromArchive(tarIn, entry.getName(), metaJsonSize);
-          var metadataContext =
-              metadata.containsKey(PGXN_META_JSON_FILENAME)
-                  ? metadata.get(PGXN_META_JSON_FILENAME)
-                  : new MetadataContext();
-          metadataContext.put(version.normalize(), metaJson);
+        var fileName = entryFile.getName();
+        if (PGXN_META_JSON_FILENAME.equals(fileName)) {
+          var metadataContext = extractMetaJsonFromArchive(version, tarIn, entry, metadata);
           metadata.put(PGXN_META_JSON_FILENAME, metadataContext);
+        } else if (fileName.equals(name + POSTGRES_CONTROL_FILE_EXTENSION)) {
+          var metadataContext = extractPostgresControlFromArchive(version, tarIn, entry, metadata);
+          metadata.put(POSTGRES_CONTROL_FILE_EXTENSION, metadataContext);
         }
       }
     } catch (FileNotFoundException e) {
