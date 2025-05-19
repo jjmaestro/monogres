@@ -71,6 +71,9 @@ public class Fetch {
     var storedRepo = readOrCreateRepoConfig(configDir.resolve(FILENAME_REPO_JSON).toFile());
     var versions = storedRepo.getVersions() == null ? new Versions() : storedRepo.getVersions();
     var metadata = storedRepo.getMetadata() == null ? new Metadata() : storedRepo.getMetadata();
+    if (!(monobotConfig.metadata() == null || monobotConfig.metadata().isEmpty())) {
+      metadata.putAll(monobotConfig.metadata());
+    }
 
     var repoUrl = monobotConfig.repoUrl();
     var repo = ForgeType.getByRepoUrl(repoUrl).newRepo(repoUrl);
