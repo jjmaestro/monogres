@@ -63,6 +63,7 @@ _DISABLED_UNLESS_EXPLICITLY_ENABLED = [
 _OPTION_SETS_MINIMAL = [
     "nls",
     "readline",
+    ("libedit_preferred", "true"),
     ("ssl", "openssl"),
     ("uuid", "e2fs"),
     "zlib",
