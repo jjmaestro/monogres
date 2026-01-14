@@ -6,7 +6,7 @@ diff --git a/src/backend/columnar/Makefile b/src/backend/columnar/Makefile
  	@# -undef is used to not predefine any system-specific or GCC-specific macros.
  	@# `man cpp` for further information
 -	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MF$(SQL_DEPDIR)/$(*F).Po -MT$@ $< > $@
-+	cd $(citus_abs_srcdir) && $(CPP) -E -undef -w -P -MMD -MP -MF$(SQL_DEPDIR)/$(*F).Po -MT$@ $< > $@
++	cd $(citus_abs_srcdir) && $(CPP) -x c -E -undef -w -P -MMD -MP -MF$(SQL_DEPDIR)/$(*F).Po -MT$@ $< > $@
  
  $(generated_downgrade_sql_files): $(citus_abs_srcdir)/build/sql/%: sql/downgrades/%
  	@mkdir -p $(citus_abs_srcdir)/$(SQL_DEPDIR) $(citus_abs_srcdir)/$(SQL_BUILDDIR)
@@ -15,7 +15,7 @@ diff --git a/src/backend/columnar/Makefile b/src/backend/columnar/Makefile
  	@# -undef is used to not predefine any system-specific or GCC-specific macros.
  	@# `man cpp` for further information
 -	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MF$(SQL_DEPDIR)/$(*F).Po -MT$@ $< > $@
-+	cd $(citus_abs_srcdir) && $(CPP) -E -undef -w -P -MMD -MP -MF$(SQL_DEPDIR)/$(*F).Po -MT$@ $< > $@
++	cd $(citus_abs_srcdir) && $(CPP) -x c -E -undef -w -P -MMD -MP -MF$(SQL_DEPDIR)/$(*F).Po -MT$@ $< > $@
  
  .PHONY: install install-downgrades install-all
  
@@ -27,7 +27,7 @@ diff --git a/src/backend/distributed/Makefile b/src/backend/distributed/Makefile
  	@# -undef is used to not predefine any system-specific or GCC-specific macros.
  	@# `man cpp` for further information
 -	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MF$(SQL_DEPDIR)/$(*F).Po -MT$@ $< > $@
-+	cd $(citus_abs_srcdir) && $(CPP) -E -undef -w -P -MMD -MP -MF$(SQL_DEPDIR)/$(*F).Po -MT$@ $< > $@
++	cd $(citus_abs_srcdir) && $(CPP) -x c -E -undef -w -P -MMD -MP -MF$(SQL_DEPDIR)/$(*F).Po -MT$@ $< > $@
  
  $(generated_downgrade_sql_files): $(citus_abs_srcdir)/build/sql/%: sql/downgrades/%
  	@mkdir -p $(citus_abs_srcdir)/$(SQL_DEPDIR) $(citus_abs_srcdir)/$(SQL_BUILDDIR)
@@ -36,7 +36,7 @@ diff --git a/src/backend/distributed/Makefile b/src/backend/distributed/Makefile
  	@# -undef is used to not predefine any system-specific or GCC-specific macros.
  	@# `man cpp` for further information
 -	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MF$(SQL_DEPDIR)/$(*F).Po -MT$@ $< > $@
-+	cd $(citus_abs_srcdir) && $(CPP) -E -undef -w -P -MMD -MP -MF$(SQL_DEPDIR)/$(*F).Po -MT$@ $< > $@
++	cd $(citus_abs_srcdir) && $(CPP) -x c -E -undef -w -P -MMD -MP -MF$(SQL_DEPDIR)/$(*F).Po -MT$@ $< > $@
  
  SQL_Po_files := $(wildcard $(SQL_DEPDIR)/*.Po)
  ifneq (,$(SQL_Po_files))
@@ -48,7 +48,7 @@ diff --git a/src/test/regress/Makefile b/src/test/regress/Makefile
  	@# `man cpp` for further information
  	@# sed is used to strip the final // comments, because OSX cpp is weird
 -	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MF$(ISOLATION_DEPDIR)/$(*F).Po -MT$@ $< | sed '/^\/\//d' | sed '/^$$/d' > $@
-+	cd $(citus_abs_srcdir) && $(CPP) -E -undef -w -P -MMD -MP -MF$(ISOLATION_DEPDIR)/$(*F).Po -MT$@ $< | sed '/^\/\//d' | sed '/^$$/d' > $@
++	cd $(citus_abs_srcdir) && $(CPP) -x c -E -undef -w -P -MMD -MP -MF$(ISOLATION_DEPDIR)/$(*F).Po -MT$@ $< | sed '/^\/\//d' | sed '/^$$/d' > $@
  
  
  Isolation_Po_files := $(wildcard $(ISOLATION_DEPDIR)/*.Po)
