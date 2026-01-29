@@ -245,6 +245,20 @@ def _relativize_build_path(introspect_json, path):
 
     fail("Unable to match path prefix for path: %s" % path)
 
+def _normalize_libdir(path, arch):
+    """
+    Normalize library paths from Debian's multiarch libdir to simple lib/.
+
+    The introspect JSONs were generated with Debian's default
+    libdir = "lib/{arch}-linux-gnu", but the actual meson builds use
+    libdir = "lib" (configured in build_options.bzl). This function normalizes
+    the paths to match the actual build output.
+    """
+    debian_libdir = "lib/%s-linux-gnu/" % arch
+    if path.startswith(debian_libdir):
+        return "lib/" + path[len(debian_libdir):]
+    return path
+
 def _get_installed_paths(introspect_json, arch):
     installed_paths_ = introspect_json["installed"]
 
@@ -256,7 +270,10 @@ def _get_installed_paths(introspect_json, arch):
     }
 
     arch_ = ARCH_MAP.get(arch, arch)
-    return {k.format(arch = arch_): v.format(arch = arch_) for k, v in res.items()}
+    expanded = {k.format(arch = arch_): v.format(arch = arch_) for k, v in res.items()}
+
+    # Normalize libdir paths from Debian multiarch to simple lib/
+    return {k: _normalize_libdir(v, arch_) for k, v in expanded.items()}
 
 def _get_contrib_installed_paths(installed_paths, contrib_name, pg_version, arch):
     contrib_paths = None

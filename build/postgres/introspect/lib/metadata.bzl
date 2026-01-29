@@ -70,16 +70,20 @@ DEP_TO_FEATURE = {
 # paths are properly generated. For example:
 # https://github.com/postgres/postgres/commit/823eb3db1c50a6b8a89ebedc1db96b14de140183
 # where the sepgsql contrib extension was not being installed, pre-17.0
+# NOTE:
+# The paths use "lib/" instead of "lib/{arch}-linux-gnu/" because the actual
+# meson builds configure libdir = "lib" (in build_options.bzl) rather than
+# Debian's default multiarch libdir.
 CONTRIB_INSTALLED_PATHS_OVERRIDE = {
     "sepgsql": {
         "<16.7": [
-            "lib/{arch}-linux-gnu/sepgsql.so",
+            "lib/sepgsql.so",
             "share/extension/sepgsql.sql",
         ],
         # NOTE: the path changed in 16.7
         # https://github.com/postgres/postgres/commit/155d616
         ">=16.7,<17.0": [
-            "lib/{arch}-linux-gnu/sepgsql.so",
+            "lib/sepgsql.so",
             "share/contrib/sepgsql.sql",
         ],
     },
