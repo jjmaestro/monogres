@@ -1,0 +1,66 @@
+From 96b8361e76ef05c2fb171ca62327bc1012361a0c Mon Sep 17 00:00:00 2001
+From: Matteo Melli <matteom@ongres.com>
+Date: Thu, 29 Jan 2026 11:07:20 +0000
+Subject: [PATCH] feat: add build option to disable contrib builds
+
+Per the Postgres docs, `make world` does build contrb but `make all`
+skips it. However, the meson build does build contrib by default.
+---
+ meson.build       | 19 +++++++++++++++++--
+ meson_options.txt |  3 +++
+ 2 files changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/meson.build b/meson.build
+index ebdfdf1b7da..e849c1258d9 100644
+--- a/meson.build
++++ b/meson.build
+@@ -3053,7 +3053,20 @@ test_install_libs = []
+ 
+ subdir('src')
+ 
+-subdir('contrib')
++if get_option('contrib')
++  subdir('contrib')
++else
++  # NOTE:
++  # These variables are normally provided by contrib meson.build files but are
++  # used elsewhere in the build, so they must be redefined here when contrib is
++  # disabled.
++
++  # defined in contrib/meson.build, used in install_test_files_args
++  contrib_data_dir = dir_data_extension
++
++  # defined in contrib/spi/meson.build, used in src/test/regress/meson.build
++  refint_cflags = ['-DREFINT_VERBOSE']
++endif
+ 
+ subdir('src/test')
+ subdir('src/interfaces/ecpg/test')
+@@ -3471,7 +3484,9 @@ endif
+ alias_target('backend', backend_targets)
+ alias_target('bin', bin_targets + [libpq_st])
+ alias_target('pl', pl_targets)
+-alias_target('contrib', contrib_targets)
++if get_option('contrib')
++  alias_target('contrib', contrib_targets)
++endif
+ alias_target('testprep', testprep_targets)
+ alias_target('install-world', install_quiet, installdocs)
+ 
+diff --git a/meson_options.txt b/meson_options.txt
+index 1ca1e164962..66308888f09 100644
+--- a/meson_options.txt
++++ b/meson_options.txt
+@@ -73,6 +73,9 @@ option('rpath', type: 'boolean', value: true,
+ option('prefix_distro', type: 'string', value: '',
+   description: 'Select a "distro prefix" (a path different from prefix where Postgres will be installed). Useful if the distro install path will be different from the install path at build time.')
+ 
++option('contrib', type: 'boolean', value: true,
++  description: 'Build contrib modules')
++
+ # External dependencies
+ 
+ option('bonjour', type: 'feature', value: 'auto',
+-- 
+2.39.5 (Apple Git-154)
+

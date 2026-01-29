@@ -188,10 +188,14 @@ def _pg_build_meson(name, pg_src, build_options, auto_features, sysroot = None):
         "postgres",
         "pg_config",
         "pg_isready",
-        # NOTE: these are needed for contrib extensions
-        "vacuumlo",
-        "oid2name",
     ]
+
+    # NOTE: these binaries are only built when contrib is enabled
+    if build_options.get("contrib", "false") == "true":
+        pg_binaries.extend([
+            "vacuumlo",
+            "oid2name",
+        ])
 
     # NOTE: including lib in out_data_dirs because even when it's
     # out_lib_dir's default, it's not included in declared_outputs

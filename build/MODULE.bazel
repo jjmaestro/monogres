@@ -136,6 +136,11 @@ download_archives(
         "//postgres/patches:0004-16.0-feat-prefix_distro-option.patch": "*",
         "//postgres/patches:0005-16.0-hack-remove-execroot-from-CC.patch": "16.*/*",
         "//postgres/patches:0005-17.0-hack-remove-execroot-from-CC.patch": ">=17.*/*",
+        "//postgres/patches:0006-16.0-feat-add-build-option-to-disable-contrib-builds.patch": ">=16.0,<16.7/*",
+        "//postgres/patches:0006-16.7-feat-add-build-option-to-disable-contrib-builds.patch": ">=16.7,<17.0/*",
+        "//postgres/patches:0006-17.0-feat-add-build-option-to-disable-contrib-builds.patch": ">=17.0,<17.3/*",
+        "//postgres/patches:0006-17.3-feat-add-build-option-to-disable-contrib-builds.patch": ">=17.3,<18.0/*",
+        "//postgres/patches:0006-18.0-feat-add-build-option-to-disable-contrib-builds.patch": ">=18.0/*",
     },
     version_scheme = "pgver",
 )

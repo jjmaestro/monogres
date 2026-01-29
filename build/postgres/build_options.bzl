@@ -45,6 +45,7 @@ _ENABLED_UNLESS_EXPLICITLY_DISABLED = [
 # disable these by default even if auto-features is enabled and are only
 # enabled when explicitly enabled.
 _DISABLED_UNLESS_EXPLICITLY_ENABLED = [
+    ("contrib", "false"),
     ("docs", "disabled"),
     ("docs_pdf", "disabled"),
     ("bsd_auth", "disabled"),
@@ -68,6 +69,7 @@ _OPTION_SETS_MINIMAL = [
 ]
 
 _OPTION_SETS_REGULAR = _OPTION_SETS_MINIMAL + [
+    ("contrib", "true"),
     "icu",
     "llvm",
     "lz4",
