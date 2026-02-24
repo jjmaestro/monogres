@@ -1,6 +1,7 @@
 package dev.monogres.monobot.fetch;
 
 import dev.monogres.monobot.digest.DigestUtils;
+import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import io.vertx.core.file.AsyncFile;
 import io.vertx.core.file.OpenOptions;
@@ -39,10 +40,10 @@ public class SourceArchive {
     return vertx.fileSystem().openBlocking(path.toString(), new OpenOptions().setCreate(true));
   }
 
-  private void downloadFile(URL url, Path path) {
+  private Future<Void> downloadFile(URL url, Path path) {
     var writeStream = writableAsyncFile(path);
 
-    webClient
+    return webClient
         .get(
             "https".equals(url.getProtocol()) ? 443 : 80,
             url.getHost(),
@@ -51,19 +52,21 @@ public class SourceArchive {
         .as(BodyCodec.pipe(writeStream))
         .send()
         .onSuccess(res -> LOG.infov("Successfully downloaded {0}", url))
-        .onFailure(err -> LOG.warnv(err, "Failure downloading {0}", url));
+        .onFailure(err -> LOG.warnv(err, "Failure downloading {0}", url))
+        .mapEmpty();
   }
 
-  public String sha256UrlFile(URL url, Path downloadPath) {
-    downloadFile(url, downloadPath);
-
-    try (var fc = FileChannel.open(downloadPath, StandardOpenOption.READ)) {
-      var buffer = fc.map(FileChannel.MapMode.READ_ONLY, 0L, fc.size());
-
-      return DigestUtils.sha256sum(buffer);
-    } catch (IOException e) {
-      LOG.warnv("I/O error while computing digest of {0}", downloadPath.toString());
-      throw new RuntimeException(e);
-    }
+  public Future<String> sha256UrlFile(URL url, Path downloadPath) {
+    return downloadFile(url, downloadPath)
+        .map(
+            v -> {
+              try (var fc = FileChannel.open(downloadPath, StandardOpenOption.READ)) {
+                var buffer = fc.map(FileChannel.MapMode.READ_ONLY, 0L, fc.size());
+                return DigestUtils.sha256sum(buffer);
+              } catch (IOException e) {
+                LOG.warnv("I/O error while computing digest of {0}", downloadPath.toString());
+                throw new RuntimeException(e);
+              }
+            });
   }
 }

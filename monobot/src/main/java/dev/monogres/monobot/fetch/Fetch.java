@@ -13,12 +13,15 @@ import dev.monogres.monobot.config.output.Versions;
 import dev.monogres.monobot.git.ForgeType;
 import dev.monogres.monobot.git.GitTag;
 import dev.monogres.monobot.git.Repo;
+import io.vertx.core.Future;
+import io.vertx.core.Vertx;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -33,39 +36,77 @@ public class Fetch {
   @ConfigProperty(name = "workdir")
   String workdir;
 
+  @Inject Vertx vertx;
+
   @Inject SourceArchive sourceArchive;
 
   @Inject ObjectMapper objectMapper;
 
   @Inject ArchiveMetadataExtractor archiveMetadataExtractor;
 
-  private void fetchVersionsByTag(
+  private record VersionDownloadResult(
+      Version version, GitTag tag, String sha256, Path archivePath, String stripPrefix) {}
+
+  private Future<Void> fetchVersionsByTag(
       MonobotConfig monobotConfig, Repo repo, Versions versions, Metadata metadata) {
+    GitTag[] tags;
     try {
-      for (var tag : GitTag.getTags(monobotConfig.repoUrl())) {
-        var version = new Version(tag.name());
-        if (versions.containsKey(version)) {
-          continue;
-        }
-
-        var archivePath =
-            Path.of(workdir, DIR_ARCHIVES, monobotConfig.name(), tag.commit().name() + ".tar.gz");
-        var sha256 = sourceArchive.sha256UrlFile(repo.getArchiveUrl(tag), archivePath);
-        versions.put(
-            version,
-            new VersionContext(tag.name(), tag.commit(), sha256, repo.getArchiveStripPrefix(tag)));
-
-        archiveMetadataExtractor.addFromArchive(
-            monobotConfig.name(), version, archivePath, metadata);
-      }
+      tags = GitTag.getTags(monobotConfig.repoUrl());
     } catch (GitAPIException e) {
       LOG.warnv(
           "[{0}]: Error while fetching metadata from repo {1}",
           monobotConfig.name(), monobotConfig.repoUrl());
+      return Future.succeededFuture();
     }
+
+    var downloadFutures = new ArrayList<Future<VersionDownloadResult>>();
+
+    for (var tag : tags) {
+      var version = new Version(tag.name());
+      if (versions.containsKey(version)) {
+        continue;
+      }
+
+      var archivePath =
+          Path.of(workdir, DIR_ARCHIVES, monobotConfig.name(), tag.commit().name() + ".tar.gz");
+
+      var downloadFuture =
+          sourceArchive
+              .sha256UrlFile(repo.getArchiveUrl(tag), archivePath)
+              .map(
+                  sha256 ->
+                      new VersionDownloadResult(
+                          version, tag, sha256, archivePath, repo.getArchiveStripPrefix(tag)));
+
+      downloadFutures.add(downloadFuture);
+    }
+
+    if (downloadFutures.isEmpty()) {
+      return Future.succeededFuture();
+    }
+
+    return Future.all(downloadFutures)
+        .compose(
+            compositeFuture ->
+                vertx.executeBlocking(
+                    () -> {
+                      for (var i = 0; i < compositeFuture.size(); i++) {
+                        var result = (VersionDownloadResult) compositeFuture.resultAt(i);
+                        versions.put(
+                            result.version(),
+                            new VersionContext(
+                                result.tag().name(),
+                                result.tag().commit(),
+                                result.sha256(),
+                                result.stripPrefix()));
+                        archiveMetadataExtractor.addFromArchive(
+                            monobotConfig.name(), result.version(), result.archivePath(), metadata);
+                      }
+                      return null;
+                    }));
   }
 
-  public void fetch(MonobotConfigFile monobotConfigFile) {
+  public Future<Void> fetch(MonobotConfigFile monobotConfigFile) {
     var monobotConfig = monobotConfigFile.monobotConfig();
     var configDir = monobotConfigFile.configFile().getParent();
     var storedRepo = readOrCreateRepoConfig(configDir.resolve(FILENAME_REPO_JSON).toFile());
@@ -77,16 +118,24 @@ public class Fetch {
 
     var repoUrl = monobotConfig.repoUrl();
     var repo = ForgeType.getByRepoUrl(repoUrl).newRepo(repoUrl);
-    fetchVersionsByTag(monobotConfig, repo, versions, metadata);
 
-    var sources = new Sources();
-    var sourcesContext = new SourceContext(repo.getArchiveUrlRaw("{commit}"));
-    sources.put(repo.getForgeType().getDomain(), sourcesContext);
+    return fetchVersionsByTag(monobotConfig, repo, versions, metadata)
+        .compose(
+            v ->
+                vertx.executeBlocking(
+                    () -> {
+                      var sources = new Sources();
+                      var sourcesContext = new SourceContext(repo.getArchiveUrlRaw("{commit}"));
+                      sources.put(repo.getForgeType().getDomain(), sourcesContext);
 
-    var repoConfig =
-        new RepoConfig(
-            sources, versions.isEmpty() ? null : versions, metadata.isEmpty() ? null : metadata);
-    writeConfigFile(configDir, FILENAME_REPO_JSON, repoConfig);
+                      var repoConfig =
+                          new RepoConfig(
+                              sources,
+                              versions.isEmpty() ? null : versions,
+                              metadata.isEmpty() ? null : metadata);
+                      writeConfigFile(configDir, FILENAME_REPO_JSON, repoConfig);
+                      return null;
+                    }));
   }
 
   private void writeConfigFile(Path configDir, String filename, Object object) {

@@ -5,9 +5,13 @@ import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.QuarkusApplication;
 import io.quarkus.runtime.annotations.QuarkusMain;
 import jakarta.inject.Inject;
+import java.util.concurrent.CountDownLatch;
+import org.jboss.logging.Logger;
 
 @QuarkusMain
 public class Main {
+  private static final Logger LOG = Logger.getLogger(Main.class);
+
   public static void main(String... args) {
     Quarkus.run(MyApp.class, args);
   }
@@ -17,12 +21,20 @@ public class Main {
 
     @Override
     public int run(String... args) throws Exception {
-      scan.run();
+      var latch = new CountDownLatch(1);
 
-      // TODO: scan.run() will eventually call Vertx on a separate thread, and we should wait for it
-      // to finish
+      var scanFuture =
+          scan.run()
+              .onSuccess(v -> latch.countDown())
+              .onFailure(
+                  err -> {
+                    LOG.error("Failed to complete scan", err);
+                    latch.countDown();
+                  });
 
-      return 0;
+      latch.await();
+
+      return scanFuture.failed() ? 1 : 0;
     }
   }
 }

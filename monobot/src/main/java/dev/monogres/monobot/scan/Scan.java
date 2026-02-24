@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.monogres.monobot.config.input.MonobotConfig;
 import dev.monogres.monobot.config.input.MonobotConfigFile;
 import dev.monogres.monobot.fetch.Fetch;
+import io.vertx.core.Future;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.io.IOException;
@@ -11,7 +12,6 @@ import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.stream.Collectors;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
@@ -30,7 +30,7 @@ public class Scan {
         Files.walk(root, FileVisitOption.FOLLOW_LINKS)
             .filter(Files::isRegularFile)
             .filter(path -> CONFIG_JSON.equals(path.getFileName().toString()))) {
-      return filesStream.collect(Collectors.toList());
+      return filesStream.toList();
     }
   }
 
@@ -42,11 +42,19 @@ public class Scan {
     }
   }
 
-  public void run() throws IOException {
+  public Future<Void> run() throws IOException {
     var path = Path.of(rootPath);
-    var a =
-        scanConfigPaths(path).stream().map(p -> new MonobotConfigFile(parseComponentConfig(p), p));
 
-    a.forEach(fetch::fetch);
+    var fetchFutures =
+        scanConfigPaths(path).stream()
+            .map(p -> new MonobotConfigFile(parseComponentConfig(p), p))
+            .map(fetch::fetch)
+            .toList();
+
+    if (fetchFutures.isEmpty()) {
+      return Future.succeededFuture();
+    }
+
+    return Future.all(fetchFutures).mapEmpty();
   }
 }
