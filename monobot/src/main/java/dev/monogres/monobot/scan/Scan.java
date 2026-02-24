@@ -18,8 +18,8 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 public class Scan {
   private static final String CONFIG_JSON = "monobot.json";
 
-  @ConfigProperty(name = "rootPath")
-  String rootPath;
+  @ConfigProperty(name = "configDir")
+  String configDir;
 
   @Inject ObjectMapper objectMapper;
 
@@ -43,7 +43,7 @@ public class Scan {
   }
 
   public Future<Void> run() throws IOException {
-    var path = Path.of(rootPath);
+    var path = Path.of(configDir);
 
     var fetchFutures =
         scanConfigPaths(path).stream()

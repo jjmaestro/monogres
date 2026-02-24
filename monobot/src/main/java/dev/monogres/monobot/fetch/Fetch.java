@@ -20,6 +20,7 @@ import jakarta.inject.Inject;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import org.eclipse.jgit.api.errors.GitAPIException;
@@ -31,10 +32,17 @@ public class Fetch {
   private static final Logger LOG = Logger.getLogger(Fetch.class);
 
   private static final String DIR_ARCHIVES = "archives";
+  private static final String DIR_BUILD = "build";
   private static final String FILENAME_REPO_JSON = "repo.json";
 
   @ConfigProperty(name = "workdir")
   String workdir;
+
+  @ConfigProperty(name = "configDir")
+  String configDir;
+
+  @ConfigProperty(name = "monogresRepo")
+  String monogresRepo;
 
   @Inject Vertx vertx;
 
@@ -110,8 +118,10 @@ public class Fetch {
 
   public Future<Void> fetch(MonobotConfigFile monobotConfigFile) {
     var monobotConfig = monobotConfigFile.monobotConfig();
-    var configDir = monobotConfigFile.configFile().getParent();
-    var storedRepo = readOrCreateRepoConfig(configDir.resolve(FILENAME_REPO_JSON).toFile());
+    var monobotConfigDir = monobotConfigFile.configFile().getParent();
+    var relPath = Path.of(configDir).relativize(monobotConfigDir);
+    var outputDir = Path.of(monogresRepo, DIR_BUILD).resolve(relPath);
+    var storedRepo = readOrCreateRepoConfig(outputDir.resolve(FILENAME_REPO_JSON).toFile());
     var versions = storedRepo.getVersions() == null ? new Versions() : storedRepo.getVersions();
     var metadata = storedRepo.getMetadata() == null ? new Metadata() : storedRepo.getMetadata();
     if (!(monobotConfig.metadata() == null || monobotConfig.metadata().isEmpty())) {
@@ -135,13 +145,14 @@ public class Fetch {
                               sources,
                               versions.isEmpty() ? null : versions,
                               metadata.isEmpty() ? null : metadata);
-                      writeConfigFile(configDir, FILENAME_REPO_JSON, repoConfig);
+                      writeConfigFile(outputDir, FILENAME_REPO_JSON, repoConfig);
                       return null;
                     }));
   }
 
   private void writeConfigFile(Path configDir, String filename, Object object) {
     try {
+      Files.createDirectories(configDir);
       objectMapper.writeValue(configDir.resolve(filename).toFile(), object);
     } catch (IOException e) {
       throw new RuntimeException(e);

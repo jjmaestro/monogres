@@ -19,6 +19,8 @@ public class VersionContext {
   @JsonProperty(value = "strip_prefix")
   private String stripPrefix;
 
+  private VersionContext() {}
+
   public VersionContext(String tag, ObjectId objectId, String archiveSha256, String stripPrefix) {
     this.tag = tag;
     this.objectId = objectId;
