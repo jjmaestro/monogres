@@ -54,8 +54,10 @@ public class Fetch {
       tags = GitTag.getTags(monobotConfig.repoUrl());
     } catch (GitAPIException e) {
       LOG.warnv(
-          "[{0}]: Error while fetching metadata from repo {1}",
-          monobotConfig.name(), monobotConfig.repoUrl());
+          e,
+          "[{0}]: Error while fetching tags from repo {1}",
+          monobotConfig.name(),
+          monobotConfig.repoUrl());
       return Future.succeededFuture();
     }
 
