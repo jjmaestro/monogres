@@ -83,18 +83,32 @@ def pgxs_build(name, pgxs_src, dependencies, pg_version, debug = False):
             local arch
             arch="$$(uname -m)"
 
+            # NOTE:
+            # We use -idirafter for include paths so they are searched AFTER
+            # system directories. This prevents sysroot headers from conflicting
+            # with system libc headers while still making them available.
             local pg_cflags=(
-                "-I$$ext_build_deps/usr/include"
-                "-I$$ext_build_deps/usr/include/$${{arch}}-linux-gnu"
+                "-idirafter $$ext_build_deps/usr/include"
+                "-idirafter $$ext_build_deps/usr/include/$${{arch}}-linux-gnu"
             )
             local pg_ldflags=(
                 "-L$$ext_build_deps/usr/lib/$${{arch}}-linux-gnu"
             )
 
+            # NOTE:
+            # Set up environment variables for pkg-config and runtime library loading.
+            # This mirrors the setup in postgres/pg_build.bzl for consistency.
+            export PKG_CONFIG_SYSROOT_DIR="$$ext_build_deps"
+            export PKG_CONFIG_PATH="$$ext_build_deps/usr/lib/$${{arch}}-linux-gnu/pkgconfig:$$ext_build_deps/usr/share/pkgconfig"
+            export LIBRARY_PATH="$$ext_build_deps/usr/lib/$${{arch}}-linux-gnu"
+            export LD_LIBRARY_PATH="$$ext_build_deps/usr/lib/$${{arch}}-linux-gnu:$$ext_build_deps/usr/lib"
+
             echo "# $$(date) - compile_extension"
             echo
             echo "pgxs_src: $$pgxs_src"
             echo "pgxs_src_copy: $$pgxs_src_copy"
+            echo "PKG_CONFIG_SYSROOT_DIR: $$PKG_CONFIG_SYSROOT_DIR"
+            echo "PKG_CONFIG_PATH: $$PKG_CONFIG_PATH"
 
             if [ -f "$$pgxs_src_copy/configure" ]
             then
@@ -118,9 +132,11 @@ def pgxs_build(name, pgxs_src, dependencies, pg_version, debug = False):
                 -C "$$pgxs_src_copy" \
                 CC="$$cc" \
                 CXX="$$cc" \
-                CPP="$$cc" \
+                CPP="$$cc -E" \
                 PG_CONFIG="$$EXT_BUILD_ROOT/$(PG_CONFIG)" \
                 PG_CFLAGS="$${{pg_cflags[*]}}" \
+                PG_CPPFLAGS="$${{pg_cflags[*]}}" \
+                CPPFLAGS="$${{pg_cflags[*]}}" \
                 PG_LDFLAGS="$${{pg_ldflags[*]}}" \
                 USE_PGXS=1 || return $$?
 
@@ -131,10 +147,11 @@ def pgxs_build(name, pgxs_src, dependencies, pg_version, debug = False):
                 -C "$$pgxs_src_copy" \
                 CC="$$cc" \
                 CXX="$$cc" \
-                CPP="$$cc" \
+                CPP="$$cc -E" \
                 PG_CONFIG="$$EXT_BUILD_ROOT/$(PG_CONFIG)" \
                 PG_CFLAGS="$${{pg_cflags[*]}}" \
                 PG_CPPFLAGS="$${{pg_cflags[*]}}" \
+                CPPFLAGS="$${{pg_cflags[*]}}" \
                 PG_LDFLAGS="$${{pg_ldflags[*]}}" \
                 USE_PGXS=1 \
                 DESTDIR="$$installdir" \
@@ -294,11 +311,11 @@ def pgxs_build_all(name, cfg):
         pgxs_build(
             name = target.name,
             pgxs_src = target.pgxs_src,
-            dependencies = target.dependencies,
+            dependencies = target.deps_buildtime,
             pg_version = target.pg_version,
         )
 
-        for dep in target.dependencies:
+        for dep in set(target.deps_buildtime + target.deps_runtime):
             dep_name = dep.split("//")[-1]
             native.alias(
                 name = "%s--%s" % (target.name, dep_name),
