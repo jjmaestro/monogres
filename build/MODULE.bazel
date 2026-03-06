@@ -164,6 +164,7 @@ PG_EXTENSIONS = [
         "citus",
         {
             "//extensions/citus/patches:0001-13.2.0-fix-hardcoded-cpp.patch": ">=13.2.0/*",
+            "//extensions/citus/patches:0002-13.2.0-fix-safestringlib-include-path.patch": ">=13.2.0/*",
         },
     ],
 ]
