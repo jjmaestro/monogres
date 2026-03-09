@@ -120,7 +120,7 @@ gen-image: $(DOCKER_TARGET_LOCK)
 
 .PHONY: gen-image
 
-$(DOCKER_TARGET_LOCK): $(DOCKERFILE).Dockerfile $(MAKEFILE_LIST) $(REPO)/.bazelversion
+$(DOCKER_TARGET_LOCK): Dockerfile.$(DOCKERFILE) $(MAKEFILE_LIST) $(REPO)/.bazelversion
 	$(DOCKER) build \
 		--platform "$(BUILD_PLATFORMS)" \
 		--file "$<" \
