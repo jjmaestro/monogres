@@ -18,9 +18,5 @@ common --attempt_to_print_relative_paths
 # Disable warning transitive module versions
 common --check_direct_dependencies=off
 
-# TODO: fix this
-build --action_env=CC=clang-14
-build --action_env=CXX=clang-14
-
 # User-specific .bazelrc
 try-import %workspace%/.bazelrc.user
