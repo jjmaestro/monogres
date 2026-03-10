@@ -184,12 +184,14 @@ apt.install(
     nolock = True,
 )
 use_repo(apt, "pg_deps_debian12")
+
 apt.install(
     name = "pgext_sslutils_deps_debian12",
     manifest = "//extensions/sslutils:deps_debian12.yaml",
     nolock = True,
 )
 use_repo(apt, "pgext_sslutils_deps_debian12")
+
 apt.install(
     name = "pgext_citus_deps_debian12",
     manifest = "//extensions/citus:deps_debian12.yaml",

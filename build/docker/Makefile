@@ -50,6 +50,21 @@ DEPS_CC_TOOLCHAIN = \
 DEPS_NON_HERMETIC_BAZEL_RULES = \
 	xz-utils
 
+DOCKER_BUILD_ARGS = \
+	--platform "$(BUILD_PLATFORMS)" \
+	--build-arg BASE_IMAGE="$(BASE_IMAGE)" \
+	--build-arg BASE_IMAGE_TAG="$(BASE_IMAGE_TAG)" \
+	--build-arg REPRODUCIBLE_CONTAINERS_VERSION="$(REPRODUCIBLE_CONTAINERS_VERSION)" \
+	--build-arg BAZELISK_VERSION="$(BAZELISK_VERSION)" \
+	--build-arg BAZEL_VERSION="$(BAZEL_VERSION)" \
+	--build-arg DEPS_CC_TOOLCHAIN="$(DEPS_CC_TOOLCHAIN)" \
+	--build-arg DEPS_NON_HERMETIC_BAZEL_RULES="$(DEPS_NON_HERMETIC_BAZEL_RULES)" \
+	--build-arg USERNAME="$(USERNAME)" \
+	--build-arg HOMEDIR="/$(USERNAME)" \
+	--label org.opencontainers.image.source="$(GH_REPO_URL)" \
+	--target "$(DOCKER_TARGET)" \
+	--tag "$(IMAGE_NAME)"
+
 all:
 	@echo $(REPO)
 	@echo "Run make gen-image to generate $(TARGET) image and "
@@ -121,22 +136,7 @@ gen-image: $(DOCKER_TARGET_LOCK)
 .PHONY: gen-image
 
 $(DOCKER_TARGET_LOCK): Dockerfile.$(DOCKERFILE) $(MAKEFILE_LIST) $(REPO)/.bazelversion
-	$(DOCKER) build \
-		--platform "$(BUILD_PLATFORMS)" \
-		--file "$<" \
-		--build-arg BASE_IMAGE="$(BASE_IMAGE)" \
-		--build-arg BASE_IMAGE_TAG="$(BASE_IMAGE_TAG)" \
-		--build-arg REPRODUCIBLE_CONTAINERS_VERSION="$(REPRODUCIBLE_CONTAINERS_VERSION)" \
-		--build-arg BAZELISK_VERSION="$(BAZELISK_VERSION)" \
-		--build-arg BAZEL_VERSION="$(BAZEL_VERSION)" \
-		--build-arg DEPS_CC_TOOLCHAIN="$(DEPS_CC_TOOLCHAIN)" \
-		--build-arg DEPS_NON_HERMETIC_BAZEL_RULES="$(DEPS_NON_HERMETIC_BAZEL_RULES)" \
-		--build-arg USERNAME="$(USERNAME)" \
-		--build-arg HOMEDIR="/$(USERNAME)" \
-		--label org.opencontainers.image.source="$(GH_REPO_URL)" \
-		--target "$(DOCKER_TARGET)" \
-		--tag "$(IMAGE_NAME)" \
-		. && \
+	$(DOCKER) build --file "$<" $(DOCKER_BUILD_ARGS) . && \
 	$(DOCKER) image tag $(IMAGE_NAME) $(TAG) && \
 	touch "$@"
 
@@ -157,7 +157,12 @@ pull-image:
 
 .PHONY: pull-image
 
+test:
+	@echo "No tests — run project-level tests instead"
+
+.PHONY: test
+
 clean:
 	rm -f .*.lock
 
-.PHONY: clean test  # making checkmake happy
+.PHONY: clean

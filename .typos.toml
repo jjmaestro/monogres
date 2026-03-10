@@ -1,3 +1,7 @@
 # For details on ignoring false positives and other configuration options, see:
 # https://github.com/crate-ci/typos?tab=readme-ov-file#false-positives
 # https://github.com/crate-ci/typos/blob/master/docs/reference.md
+
+[default.extend-words]
+# CPY is a valid ruff rule code (flake8-copyright)
+CPY = "CPY"

@@ -287,7 +287,7 @@ export EKS_CLUSTER_NAME="buildcluster"
 eksctl create cluster --config-file "eks/${EKS_CLUSTER_NAME}.yaml"
 ```
 
-For testing locally there's a `k3d` config that "simmulates" different roles
+For testing locally there's a `k3d` config that "simulates" different roles
 and architectures to validate the deployment and node placement:
 
 ```sh
