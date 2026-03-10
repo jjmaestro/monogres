@@ -134,6 +134,14 @@ ENTRYPOINT_SCRIPT := \
 		--groups=$$USER_GID,0,$$HOST_GID \
 		-- $(EXEC_CMD)
 
+# Extra read-only bind mounts. Space-separated NAME=PATH pairs.
+# Each is mounted at /src/NAME:ro inside the container.
+# Example: BIND_MOUNTS="bazel_download_archives=/home/user/repos/bazel_download_archives"
+BIND_MOUNTS ?=
+
+EXTRA_VOLUME_FLAGS := $(foreach mount,$(BIND_MOUNTS),\
+	--volume "$(lastword $(subst =, ,$(mount)))":/src/$(firstword $(subst =, ,$(mount))):ro)
+
 all:
 	@echo $(REPO)
 	@echo "Run make gen-image to generate $(TARGET) image and "
@@ -161,6 +169,7 @@ run-image:
 		--volume "$(REPO)":/src/workspace:rw \
 		--volume "$(REPO)/../.git":/src/.git:ro \
 		$(CACHE_MOUNTS) \
+		$(EXTRA_VOLUME_FLAGS) \
 		--workdir /src/workspace \
 		--entrypoint /bin/bash \
 		$(TAG) \
