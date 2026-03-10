@@ -1,0 +1,22 @@
+# gitlint configuration. See https://jorisroovers.com/gitlint/
+#
+# Runs as a commit-msg hook (right after commitizen) to keep commit messages
+# consistent. Two project-specific choices:
+#
+#   * titles may run to 100 chars, because a conventional-commit prefix such as
+#     chore(patches/rules_foreign_cc) already eats ~30 of the usual 72;
+#   * body lines cap at 72, but a URL inside a `References:` git trailer is
+#     exempt (a URL cannot be wrapped). That exemption needs whole-message
+#     context, so it lives in the UC1 custom rule below rather than the
+#     built-in B1.
+[general]
+extra-path=.gitlint-rules
+# B1 (body-max-line-length) is replaced by UC1 (body-max-line-length-references).
+# B6 (body-is-missing) is off: short, self-explanatory commits need no body.
+ignore=B1,B6
+
+[title-max-length]
+line-length=100
+
+[body-max-line-length-references]
+max-line-length=72
