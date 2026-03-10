@@ -65,6 +65,9 @@ DOCKER_BUILD_ARGS = \
 	--target "$(DOCKER_TARGET)" \
 	--tag "$(IMAGE_NAME)"
 
+CONTAINER_NAME_SUFFIX ?=
+CONTAINER_NAME ?= bzlsndbx-$(PROJECT_NAME)_$(ARCH)$(CONTAINER_NAME_SUFFIX)
+
 ifneq ($(USE_CACHE),false)
 CACHE_MOUNTS := --mount type=volume,src=bazel-cache,dst=/cache
 
@@ -126,7 +129,7 @@ run-image:
     # OTHERWISE IT JUST SILENTLY CONTINUES WITHOUT HERMETIC SANDBOX!!?
 	$(DOCKER) run \
 		--platform "linux/$(ARCH)" \
-		--name "sandbox_$(PROJECT_NAME)_$(ARCH)" \
+		--name "$(CONTAINER_NAME)" \
 		--privileged \
 		--rm \
 		--tty \
