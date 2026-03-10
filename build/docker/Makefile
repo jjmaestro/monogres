@@ -100,6 +100,16 @@ CACHE_MOUNTS :=
 CACHE_SETUP_SCRIPT :=
 endif
 
+DETACHED ?= false
+
+ifeq ($(DETACHED),false)
+EXEC_CMD := /bin/bash
+RUN_MODE := --tty --interactive
+else
+EXEC_CMD := sleep infinity
+RUN_MODE := --detach
+endif
+
 # The container starts as root (--user root) so the entrypoint can run the
 # cache setup. It then drops privileges to $(USERNAME) via setpriv.
 #
@@ -122,7 +132,7 @@ ENTRYPOINT_SCRIPT := \
 		--reuid=$$USER_UID \
 		--regid=$$USER_GID \
 		--groups=$$USER_GID,0,$$HOST_GID \
-		-- /bin/bash
+		-- $(EXEC_CMD)
 
 all:
 	@echo $(REPO)
@@ -142,8 +152,7 @@ run-image:
 		--name "$(CONTAINER_NAME)" \
 		--privileged \
 		--rm \
-		--tty \
-		--interactive \
+		$(RUN_MODE) \
 		--user "root" \
 		--group-add root \
 		--group-add "$(shell id -g)" \
