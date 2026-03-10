@@ -65,6 +65,52 @@ DOCKER_BUILD_ARGS = \
 	--target "$(DOCKER_TARGET)" \
 	--tag "$(IMAGE_NAME)"
 
+ifneq ($(USE_CACHE),false)
+CACHE_MOUNTS := --mount type=volume,src=bazel-cache,dst=/cache
+
+# initialize cache volume and symlink into $HOME
+CACHE_SETUP_SCRIPT := \
+	mkdir -p /cache/bazel-cache; \
+	if [ ! -f /cache/.seeded ]; then \
+		cp -a /$(USERNAME)/.cache/. /cache/bazel-cache/.; \
+		touch /cache/.seeded; \
+	fi; \
+	rm -rf /$(USERNAME)/.cache; \
+	ln -sf /cache/bazel-cache /$(USERNAME)/.cache; \
+	touch /cache/bash_history; \
+	ln -sf /cache/bash_history /$(USERNAME)/.bash_history; \
+	touch /cache/bazelrc; \
+	ln -sf /cache/bazelrc /$(USERNAME)/.bazelrc; \
+	chown -R $(USERNAME) /cache;
+else
+CACHE_MOUNTS :=
+CACHE_SETUP_SCRIPT :=
+endif
+
+# The container starts as root (--user root) so the entrypoint can run the
+# cache setup. It then drops privileges to $(USERNAME) via setpriv.
+#
+# NOTE: HOME must be set explicitly because the container starts as root,
+# so HOME defaults to /root. Without this, bash sources /root/.bashrc which
+# the non-root user can't read. Setting HOME to the user's actual home dir
+# (e.g. /postgres) fixes .bashrc, .cache, and other dotfile lookups.
+#
+# NOTE: Docker must run WITHOUT rootless mode and WITHOUT userns-remap, so
+# that host UIDs map 1:1 to container UIDs. The host user's GID is passed
+# via HOST_GID and added to the supplementary groups, ensuring the container
+# user can access bind-mounted files owned by the host user's group.
+ENTRYPOINT_SCRIPT := \
+	set -xeuo pipefail; \
+	$(CACHE_SETUP_SCRIPT) \
+	USER_UID=$$(getent passwd $(USERNAME) | cut -d: -f3); \
+	USER_GID=$$(getent passwd $(USERNAME) | cut -d: -f4); \
+	export HOME=$$(getent passwd $(USERNAME) | cut -d: -f6); \
+	exec setpriv \
+		--reuid=$$USER_UID \
+		--regid=$$USER_GID \
+		--groups=$$USER_GID,0,$$HOST_GID \
+		-- /bin/bash
+
 all:
 	@echo $(REPO)
 	@echo "Run make gen-image to generate $(TARGET) image and "
@@ -74,44 +120,10 @@ all:
 
 .PHONY: all
 
-ifneq ($(USE_CACHE),false)
-define CACHE_SETUP_SCRIPT
-set -x \
-	&& mkdir -p bazel-cache \
-	&& cp -a /$(USERNAME)/.cache/. bazel-cache/. \
-	&& touch bash_history \
-	&& chown -R "$(USERNAME)" bash_history \
-	&& touch bazelrc \
-	&& chown -R "$(USERNAME)" bazelrc
-endef
-
-define CACHE_PARAMETER
---mount type=volume,src=bazel-cache,dst=/$(USERNAME)/.cache,volume-subpath=bazel-cache \
---mount type=volume,src=bazel-cache,dst=/$(USERNAME)/.bash_history,volume-subpath=bash_history \
---mount type=volume,src=bazel-cache,dst=/$(USERNAME)/.bazelrc,volume-subpath=bazelrc
-endef
-else
-CACHE_PARAMETER :=
-endif
-
 run-image:
 	# NOTE:
     # MUST RUN --privileged so that Bazel --experimental_use_hermetic_linux_sandbox works!
     # OTHERWISE IT JUST SILENTLY CONTINUES WITHOUT HERMETIC SANDBOX!!?
-ifneq ($(USE_CACHE),false)
-	$(DOCKER) run \
-		--platform "linux/$(ARCH)" \
-		--name "sandbox_$(PROJECT_NAME)_$(ARCH)" \
-		--privileged \
-		--rm \
-		--mount type=volume,src=bazel-cache,dst=/src/workspace \
-		--user "root" \
-		--group-add root \
-		--workdir /src/workspace \
-		--entrypoint /bin/bash \
-		$(TAG) \
-		-c '$(CACHE_SETUP_SCRIPT)'
-endif
 	$(DOCKER) run \
 		--platform "linux/$(ARCH)" \
 		--name "sandbox_$(PROJECT_NAME)_$(ARCH)" \
@@ -119,15 +131,18 @@ endif
 		--rm \
 		--tty \
 		--interactive \
+		--user "root" \
 		--group-add root \
 		--group-add "$(shell id -g)" \
+		--env HOST_GID="$(shell id -g)" \
 		--volume "$(REPO)":/src/repo:ro \
 		--volume "$(REPO)":/src/workspace:rw \
 		--volume "$(REPO)/../.git":/src/.git:ro \
-		$(CACHE_PARAMETER) \
+		$(CACHE_MOUNTS) \
 		--workdir /src/workspace \
 		--entrypoint /bin/bash \
-		$(TAG)
+		$(TAG) \
+		-c '$(ENTRYPOINT_SCRIPT)'
 
 .PHONY: run-image
 
