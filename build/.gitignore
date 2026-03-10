@@ -9,5 +9,8 @@ MODULE.bazel.lock
 # ignore the user's Bazel config
 .bazelrc.user
 
+# ignore the user's Bazel downloader config
+.bazel_downloader.cfg.user
+
 # ignore the "Makefile locks"
 /docker/.*.lock

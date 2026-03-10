@@ -15,3 +15,10 @@
 # <TOKEN> is a JWT token generated with the Buildbarn private key, see
 # rbe/README.md and rbe/auth.auth.sh
 # build:remote-buildbarn --remote_exec_header=authorization="Bearer <TOKEN>"
+
+# NOTE:
+# Opt into the local caching download proxy (DOCKER ONLY; breaks host-side
+# bazel). Copy .bazel_downloader.cfg.user.tmpl to .bazel_downloader.cfg.user
+# first. --downloader_config is single-valued (last flag wins), so this
+# REPLACES the base .bazel_downloader.cfg; the .user file is a complete config.
+# common --downloader_config=.bazel_downloader.cfg.user

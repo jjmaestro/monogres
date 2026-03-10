@@ -1,0 +1,35 @@
+# This file is a template for .bazel_downloader.cfg.user, which is .gitignored
+# so you can opt into a local caching download proxy without committing it.
+#
+# To enable it:
+#   1. cp .bazel_downloader.cfg.user.tmpl .bazel_downloader.cfg.user
+#   2. uncomment the matching --downloader_config line in .bazelrc.user
+#      (see .bazelrc.user.tmpl)
+
+# NOTE:
+# In Bazel 10 supports passing --downloader_config more than once and applies
+# all of them, see https://github.com/bazelbuild/bazel/issues/13131 but in
+# Bazel <=9 --downloader_config is single-valued: it doesn't merge, the last
+# flag wins.
+
+# -- 8< Remember to keep in-sync with .bazel_downloader.cfg! ---
+# GNU ftp is very flaky because it's being DDOSed, see:
+# https://github.com/bazelbuild/bazel-central-registry/pull/5996
+# https://github.com/bazelbuild/bazel-central-registry/pull/6098
+rewrite (ftp.gnu.org)/(.*) https://mirrors.kernel.org/$2
+rewrite (ftpmirror.gnu.org)/(.*) https://mirrors.kernel.org/$2
+# -- 8< Remember to keep in-sync with .bazel_downloader.cfg! ---
+
+# DOCKER ONLY: the proxy is reached via host.docker.internal, which resolves
+# only inside the container, and the Bazel module registry fetch tries just the
+# first rewrite candidate (no fallthrough to the direct URL). On the host this
+# breaks `bazel query`/`mod` with "Unknown host: host.docker.internal", so wire
+# it only in the container.
+
+# Catch-all rewrites: try the local caching proxy first, then the original URL.
+# The proxy runs on the host machine; containers reach it via
+# host.docker.internal, mapped to the gateway in docker/Makefile. Repository
+# downloads (http_archive) fall through to the direct URL when the proxy is
+# down, but registry fetches do not.
+rewrite ([^/]+)/(.*) http://host.docker.internal:8080/$1/$2
+rewrite ([^/]+)/(.*) https://$1/$2

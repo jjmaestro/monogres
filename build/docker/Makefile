@@ -198,6 +198,7 @@ run-image:
 		--group-add root \
 		--group-add "$(shell id -g)" \
 		--env HOST_GID="$(shell id -g)" \
+		--add-host=host.docker.internal:host-gateway \
 		--volume "$(REPO)":/src/repo:rw \
 		--volume "$(REPO)/build":/src/workspace:rw \
 		$(CACHE_MOUNTS) \
