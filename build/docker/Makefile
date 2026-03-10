@@ -23,7 +23,6 @@ ARCH ?= $(shell uname -m)
 USERNAME = postgres
 
 BUILD_PLATFORMS ?= "linux/amd64,linux/arm64"
-USE_CACHE ?= false
 
 BASE_IMAGE=debian
 # https://hub.docker.com/_/debian/tags
@@ -68,8 +67,19 @@ DOCKER_BUILD_ARGS = \
 CONTAINER_NAME_SUFFIX ?=
 CONTAINER_NAME ?= bzlsndbx-$(PROJECT_NAME)_$(ARCH)$(CONTAINER_NAME_SUFFIX)
 
+CACHE_VOLUME_NAME_SUFFIX ?=
+CACHE_VOLUME_NAME ?= bzlcache-$(CONTAINER_NAME)$(CACHE_VOLUME_NAME_SUFFIX)
+
+# A non-empty CACHE_VOLUME_NAME_SUFFIX makes caching default on, but an
+# explicit USE_CACHE (e.g. USE_CACHE=false) still wins.
+ifeq ($(CACHE_VOLUME_NAME_SUFFIX),)
+USE_CACHE ?= false
+else
+USE_CACHE ?= true
+endif
+
 ifneq ($(USE_CACHE),false)
-CACHE_MOUNTS := --mount type=volume,src=bazel-cache,dst=/cache
+CACHE_MOUNTS := --mount type=volume,src=$(CACHE_VOLUME_NAME),dst=/cache
 
 # initialize cache volume and symlink into $HOME
 CACHE_SETUP_SCRIPT := \
