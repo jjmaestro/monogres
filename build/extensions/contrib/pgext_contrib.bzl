@@ -2,8 +2,8 @@
 Rules to package Postgres contrib extensions from source.
 
 Postgres contrib extensions are built as part of the main Postgres build. These
-rules isolate and collect the relevant files for each extension and package
-them into individual tar archives for distribution or reuse.
+rules isolate and collect the relevant files for each extension and package them
+into individual tar archives for distribution or reuse.
 """
 
 load("@tar.bzl//tar:mtree.bzl", "mtree_mutate", "mtree_spec")
@@ -22,8 +22,8 @@ def pgext_contrib(name, files, pg_target):
 
     Args:
         name (str): The name of the contrib extension.
-        files (list[str]): The list of file paths (relative to the Postgres
-            base dir) that make the contrib extension.
+        files (list[str]): The list of file paths (relative to the Postgres base
+            dir) that make the contrib extension.
         pg_target (struct): A struct with the Postgres build configuration.
     """
     name_files = "%s--files" % name

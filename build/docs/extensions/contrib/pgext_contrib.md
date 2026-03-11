@@ -3,8 +3,8 @@
 Rules to package Postgres contrib extensions from source.
 
 Postgres contrib extensions are built as part of the main Postgres build. These
-rules isolate and collect the relevant files for each extension and package
-them into individual tar archives for distribution or reuse.
+rules isolate and collect the relevant files for each extension and package them
+into individual tar archives for distribution or reuse.
 
 <a id="pgext_contrib"></a>
 

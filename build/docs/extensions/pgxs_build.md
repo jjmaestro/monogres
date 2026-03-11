@@ -9,7 +9,7 @@ Rules to build Postgres PGXS extensions from source.
 <pre>
 load("@monogres//extensions:pgxs_build.bzl", "pgxs_build")
 
-pgxs_build(<a href="#pgxs_build-name">name</a>, <a href="#pgxs_build-pgxs_src">pgxs_src</a>, <a href="#pgxs_build-dependencies">dependencies</a>, <a href="#pgxs_build-pg_version">pg_version</a>)
+pgxs_build(<a href="#pgxs_build-name">name</a>, <a href="#pgxs_build-pgxs_src">pgxs_src</a>, <a href="#pgxs_build-deps_buildtime">deps_buildtime</a>, <a href="#pgxs_build-pg_version">pg_version</a>, <a href="#pgxs_build-debug">debug</a>)
 </pre>
 
 Generates a Bazel target to build a PGXS extension with the [PGXS build system].
@@ -24,8 +24,9 @@ Generates a Bazel target to build a PGXS extension with the [PGXS build system].
 | :------------- | :------------- | :------------- |
 | <a id="pgxs_build-name"></a>name |  The name of the Bazel target to generate.   |  none |
 | <a id="pgxs_build-pgxs_src"></a>pgxs_src |  The repo with the extension source code.   |  none |
-| <a id="pgxs_build-dependencies"></a>dependencies |  List of dependencies needed to build the extension.   |  none |
+| <a id="pgxs_build-deps_buildtime"></a>deps_buildtime |  List of dependencies needed to build the extension.   |  none |
 | <a id="pgxs_build-pg_version"></a>pg_version |  `struct` containing metadata to select the Postgres build that will be used when building the extension.   |  none |
+| <a id="pgxs_build-debug"></a>debug |  If `True`, prints a debug message for each command executed.   |  `False` |
 
 
 <a id="pgxs_build_all"></a>

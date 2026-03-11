@@ -9,7 +9,7 @@ Postgres build configuration.
 <pre>
 load("@monogres//postgres:cfg.bzl", "cfg")
 
-cfg.new(<a href="#cfg.new-name">name</a>, <a href="#cfg.new-versions">versions</a>, <a href="#cfg.new-option_sets">option_sets</a>, <a href="#cfg.new-repo_name">repo_name</a>)
+cfg.new(<a href="#cfg.new-name">name</a>, <a href="#cfg.new-versions">versions</a>, <a href="#cfg.new-option_sets">option_sets</a>, <a href="#cfg.new-repo_name">repo_name</a>, <a href="#cfg.new-deps_buildtime">deps_buildtime</a>, <a href="#cfg.new-deps_runtime">deps_runtime</a>)
 </pre>
 
 Creates a config `struct` containing build targets for multiple Postgres versions.
@@ -23,6 +23,8 @@ Creates a config `struct` containing build targets for multiple Postgres version
 | <a id="cfg.new-versions"></a>versions |  List of Postgres versions.   |  none |
 | <a id="cfg.new-option_sets"></a>option_sets |  The names of the Postgres option sets to add to the targets. An option set is a predefined combination of compile-time options.   |  none |
 | <a id="cfg.new-repo_name"></a>repo_name |  The name of the external Bazel repository with the Postgres source code.   |  none |
+| <a id="cfg.new-deps_buildtime"></a>deps_buildtime |  List of Postgres buildtime dependencies.   |  none |
+| <a id="cfg.new-deps_runtime"></a>deps_runtime |  List of Postgres runtime dependencies.   |  none |
 
 **RETURNS**
 

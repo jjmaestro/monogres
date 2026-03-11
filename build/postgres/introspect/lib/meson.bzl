@@ -85,8 +85,9 @@ def _meson_options_txt_to_bzl(meson_options_txt):
     somehow, Meson "drops" (changes) this in the introspect.json so there is no
     way to separate the features from the rest of the options.
 
-    E.g.
+    E.g.:
 
+    ```
     # meson_options.txt
     option('bonjour', type: 'feature', value: 'auto',
       description: 'Bonjour support')
@@ -108,6 +109,7 @@ def _meson_options_txt_to_bzl(meson_options_txt):
         },
         (...)
     ]
+    ```
     """
     lines = meson_options_txt.split("\n")
     new_lines = []
@@ -145,14 +147,16 @@ def _get_contrib_features(contrib_name, meson_build):
     Get the features required to compile the contrib extension.
 
     The features are extracted by "parsing" the meson.build file. This is not
-    perfect because dependency checks can have an else-branch, e.g.
+    perfect because dependency checks can have an else-branch, e.g.:
 
-        if zlib.found()
-          pgcrypto_deps += zlib
-          pgcrypto_regress += 'pgp-compression'
-        else
-          pgcrypto_regress += 'pgp-zlib-DISABLED'
-        endif
+    ```
+    if zlib.found()
+      pgcrypto_deps += zlib
+      pgcrypto_regress += 'pgp-compression'
+    else
+      pgcrypto_regress += 'pgp-zlib-DISABLED'
+    endif
+    ```
 
     or the checks can actually be for something else (like basebackup_to_shell
     where the check is used to select tools during testing).
@@ -277,9 +281,9 @@ def _get_contrib_installed_paths(installed_paths, contrib_name, pg_version, arch
 
     if not contrib_paths:
         # NOTE:
-        # deduping the installed_paths because some of them have different
-        # build paths (e.g. share/tsearch_data has src/backend/tsearch/dicts
-        # and src/backend/snowball/stopwords as build dirs)
+        # deduping the installed_paths because some of them have different build
+        # paths (e.g. share/tsearch_data has src/backend/tsearch/dicts and
+        # src/backend/snowball/stopwords as build dirs)
         contrib_paths = {
             path_installed: path_build
             for path_build, path_installed in installed_paths.items()

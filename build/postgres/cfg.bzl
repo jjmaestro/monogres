@@ -11,8 +11,8 @@ def _target(name, version, option_set, repo_name, deps_buildtime, deps_runtime):
 
     Args:
         name (str): Base name for the target (e.g. "postgres").
-        version (str): Postgres version string (e.g. "16.0"). Must be one of
-            the versions in `pg_src`.
+        version (str): Postgres version string (e.g. "16.0"). Must be one of the
+            versions in `pg_src`.
         option_set (str): The name of the Postgres option sets to add to the
             target. An option set is a predefined combination of compile-time
             options.
@@ -68,14 +68,13 @@ def _target(name, version, option_set, repo_name, deps_buildtime, deps_runtime):
     )
 
 def _new(name, versions, option_sets, repo_name, deps_buildtime, deps_runtime):
-    """
-    Creates a config `struct` containing build targets for multiple Postgres versions.
+    """Creates a config `struct` containing build targets for multiple Postgres versions.
 
     Args:
         name (str): A base name for the group of targets (e.g. "postgres").
         versions (list[str]): List of Postgres versions.
-        option_sets (list[str]): The names of the Postgres option sets to
-            add to the targets. An option set is a predefined combination of
+        option_sets (list[str]): The names of the Postgres option sets to add to
+            the targets. An option set is a predefined combination of
             compile-time options.
         repo_name (str): The name of the external Bazel repository with the
             Postgres source code.

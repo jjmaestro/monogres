@@ -60,7 +60,8 @@ def _gen(
         indent_size (int): Number of spaces per indent level.
         quote_strings (bool): Whether to quote `string` values.
         quote_keys (bool): Whether to quote `dict` keys.
-        ltd_as_assignments (bool): If `True`, render dicts using `=` instead of `:`.
+        ltd_as_assignments (bool): If `True`, render dicts using `=` instead of
+            `:`.
 
     Returns:
         A Starlark-compatible source string.
@@ -166,8 +167,7 @@ def _gen(
     return "".join(result)
 
 def _assignments(assignments, inline = True, quote_values = True):
-    """
-    Generates a Starlark assignment strings from a `dict` or `list` of key-value pairs.
+    """Generates a Starlark assignment strings from a `dict` or `list` of key-value pairs.
 
     Args:
         assignments: A `dict`, `list` of 2-tuples, or `tuple` of 2-tuples.

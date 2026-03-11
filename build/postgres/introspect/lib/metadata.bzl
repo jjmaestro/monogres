@@ -5,8 +5,8 @@ PG introspect manual metadata
 # NOTE:
 # FEATURES_TO_DEB_PKGS maps the feature to the required Debian package(s). It
 # was curated by hand from PG 16.0 contrib extensions. Hopefully / luckily,
-# these should not change too often and will probably remain the same for a
-# long time. But if not, then we will probably have to add some versioning
+# these should not change too often and will probably remain the same for a long
+# time. But if not, then we will probably have to add some versioning
 # mechanisms.
 FEATURES_TO_DEB_PKGS = {
     "bonjour": "libavahi-compat-libdnssd-dev",
@@ -55,7 +55,8 @@ FEATURES_TO_DEB_PKGS = {
 }
 
 FEATURES_OVERRIDE = {
-    # the .found() in basebackup_to_shell is only for testing and selecting tools
+    # the .found() in basebackup_to_shell is only for testing and selecting
+    # tools
     "basebackup_to_shell": None,
 }
 

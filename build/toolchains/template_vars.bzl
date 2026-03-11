@@ -9,11 +9,11 @@ def template_variable_info_rule(is_mapped, get_name, other_template_vars = None)
     Args:
 
         is_mapped (function): f(path, target), returns if the path should be
-          mapped to a template variable.
+            mapped to a template variable.
         get_name (function): f(path, target), returns the template name onto
-          which to map the given path.
+            which to map the given path.
         other_template_vars (function, optional): f(context, target), returns
-          other template variables.
+            other template variables.
 
     Returns:
         template_variable_info (rule)

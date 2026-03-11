@@ -12,7 +12,7 @@ intended to be imported into BUILD files to then call `pgxs_build` rules.
 <pre>
 load("@monogres//extensions:cfg.bzl", "cfg")
 
-cfg.new(<a href="#cfg.new-name">name</a>, <a href="#cfg.new-versions">versions</a>, <a href="#cfg.new-pg_targets">pg_targets</a>, <a href="#cfg.new-repo_name">repo_name</a>, <a href="#cfg.new-dependencies">dependencies</a>, <a href="#cfg.new-metadata">metadata</a>)
+cfg.new(<a href="#cfg.new-name">name</a>, <a href="#cfg.new-versions">versions</a>, <a href="#cfg.new-pg_targets">pg_targets</a>, <a href="#cfg.new-repo_name">repo_name</a>, <a href="#cfg.new-deps_buildtime">deps_buildtime</a>, <a href="#cfg.new-deps_runtime">deps_runtime</a>, <a href="#cfg.new-metadata">metadata</a>)
 </pre>
 
 Creates a config `struct` containing build targets for multiple Postgres extensions.
@@ -31,7 +31,8 @@ out the PG versions that are incompatible with the extension.
 | <a id="cfg.new-versions"></a>versions |  List of versions for the extension.   |  none |
 | <a id="cfg.new-pg_targets"></a>pg_targets |  The list of pg_target `struct`s for which to build the extension.   |  none |
 | <a id="cfg.new-repo_name"></a>repo_name |  The name of the external Bazel repository with the extension source code.   |  none |
-| <a id="cfg.new-dependencies"></a>dependencies |  List of dependencies needed to build the extension.   |  `None` |
+| <a id="cfg.new-deps_buildtime"></a>deps_buildtime |  List of dependencies needed to build the extension.   |  `None` |
+| <a id="cfg.new-deps_runtime"></a>deps_runtime |  List of dependencies needed to run the extension.   |  `None` |
 | <a id="cfg.new-metadata"></a>metadata |  Extension metadata that can contain e.g. `compatible_with` metadata to filter incompatible Postgres versions.   |  `None` |
 
 **RETURNS**

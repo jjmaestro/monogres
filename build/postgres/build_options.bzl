@@ -25,9 +25,9 @@ _DEFAULT_OPTIONS = dict(
     # NOTE:
     # PG docs say libdir defaults to `PREFIX/lib` but the Meson build uses
     # get_option('libdir') and the Meson docs say "libdir is automatically
-    # detected based on your platform". Testing on Debian amd64, libdir
-    # defaults to lib64 while on arm64 is lib, so we need to pin it to lib
-    # to ensure the libdir path is always the same across all platforms:
+    # detected based on your platform". Testing on Debian amd64, libdir defaults
+    # to lib64 while on arm64 is lib, so we need to pin it to lib to ensure the
+    # libdir path is always the same across all platforms:
     libdir = "lib",
     rpath = "false",
     system_tzdata = "/usr/share/zoneinfo",
@@ -41,9 +41,9 @@ _ENABLED_UNLESS_EXPLICITLY_DISABLED = [
 ]
 
 # These options usually only make sense on specific OSes or specific builds
-# requiring the functionality (e.g. the docs or developer options) so we
-# disable these by default even if auto-features is enabled and are only
-# enabled when explicitly enabled.
+# requiring the functionality (e.g. the docs or developer options) so we disable
+# these by default even if auto-features is enabled and are only enabled when
+# explicitly enabled.
 _DISABLED_UNLESS_EXPLICITLY_ENABLED = [
     ("docs", "disabled"),
     ("docs_pdf", "disabled"),

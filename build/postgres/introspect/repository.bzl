@@ -2,8 +2,8 @@
 Repository rule to create Postgres introspect repos.
 
 These repos expose metadata about the Postgres build, such as all the generated
-files. The metadata is extracted and generated from the Meson introspection
-JSON files and the meson_options.txt file.
+files. The metadata is extracted and generated from the Meson introspection JSON
+files and the meson_options.txt file.
 
 This metadata enables the creation of "slice" targets that expose specific
 subsets of the build output (e.g. the files belonging to individual Postgres

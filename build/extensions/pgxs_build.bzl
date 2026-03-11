@@ -3,8 +3,7 @@ Rules to build Postgres PGXS extensions from source.
 """
 
 def pgxs_build(name, pgxs_src, deps_buildtime, pg_version, debug = False):
-    """
-    Generates a Bazel target to build a PGXS extension with the [PGXS build system].
+    """Generates a Bazel target to build a PGXS extension with the [PGXS build system].
 
     [PGXS build system]: https://www.postgresql.org/docs/current/extend-pgxs.html
 
@@ -13,9 +12,10 @@ def pgxs_build(name, pgxs_src, deps_buildtime, pg_version, debug = False):
         pgxs_src (str): The repo with the extension source code.
         deps_buildtime (list[str]): List of dependencies needed to build the
             extension.
-        pg_version (struct): `struct` containing metadata to select the
-            Postgres build that will be used when building the extension.
-        debug (bool): If `True`, prints a debug message for each command executed.
+        pg_version (struct): `struct` containing metadata to select the Postgres
+            build that will be used when building the extension.
+        debug (bool): If `True`, prints a debug message for each command
+            executed.
     """
     tar_file, log_file = ["%s%s" % (name, file) for file in (".tar", ".log")]
 
@@ -268,8 +268,8 @@ def pgxs_build(name, pgxs_src, deps_buildtime, pg_version, debug = False):
             tar_cmd = "$(BSDTAR_BIN)",
             # NOTE: https://reproducible-builds.org/docs/archives/
             # We are using bsd tar which has less flags available. Consider
-            # writing an mtree and/or find a way to use tar.bzl tar rule
-            # like we did in extensions/contrib
+            # writing an mtree and/or find a way to use tar.bzl tar rule like we
+            # did in extensions/contrib
             tar_args = "\n".join([
                 "--format=posix",
                 "--numeric-owner",

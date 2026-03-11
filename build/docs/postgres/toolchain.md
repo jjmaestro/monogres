@@ -5,7 +5,7 @@ target.
 
 It uses `template_variable_info_rule` to expose template variables, as follows:
 - `<BINARY_NAME>`: each binary under `<target>/bin/` is mapped to an uppercase
-  variable of the binary name (e.g., `pg_config` â `PG_CONFIG`).
+  variable of the binary name (e.g., `pg_config` → `PG_CONFIG`).
 - `PG_INSTALL_DIR`: the Postgres install dir, derived from the path to
   `pg_config`.
 

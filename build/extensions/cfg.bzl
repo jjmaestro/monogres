@@ -15,8 +15,7 @@ def _new(
         deps_buildtime = None,
         deps_runtime = None,
         metadata = None):
-    """
-    Creates a config `struct` containing build targets for multiple Postgres extensions.
+    """Creates a config `struct` containing build targets for multiple Postgres extensions.
 
     For each of the extension versions, it will generate a target `struct` that
     contains all the required config needed to compile the extension, filtering
@@ -26,8 +25,8 @@ def _new(
         name (str): A base name for the group of targets (usually the name of
             the extension).
         versions (list[str]): List of versions for the extension.
-        pg_targets (list[struct]): The list of pg_target `struct`s for
-            which to build the extension.
+        pg_targets (list[struct]): The list of pg_target `struct`s for which to
+            build the extension.
         repo_name (str): The name of the external Bazel repository with the
             extension source code.
         deps_buildtime (list[str]): List of dependencies needed to build the
@@ -35,8 +34,7 @@ def _new(
         deps_runtime (list[str]): List of dependencies needed to run the
             extension.
         metadata (dict): Extension metadata that can contain e.g.
-            `compatible_with` metadata to filter incompatible Postgres
-            versions.
+            `compatible_with` metadata to filter incompatible Postgres versions.
 
     Returns:
         A `pgext` config `struct` with:

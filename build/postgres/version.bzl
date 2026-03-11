@@ -6,8 +6,7 @@ load("@version_utils//spec:spec.bzl", Spec = "spec")
 load("@version_utils//version:version.bzl", Version = "version")
 
 def is_compatible_with(version, version_constraints, debug_prefix = None):
-    """
-    Returns whether a Postgres version is compatible with the given version constraints.
+    """Returns whether a Postgres version is compatible with the given version constraints.
 
     **EXAMPLE**
 

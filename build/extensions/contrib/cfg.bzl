@@ -1,18 +1,15 @@
 """
 Postgres contrib extensions build configuration.
 
-This module defines a build configuration for a Postgres contrib extension.
-It's intended to be imported into BUILD files to then call `pgext_contrib`
-rules.
+This module defines a build configuration for a Postgres contrib extension. It's
+intended to be imported into BUILD files to then call `pgext_contrib` rules.
 """
 
 load("@pg_introspect//:defs.bzl", "INTROSPECTIONS")
 load("//postgres:cfg.bzl", PG_CFG = "CFG")
 
 def _target(name, pg_target, pgext_metadata):
-    """
-    Creates a struct representing a build target for a Postgres contrib extension.
-    """
+    """Creates a struct representing a build target for a Postgres contrib extension."""
     return struct(
         name = "~".join([name, pg_target.pg_version.name]),
         pg_target = pg_target,
@@ -24,8 +21,7 @@ def _pgext_metadata(pg_target):
     return INTROSPECTIONS[ikey]
 
 def _new(name, pgext_pg_targets):
-    """
-    Creates a config `struct` containing build targets for multiple Postgres contrib extensions.
+    """Creates a config `struct` containing build targets for multiple Postgres contrib extensions.
 
     Args:
         name (str): The base name of the extension (e.g. "sslutils").
@@ -58,9 +54,7 @@ cfg = struct(
 )
 
 def _pgext_contrib(pg_targets):
-    """
-    Maps the contrib extension name to the Postgres versions in the `pg_targets`.
-    """
+    """Maps the contrib extension name to the Postgres versions in the `pg_targets`."""
     pgext_contrib = {}
 
     for pg_target in pg_targets:
