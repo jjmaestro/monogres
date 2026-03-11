@@ -32,6 +32,7 @@ repos:
         exclude: >-
           (?x)^(
             build/docs/.*/.*\.md
+            |build/.*/docs/.*/.*\.md
           )$
       - id: mixed-line-ending
       - id: trailing-whitespace
@@ -67,6 +68,7 @@ repos:
         exclude: >-
           (?x)^(
             build/docs/.*/.*\.md
+            |build/.*/docs/.*/.*\.md
           )$
   - repo: https://github.com/mpalmer/action-validator
     rev: v0.9.0
@@ -97,6 +99,16 @@ repos:
     rev: v2.14.0
     hooks:
       - id: hadolint
+  - repo: local
+    hooks:
+      - id: bzl-docstring-lint
+        name: bzl-docstring-lint
+        entry: .pre-commit-hooks/bzl-docstring-lint.py
+        args:
+          - --fix
+        language: system
+        types: [file]
+        files: \.(bzl|bazel)$
   - repo: https://github.com/keith/pre-commit-buildifier
     rev: 8.5.1.1
     hooks:

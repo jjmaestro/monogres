@@ -28,11 +28,14 @@
               python314
               hadolint
               jsonnet
+              uv
             ]);
 
             env = build.env;
 
             shellHook = ''
+              export UV_PYTHON="$(command -v python3)"
+              export UV_NO_MANAGED_PYTHON=1
               export SSL_CERT_FILE="${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
               prek install --prepare-hooks --quiet
             '';
