@@ -45,7 +45,7 @@ bzl_library(
         ":toolchain",
         "@protobuf//bazel:cc_proto_library_bzl",
         "@rules_foreign_cc//foreign_cc:meson",
-        "@rules_pkg//pkg:tar",
+        "@rules_pkg//pkg:bzl_srcs",
     ],
 )
 
