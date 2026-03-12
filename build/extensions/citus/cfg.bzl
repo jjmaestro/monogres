@@ -21,6 +21,7 @@ CFG = cfg.new(
     deps_runtime = [
         "@pgext_citus_deps_debian12//libcurl4",
         "@pgext_citus_deps_debian12//liblz4-1",
+        "@pgext_citus_deps_debian12//libssl3",
         "@pgext_citus_deps_debian12//libzstd1",
     ],
     metadata = METADATA,

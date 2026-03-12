@@ -19,4 +19,5 @@ packages:
   # runtime
   - libcurl4
   - liblz4-1
+  - libssl3
   - libzstd1
