@@ -48,6 +48,7 @@ packages:
   - libavahi-compat-libdnssd1
   - libcurl4
   - libedit2
+  - libgssapi-krb5-2
   - libicu72
   - libkrb5-3
   - libldap-2.5-0
@@ -68,4 +69,5 @@ packages:
   - llvm-14-runtime
   - ncurses-term
   - tcl
+  - tzdata
   - zlib1g

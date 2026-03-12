@@ -154,7 +154,9 @@ CFG = cfg.new(
     deps_runtime = [
         "@pg_deps_debian12//gettext",
         "@pg_deps_debian12//libavahi-compat-libdnssd1",
+        "@pg_deps_debian12//libcurl4",
         "@pg_deps_debian12//libedit2",
+        "@pg_deps_debian12//libgssapi-krb5-2",
         "@pg_deps_debian12//libicu72",
         "@pg_deps_debian12//libkrb5-3",
         "@pg_deps_debian12//libldap-2.5-0",
@@ -175,6 +177,7 @@ CFG = cfg.new(
         "@pg_deps_debian12//llvm-14-runtime",
         "@pg_deps_debian12//ncurses-term",
         "@pg_deps_debian12//tcl",
+        "@pg_deps_debian12//tzdata",
         "@pg_deps_debian12//zlib1g",
     ],
 )
