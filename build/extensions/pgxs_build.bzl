@@ -103,6 +103,20 @@ def pgxs_build(name, pgxs_src, deps_buildtime, pg_version, debug = False):
             export LIBRARY_PATH="$$deps_buildtime_path/usr/lib/$${{arch}}-linux-gnu"
             export LD_LIBRARY_PATH="$$deps_buildtime_path/usr/lib/$${{arch}}-linux-gnu:$$deps_buildtime_path/usr/lib"
 
+            # NOTE:
+            # PGXS flag variables are exported as environment variables (not
+            # passed on the make command line) so that extensions can freely
+            # override or append to them in their Makefiles. In GNU Make,
+            # command-line variables (priority 2) crush Makefile assignments
+            # (priority 3), while environment variables (priority 4) act as
+            # defaults. This lets the standard PGXS mechanism in pgxs.mk
+            # (e.g. override CPPFLAGS := PG_CPPFLAGS + CPPFLAGS) merge
+            # extension-defined flags with our sysroot flags correctly.
+            export PG_CFLAGS="$${{pg_cflags[*]}}"
+            export PG_CPPFLAGS="$${{pg_cflags[*]}}"
+            export CPPFLAGS="$${{pg_cflags[*]}}"
+            export PG_LDFLAGS="$${{pg_ldflags[*]}}"
+
             echo "# $$(date) - compile_extension"
             echo
             echo "pgxs_src: $$pgxs_src"
@@ -134,10 +148,6 @@ def pgxs_build(name, pgxs_src, deps_buildtime, pg_version, debug = False):
                 CXX="$$cc" \
                 CPP="$$cc -E" \
                 PG_CONFIG="$$EXT_BUILD_ROOT/$(PG_CONFIG)" \
-                PG_CFLAGS="$${{pg_cflags[*]}}" \
-                PG_CPPFLAGS="$${{pg_cflags[*]}}" \
-                CPPFLAGS="$${{pg_cflags[*]}}" \
-                PG_LDFLAGS="$${{pg_ldflags[*]}}" \
                 USE_PGXS=1 || return $$?
 
             echo
@@ -149,10 +159,6 @@ def pgxs_build(name, pgxs_src, deps_buildtime, pg_version, debug = False):
                 CXX="$$cc" \
                 CPP="$$cc -E" \
                 PG_CONFIG="$$EXT_BUILD_ROOT/$(PG_CONFIG)" \
-                PG_CFLAGS="$${{pg_cflags[*]}}" \
-                PG_CPPFLAGS="$${{pg_cflags[*]}}" \
-                CPPFLAGS="$${{pg_cflags[*]}}" \
-                PG_LDFLAGS="$${{pg_ldflags[*]}}" \
                 USE_PGXS=1 \
                 DESTDIR="$$installdir" \
                 install || return $$?
