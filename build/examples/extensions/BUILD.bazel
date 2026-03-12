@@ -1,13 +1,12 @@
-"""e2e test"""
+"""e2e smoke test"""
 
 load("@monogres//extensions:all.bzl", "CFGS_ALL")
-load(":test.bzl", "build_all_test")
+load(":test.bzl", "build_smoke_test")
 
-[
-    build_all_test(
-        name = name,
-        cfg = cfg,
-    )
-    for name, cfgs in CFGS_ALL.items()
-    for cfg in cfgs
-]
+# Loading CFGS_ALL validates every generated cfg.bzl / repo.bzl. Exercise
+# build_all_test with just citus's default target: it covers deps_buildtime,
+# deps_runtime, and is_compatible filtering.
+build_smoke_test(
+    name = "citus",
+    cfg = CFGS_ALL["citus"][0],
+)

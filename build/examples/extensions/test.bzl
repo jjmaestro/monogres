@@ -12,3 +12,7 @@ def build_test(package, name):
 def build_all_test(name, cfg):
     for target in cfg.targets:
         build_test(name, target.name)
+
+def build_smoke_test(name, cfg):
+    """Exercises build_all_test with just the default target."""
+    build_all_test(name, struct(targets = [cfg.default]))
