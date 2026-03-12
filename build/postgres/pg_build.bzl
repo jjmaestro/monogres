@@ -249,6 +249,54 @@ def _pg_build_introspect(name, pg_src, build_options, auto_features, sysroot = N
         tags = ["manual"],
     )
 
+def _sysroot(deps):
+    """
+    Declares or reuses a shared sysroot target for the given dependencies.
+
+    This helper canonicalizes the dependency labels into a sorted, deduplicated
+    key, derives the shared sysroot target name from that key, and ensures the
+    target exists as a `pkg_tar`. If an existing rule already uses that name, it
+    must be the expected sysroot target kind.
+
+    Args:
+        deps (list[str]): Dependency tarball labels to merge into the sysroot.
+
+    Returns:
+        str: The Bazel target name of the shared sysroot.
+    """
+
+    # Canonicalize the dependency set so equivalent inputs share the same
+    # sysroot target.
+    deps_ = tuple(sorted({dep: None for dep in deps}.keys()))
+
+    # Derive a stable shared sysroot target name from the canonicalized
+    # dependency set. `hash()` is deterministic in Bazel Starlark for strings;
+    # using both the forward and reversed dependency order plus the number of
+    # dependencies keeps the name short while making accidental collisions
+    # vanishingly unlikely.
+    sysroot_name = "sysroot-{}-{}-{}".format(
+        abs(hash("\n".join(deps_))),
+        abs(hash("\n".join(reversed(deps_)))),
+        len(deps_),
+    )
+
+    existing_sysroot = native.existing_rule(sysroot_name)
+
+    if existing_sysroot == None:
+        pkg_tar(
+            name = sysroot_name,
+            deps = list(deps_),
+            extension = "tar",
+            out = "{}.tar".format(sysroot_name),
+        )
+    elif existing_sysroot.get("kind") not in ("pkg_tar", "pkg_tar_impl"):
+        fail("sysroot target name %r is already defined as %r" % (
+            sysroot_name,
+            existing_sysroot.get("kind"),
+        ))
+
+    return sysroot_name
+
 def pg_build(name, pg_src, build_options, auto_features, deps_buildtime = None, pg_version = None):
     """
     Generates a Bazel target to build Postgres with the Meson build system.
@@ -274,22 +322,23 @@ def pg_build(name, pg_src, build_options, auto_features, deps_buildtime = None, 
             and [Meson Build Options
             "Features"](https://mesonbuild.com/Build-options.html#features).
         deps_buildtime (list[str]): Optional list of dependency tarballs from
-            rules_distroless packages. These will be combined into a sysroot and
-            made available to the meson build via environment variables
-            (PKG_CONFIG_SYSROOT_DIR, CFLAGS, LDFLAGS, etc.).
+            rules_distroless packages. This macro combines them into a shared
+            sysroot, reused by targets with the same dependency set, and exposes
+            it to the Meson build through environment variables such as
+            `PKG_CONFIG_SYSROOT_DIR`, `CFLAGS`, and `LD_LIBRARY_PATH`. It also
+            creates a per-target `name--sysroot` alias that points at the shared
+            target.
         pg_version (struct): Optional `struct` that contains the Postgres name
             and version that will be the default target.
     """
     sysroot = None
 
     if deps_buildtime:
-        sysroot = "{}--sysroot".format(name)
-
-        pkg_tar(
-            name = sysroot,
-            deps = deps_buildtime,
-            extension = "tar",
-            out = "{}.tar".format(sysroot),
+        sysroot = _sysroot(deps_buildtime)
+        native.alias(
+            name = "{}--sysroot".format(name),
+            actual = sysroot,
+            visibility = ["//visibility:public"],
         )
 
     _pg_build_meson(name, pg_src, build_options, auto_features, sysroot)
