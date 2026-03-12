@@ -32,6 +32,18 @@ let
     else
       pkgs.bazelisk;
 
+  # Some actions call ctx.actions.run_shell WITHOUT use_default_shell_env (e.g.
+  # protobuf's ProtocAuthenticityCheck): Bazel runs them with an empty env (no
+  # PATH), so bare grep/cat in the script aren't found on NixOS, and
+  # --action_env can't reach them precisely because they opt out of the default
+  # shell env. Point Bazel's run_shell shell at a wrapper that puts our tools on
+  # PATH before exec'ing real bash. (Same idea as the FHS env above, aimed at
+  # the shell instead of the launchers.)
+  bashShell = pkgs.writeShellScriptBin "bash" ''
+    export PATH="${bazelPath}''${PATH:+:$PATH}"
+    exec ${pkgs.bash}/bin/bash "$@"
+  '';
+
   # --host_action_env is needed in addition to --action_env: actions that run
   # in the exec configuration ("[for tool]") don't inherit --action_env.
   bazel = pkgs.writeShellScriptBin "bazel" ''
@@ -43,12 +55,14 @@ let
     case "''${1:-}" in
       test)
         exec ${bazelisk}/bin/bazelisk "$@" \
+          --shell_executable="${bashShell}/bin/bash" \
           --action_env=PATH="${bazelPath}" \
           --host_action_env=PATH="${bazelPath}" \
           --test_env=PATH="${bazelPath}"
         ;;
       build|run)
         exec ${bazelisk}/bin/bazelisk "$@" \
+          --shell_executable="${bashShell}/bin/bash" \
           --action_env=PATH="${bazelPath}" \
           --host_action_env=PATH="${bazelPath}"
         ;;
