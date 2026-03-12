@@ -258,12 +258,12 @@ def pgxs_build(name, pgxs_src, deps_buildtime, pg_version, debug = False):
         export LOG_FILE
 
         {{
-            setup_dependencies "$$DEPS_BUILDTIME_PATH" "$${{DEPS_BUILDTIME[@]}}"
-            compile_extension "$$CC" "$$PGXS_SRC" "$$DEPS_BUILDTIME_PATH" "$$INSTALLDIR" 2>&1
+            setup_deps_buildtime "$$DEPS_BUILDTIME_PATH" "$${{DEPS_BUILDTIME[@]}}"
+            compile_extension "$$CC" "$$PGXS_SRC" "$$DEPS_BUILDTIME_PATH" "$$INSTALLDIR"
             mkdir -p "$$RELOCATED_PGXS_INSTALLDIR/postgres/{pg_version}"
             mv -t "$$RELOCATED_PGXS_INSTALLDIR/postgres/{pg_version}/." "$$PGXS_INSTALLDIR"/*
             tar_ "$$TAR_FILE" --directory "$$RELOCATED_PGXS_INSTALLDIR" .
-        }} >> "$$LOG_FILE"
+        }} >> "$$LOG_FILE" 2>&1
         """.format(
             tar_cmd = "$(BSDTAR_BIN)",
             # NOTE: https://reproducible-builds.org/docs/archives/
