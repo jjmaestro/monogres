@@ -1,0 +1,243 @@
+From 40264d7e558401c6b3fe995af050bd380e32c72a Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Tue, 10 Mar 2026 01:02:49 +0000
+Subject: [PATCH] patch: rename the isinstance helper, a Bazel 9 builtin
+
+Bazel 9 promotes `isinstance` to a predeclared Starlark builtin and
+reserves the identifier at parse time: `def isinstance(...)` is rejected
+with "syntax error at 'isinstance': expected identifier", and every call
+site fails with "isinstance() is not yet supported".
+
+version_utils ships its own `isinstance` helper in
+`spec/internal/utils.bzl` and loads it into `spec/internal/clauses.bzl`
+and `spec/spec.bzl`, so the module no longer parses under Bazel 9.
+
+Rename the helper and all of its references to `is_instance`, a plain
+identifier that resolves the same way on Bazel <9 and >=9. The helper
+matches against the `__class__` string convention these modules attach to
+their structs, so the builtin is not a drop-in replacement; keeping the
+existing implementation under a non-reserved name preserves the semantics
+on every supported Bazel version.
+---
+ spec/internal/clauses.bzl | 56 +++++++++++++++++++--------------------
+ spec/internal/utils.bzl   |  2 +-
+ spec/spec.bzl             |  4 +--
+ 3 files changed, 31 insertions(+), 31 deletions(-)
+
+diff --git a/spec/internal/clauses.bzl b/spec/internal/clauses.bzl
+index ddca4c6..8b57389 100644
+--- a/spec/internal/clauses.bzl
++++ b/spec/internal/clauses.bzl
+@@ -7,7 +7,7 @@ See [`docs/spec/internal/clauses`]
+ """
+ 
+ load("//version:version.bzl", Version = "version")
+-load(":utils.bzl", "isinstance")
++load(":utils.bzl", "is_instance")
+ 
+ # Clause
+ 
+@@ -84,7 +84,7 @@ def _allof_anyof_new(__class__, clauses_, _fail = fail):
+                 if c in results:
+                     # use the already computed value
+                     sub_results.append(results[c])
+-                elif isinstance(c, (__CLASS__ANYOF, __CLASS__ALLOF)):
++                elif is_instance(c, (__CLASS__ANYOF, __CLASS__ALLOF)):
+                     # re-push current node
+                     stack.append((node, children_results, depth))
+ 
+@@ -131,7 +131,7 @@ def _allof_anyof_new(__class__, clauses_, _fail = fail):
+ 
+     def eq(self, other):
+         return (
+-            isinstance(other, self.__class__) and
++            is_instance(other, self.__class__) and
+             self.repr() == other.repr()
+         )
+ 
+@@ -140,7 +140,7 @@ def _allof_anyof_new(__class__, clauses_, _fail = fail):
+             return clause.match(version)
+ 
+         def result_f(_, node, sub_results):
+-            if isinstance(node, __CLASS__ALLOF):
++            if is_instance(node, __CLASS__ALLOF):
+                 return all(sub_results)
+             else:
+                 return any(sub_results)
+@@ -159,16 +159,16 @@ def _allof_anyof_new(__class__, clauses_, _fail = fail):
+             for c in clause.clauses:
+                 simplified = results[c]
+ 
+-                if isinstance(simplified, self.__class__):
++                if is_instance(simplified, self.__class__):
+                     merged |= {c.repr(): c for c in simplified.clauses}
+                 elif (
+-                    isinstance(self, __CLASS__ALLOF) and
+-                    isinstance(simplified, __CLASS__ALWAYS)
++                    is_instance(self, __CLASS__ALLOF) and
++                    is_instance(simplified, __CLASS__ALWAYS)
+                 ):
+                     continue
+                 elif (
+-                    isinstance(self, __CLASS__ANYOF) and
+-                    isinstance(simplified, __CLASS__NEVER)
++                    is_instance(self, __CLASS__ANYOF) and
++                    is_instance(simplified, __CLASS__NEVER)
+                 ):
+                     continue
+                 else:
+@@ -186,9 +186,9 @@ def _allof_anyof_new(__class__, clauses_, _fail = fail):
+         return __stack_recursion__(self, leaf_f, result_f)
+ 
+     def _allof_and(self, other):
+-        if isinstance(other, __CLASS__ALLOF):
++        if is_instance(other, __CLASS__ALLOF):
+             allof_clauses = list(self.clauses) + list(other.clauses)
+-        elif isinstance(other, (__CLASS__ANYOF, __CLASS__MATCHER)):
++        elif is_instance(other, (__CLASS__ANYOF, __CLASS__MATCHER)):
+             allof_clauses = list(self.clauses) + [other]
+         else:
+             return _fail("NotImplemented")
+@@ -196,33 +196,33 @@ def _allof_anyof_new(__class__, clauses_, _fail = fail):
+         return allof.new(*allof_clauses)
+ 
+     def _anyof_and(self, other):
+-        if isinstance(other, __CLASS__ALLOF):
++        if is_instance(other, __CLASS__ALLOF):
+             return other.and_(self)
+-        elif isinstance(other, (__CLASS__ANYOF, __CLASS__MATCHER)):
++        elif is_instance(other, (__CLASS__ANYOF, __CLASS__MATCHER)):
+             return allof.new(self, other)
+         else:
+             return _fail("NotImplemented")
+ 
+     def and_(self, other):
+-        if isinstance(self, __CLASS__ALLOF):
++        if is_instance(self, __CLASS__ALLOF):
+             return _allof_and(self, other)
+         else:
+             return _anyof_and(self, other)
+ 
+     def _allof_or(self, other):
+-        if isinstance(other, __CLASS__ANYOF):
++        if is_instance(other, __CLASS__ANYOF):
+             return other.or_(self)
+-        elif isinstance(other, __CLASS__ALLOF):
++        elif is_instance(other, __CLASS__ALLOF):
+             return anyof.new(self, other)
+-        elif isinstance(other, __CLASS__MATCHER):
++        elif is_instance(other, __CLASS__MATCHER):
+             return anyof.new(self, allof.new(other))
+         else:
+             return _fail("NotImplemented")
+ 
+     def _anyof_or(self, other):
+-        if isinstance(other, __CLASS__ANYOF):
++        if is_instance(other, __CLASS__ANYOF):
+             anyof_clauses = list(self.clauses) + list(other.clauses)
+-        elif isinstance(other, (__CLASS__ALLOF, __CLASS__MATCHER)):
++        elif is_instance(other, (__CLASS__ALLOF, __CLASS__MATCHER)):
+             anyof_clauses = list(self.clauses) + [other]
+         else:
+             return _fail("NotImplemented")
+@@ -230,7 +230,7 @@ def _allof_anyof_new(__class__, clauses_, _fail = fail):
+         return anyof.new(*anyof_clauses)
+ 
+     def or_(self, other):
+-        if isinstance(self, __CLASS__ALLOF):
++        if is_instance(self, __CLASS__ALLOF):
+             return _allof_or(self, other)
+         else:
+             return _anyof_or(self, other)
+@@ -291,17 +291,17 @@ __CLASS__MATCHER = "%s." % _MATCHER
+ 
+ def _matcher_new(self_dict, _fail = fail):
+     def and_(other):
+-        if isinstance(other, __CLASS__ALLOF):
++        if is_instance(other, __CLASS__ALLOF):
+             return other.and_(self)
+-        elif isinstance(other, (__CLASS__ANYOF, __CLASS__MATCHER)):
++        elif is_instance(other, (__CLASS__ANYOF, __CLASS__MATCHER)):
+             return allof.new(self, other)
+         else:
+             return _fail("NotImplemented")
+ 
+     def or_(other):
+-        if isinstance(other, __CLASS__ANYOF):
++        if is_instance(other, __CLASS__ANYOF):
+             return other.or_(self)
+-        elif isinstance(other, (__CLASS__ALLOF, __CLASS__MATCHER)):
++        elif is_instance(other, (__CLASS__ALLOF, __CLASS__MATCHER)):
+             return anyof.new(self, other)
+         else:
+             return _fail("NotImplemented")
+@@ -341,7 +341,7 @@ def _always_new(_fail = fail):
+     self = struct(**self_dict)
+ 
+     self_dict |= dict(
+-        eq = lambda other: isinstance(other, self.__class__),
++        eq = lambda other: is_instance(other, self.__class__),
+         or_ = lambda other: self,
+     )
+ 
+@@ -358,7 +358,7 @@ def _never_new(_fail = fail):
+     self = struct(**self_dict)
+ 
+     self_dict |= dict(
+-        eq = lambda other: isinstance(other, self.__class__),
++        eq = lambda other: is_instance(other, self.__class__),
+         and_ = lambda other: self,
+     )
+ 
+@@ -465,7 +465,7 @@ def _range_new(
+ 
+     def eq(other):
+         return (
+-            isinstance(other, self.__class__) and
++            is_instance(other, self.__class__) and
+             self.operator == other.operator and
+             self.target.to_str() == other.target.to_str() and
+             self.prerelease_policy == other.prerelease_policy
+@@ -568,7 +568,7 @@ clauses = struct(
+     AllOf = allof,
+     AnyOf = anyof,
+     Range = range_,
+-    isinstance = isinstance,
++    is_instance = is_instance,
+     __test__ = struct(
+         _clause_new = _clause_new,
+     ),
+diff --git a/spec/internal/utils.bzl b/spec/internal/utils.bzl
+index ea0fadd..fe5c3f7 100644
+--- a/spec/internal/utils.bzl
++++ b/spec/internal/utils.bzl
+@@ -1,6 +1,6 @@
+ """utils.bzl"""
+ 
+-def isinstance(other, __classes__):
++def is_instance(other, __classes__):
+     if type(__classes__) not in ("tuple", "list"):
+         __classes__ = [__classes__]
+ 
+diff --git a/spec/spec.bzl b/spec/spec.bzl
+index ffa9939..22505b9 100644
+--- a/spec/spec.bzl
++++ b/spec/spec.bzl
+@@ -87,7 +87,7 @@ print(v.to_str())
+ 
+ load("//spec/internal:npm.bzl", NPMParser = "npmparser")
+ load("//spec/internal:simple.bzl", SimpleParser = "simpleparser")
+-load("//spec/internal:utils.bzl", "isinstance")
++load("//spec/internal:utils.bzl", "is_instance")
+ load("//version:version.bzl", Version = "version")
+ 
+ SYNTAX = struct(
+@@ -163,7 +163,7 @@ def _new(
+         return max_
+ 
+     def _eq(other, _fail = fail):
+-        if not isinstance(other, self.__class__):
++        if not is_instance(other, self.__class__):
+             return _fail("NotImplemented")
+ 
+         return self.clause.eq(other.clause)
