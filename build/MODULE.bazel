@@ -115,8 +115,8 @@ m4.repository(
 )
 use_repo(m4, "m4")
 
-bazel_lib_toolchains = use_extension("@tar.bzl//tar:extensions.bzl", "toolchains")
-use_repo(bazel_lib_toolchains, "bsd_tar_toolchains")
+bsd_tar_toolchains = use_extension("@tar.bzl//tar:extensions.bzl", "toolchains")
+use_repo(bsd_tar_toolchains, "bsd_tar_toolchains")
 
 register_toolchains("@bsd_tar_toolchains//:all")
 
