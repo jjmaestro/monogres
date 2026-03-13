@@ -95,13 +95,30 @@ def pgxs_build(name, pgxs_src, deps_buildtime, pg_version, debug = False):
                 "-L$$deps_buildtime_path/usr/lib/$${{arch}}-linux-gnu"
             )
 
+            local pkg_config_path=(
+              "$$deps_buildtime_path/usr/lib/$${{arch}}-linux-gnu/pkgconfig"
+              "$$deps_buildtime_path/usr/share/pkgconfig"
+            )
+
+            local library_path=(
+              "$$deps_buildtime_path/usr/lib/$${{arch}}-linux-gnu"
+            )
+
+            local ld_library_path=(
+              "$$deps_buildtime_path/usr/lib/$${{arch}}-linux-gnu"
+              "$$deps_buildtime_path/usr/lib"
+            )
+
             # NOTE:
             # Set up environment variables for pkg-config and runtime library loading.
             # This mirrors the setup in postgres/pg_build.bzl for consistency.
             export PKG_CONFIG_SYSROOT_DIR="$$deps_buildtime_path"
-            export PKG_CONFIG_PATH="$$deps_buildtime_path/usr/lib/$${{arch}}-linux-gnu/pkgconfig:$$deps_buildtime_path/usr/share/pkgconfig"
-            export LIBRARY_PATH="$$deps_buildtime_path/usr/lib/$${{arch}}-linux-gnu"
-            export LD_LIBRARY_PATH="$$deps_buildtime_path/usr/lib/$${{arch}}-linux-gnu:$$deps_buildtime_path/usr/lib"
+            export PKG_CONFIG_PATH
+            PKG_CONFIG_PATH="$$(IFS=:; echo "$${{pkg_config_path[*]}}")"
+            export LIBRARY_PATH
+            LIBRARY_PATH="$$(IFS=:; echo "$${{library_path[*]}}")"
+            export LD_LIBRARY_PATH
+            LD_LIBRARY_PATH="$$(IFS=:; echo "$${{ld_library_path[*]}}")"
 
             # NOTE:
             # PGXS flag variables are exported as environment variables (not
