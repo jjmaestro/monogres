@@ -53,13 +53,15 @@ llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm", 
 # Docker image. This requires llvm-14, clang-14, lld-14, and libc6-dev to be
 # installed. Also, absolute_paths=True is needed because the system toolchain
 # uses absolute paths for builtin headers:
-# /usr/lib/llvm-14/lib/clang/14.0.6/include/
+# /usr/lib/llvm-14/lib/clang/14.0.6/include/. Plus using libstdc++ instead of
+# libc++ to match Debian's LLVM libraries ABI.
 llvm.toolchain(
     name = "llvm_toolchain_system_linux_amd64",
     absolute_paths = True,
     exec_arch = "amd64",
     exec_os = "linux",
     llvm_version = "14.0.6",
+    stdlib = {"": "stdc++"},
 )
 llvm.toolchain_root(
     name = "llvm_toolchain_system_linux_amd64",
@@ -71,6 +73,7 @@ llvm.toolchain(
     exec_arch = "arm64",
     exec_os = "linux",
     llvm_version = "14.0.6",
+    stdlib = {"": "stdc++"},
 )
 llvm.toolchain_root(
     name = "llvm_toolchain_system_linux_arm64",

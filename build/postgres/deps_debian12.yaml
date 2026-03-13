@@ -52,6 +52,7 @@ packages:
   - libicu72
   - libkrb5-3
   - libldap-2.5-0
+  - libllvm14
   - liblz4-1
   - libnuma1
   - libossp-uuid16

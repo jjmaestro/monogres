@@ -160,6 +160,7 @@ CFG = cfg.new(
         "@pg_deps_debian12//libicu72",
         "@pg_deps_debian12//libkrb5-3",
         "@pg_deps_debian12//libldap-2.5-0",
+        "@pg_deps_debian12//libllvm14",
         "@pg_deps_debian12//liblz4-1",
         "@pg_deps_debian12//libnuma1",
         "@pg_deps_debian12//libossp-uuid16",
