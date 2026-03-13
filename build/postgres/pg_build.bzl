@@ -27,6 +27,7 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot = None):
         "@rules_m4//m4:current_m4_toolchain",
         "@rules_flex//flex:current_flex_toolchain",
         "@rules_bison//bison:current_bison_toolchain",
+        "@bsd_tar_toolchains//:resolved_toolchain",
     ]
 
     # NOTE:
@@ -50,6 +51,7 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot = None):
         # `execvp` to resolve it using `PATH`.
         M4 = "$(execpath @m4//bin:m4)",
         PYTHON = "$(execpath @python_3_11//:python3)",
+        TAR = "$$EXT_BUILD_ROOT/$(BSDTAR_BIN)",
     )
 
     # NOTE:
@@ -163,6 +165,7 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot = None):
         BISON = "$BISON",
         FLEX = "$FLEX",
         PYTHON = "$PYTHON",
+        TAR = "$TAR",  # NOTE: PG meson 16.x marks `tar` REQUIRED
     )
 
     # NOTE: env_sysroot must be merged first so SYSROOT_DIR is set before other
