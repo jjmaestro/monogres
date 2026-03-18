@@ -1,3 +1,3 @@
 package dev.monogres.monobot.config.output;
 
-public record SourceContext(String url) {}
+public record SourceContext(String url, String type) {}

@@ -7,6 +7,8 @@ public interface Repo {
 
   ForgeType getForgeType();
 
+  String getArchiveUrlExtension();
+
   String getArchiveUrlRaw(GitTag gitTag);
 
   String getArchiveUrlRaw(String gitTag);

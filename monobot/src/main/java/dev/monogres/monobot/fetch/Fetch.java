@@ -137,7 +137,9 @@ public class Fetch {
                 vertx.executeBlocking(
                     () -> {
                       var sources = new Sources();
-                      var sourcesContext = new SourceContext(repo.getArchiveUrlRaw("{commit}"));
+                      var sourcesContext =
+                          new SourceContext(
+                              repo.getArchiveUrlRaw("{commit}"), repo.getArchiveUrlExtension());
                       sources.put(repo.getForgeType().getDomain(), sourcesContext);
 
                       var repoConfig =

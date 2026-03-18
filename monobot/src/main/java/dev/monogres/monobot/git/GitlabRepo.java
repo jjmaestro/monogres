@@ -8,6 +8,7 @@ import java.text.MessageFormat;
 public class GitlabRepo extends AbstractOrgNameRepo {
   private static final String ARCHIVE_URL_PATH_MESSAGE_FORMAT_TEMPLATE =
       "https://{0}/api/v4/projects/{1}/repository/archive.tar.gz?sha={2}";
+  private static final String ARCHIVE_URL_EXTENSION_TYPE = "tar.gz";
 
   private static String parseOrganization(URL url) {
     var name = parseName(url);
@@ -32,6 +33,11 @@ public class GitlabRepo extends AbstractOrgNameRepo {
   @Override
   public ForgeType getForgeType() {
     return ForgeType.GITLAB;
+  }
+
+  @Override
+  public String getArchiveUrlExtension() {
+    return ARCHIVE_URL_EXTENSION_TYPE;
   }
 
   /// [Gitlab API id](https://docs.gitlab.com/api/rest/#namespaced-paths)

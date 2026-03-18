@@ -29,6 +29,8 @@ public class GithubRepo extends AbstractOrgNameRepo {
   private static final String ARCHIVE_URL_PATH_MESSAGE_FORMAT_TEMPLATE =
       "https://{0}/repos/{1}/{2}/tarball/{3}";
 
+  private static final String ARCHIVE_URL_EXTENSION_TYPE = "tar.gz";
+
   private static String parseUrlItem(URL url, int item) {
     var paths = url.getPath().replaceFirst("^/", "").split("/");
     if (paths.length != 2) {
@@ -53,6 +55,11 @@ public class GithubRepo extends AbstractOrgNameRepo {
   @Override
   public ForgeType getForgeType() {
     return ForgeType.GITHUB;
+  }
+
+  @Override
+  public String getArchiveUrlExtension() {
+    return ARCHIVE_URL_EXTENSION_TYPE;
   }
 
   @Override
