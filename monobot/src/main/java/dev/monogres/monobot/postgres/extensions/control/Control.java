@@ -9,6 +9,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 /// Java record modeling the fields, defaults and invariants of a Postgres extension's control
 /// ($extname.control) file.
@@ -127,8 +128,9 @@ public record Control(
 
   public static Control fromBytes(byte[] bytes) {
     var properties = parseFromBytes(bytes);
-    @SuppressWarnings("unchecked")
-    Map<String, String> propertiesMap = (Map) properties;
+    Map<String, String> propertiesMap =
+        properties.entrySet().stream()
+            .collect(Collectors.toMap(e -> e.getKey().toString(), e -> e.getValue().toString()));
 
     var mapper = new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
