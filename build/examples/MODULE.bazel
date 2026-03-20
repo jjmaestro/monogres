@@ -4,7 +4,7 @@ module(
 )
 
 bazel_dep(name = "monogres", version = "", dev_dependency = True)
-bazel_dep(name = "toolchains_llvm", version = "1.5.0", dev_dependency = True)
+bazel_dep(name = "toolchains_llvm", version = "1.7.0", dev_dependency = True)
 
 local_path_override(
     module_name = "monogres",
@@ -19,7 +19,7 @@ local_path_override(
 # Root-module overrides do not propagate through dependencies, so the examples
 # workspace must mirror the monogres RFCC override to exercise the same tool
 # stack as a downstream consumer.
-RFCC_COMMIT = "2eca712c15301c1f4e71ceec21e6271f373501e2"
+RFCC_COMMIT = "006ae82d9b4953a9b1c170827aef660f9f0f9ec0"
 
 archive_override(
     module_name = "rules_foreign_cc",
@@ -27,7 +27,7 @@ archive_override(
     patches = [
         "//patches/rules_foreign_cc:0001-workaround-rfcc-0.15.1-ninja-version-breaks-with-gli.patch",
     ],
-    sha256 = "62cf2de93583a40413cbf7ebca380a0c0d2421db7b3614eb1d8389bcba21723e",
+    sha256 = "6cfda69786df4c539384b1c0031c13bb8d666b0042a4eab59841fa7a6c21fca9",
     strip_prefix = "rules_foreign_cc-{}".format(RFCC_COMMIT),
     url = "https://github.com/bazel-contrib/rules_foreign_cc/archive/{}.tar.gz".format(RFCC_COMMIT),
 )

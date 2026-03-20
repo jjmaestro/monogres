@@ -7,32 +7,32 @@ module(
     compatibility_level = 0,
 )
 
-bazel_dep(name = "bazel_lib", version = "3.0.0")
-bazel_dep(name = "bazel_skylib", version = "1.8.2")
+bazel_dep(name = "bazel_lib", version = "3.3.1")
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "download_archives", version = "0.1.0")
-bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "platforms", version = "1.1.0")
 
 # see https://bazelbuild.slack.com/archives/CA31HN1T3/p1753021278448849
-bazel_dep(name = "protobuf", version = "31.1")
-bazel_dep(name = "rules_bison", version = "0.4")
-bazel_dep(name = "rules_distroless", version = "0.6.1")
-bazel_dep(name = "rules_flex", version = "0.4")
+bazel_dep(name = "protobuf", version = "34.1")
+bazel_dep(name = "rules_bison", version = "0.4.bcr.1")
+bazel_dep(name = "rules_distroless", version = "0.8.0")
+bazel_dep(name = "rules_flex", version = "0.4.1")
 bazel_dep(name = "rules_foreign_cc", version = "0.15.1")
-bazel_dep(name = "rules_m4", version = "0.3")
+bazel_dep(name = "rules_m4", version = "0.3.bcr.1")
 bazel_dep(name = "rules_pkg", version = "1.2.0")
-bazel_dep(name = "rules_python", version = "1.6.3")
+bazel_dep(name = "rules_python", version = "1.9.0")
 bazel_dep(name = "starlark_utils", version = "0.0.1")
-bazel_dep(name = "tar.bzl", version = "0.6.0")
+bazel_dep(name = "tar.bzl", version = "0.10.5")
 bazel_dep(name = "version_utils", version = "0.1.0")
 
-bazel_dep(name = "toolchains_llvm", version = "1.5.0", dev_dependency = True)
+bazel_dep(name = "toolchains_llvm", version = "1.7.0", dev_dependency = True)
 
 local_path_override(
     module_name = "starlark_utils",
     path = "starlark_utils",
 )
 
-RFCC_COMMIT = "2eca712c15301c1f4e71ceec21e6271f373501e2"
+RFCC_COMMIT = "006ae82d9b4953a9b1c170827aef660f9f0f9ec0"
 
 archive_override(
     module_name = "rules_foreign_cc",
@@ -40,7 +40,7 @@ archive_override(
     patches = [
         "//patches/rules_foreign_cc:0001-workaround-rfcc-0.15.1-ninja-version-breaks-with-gli.patch",
     ],
-    sha256 = "62cf2de93583a40413cbf7ebca380a0c0d2421db7b3614eb1d8389bcba21723e",
+    sha256 = "6cfda69786df4c539384b1c0031c13bb8d666b0042a4eab59841fa7a6c21fca9",
     strip_prefix = "rules_foreign_cc-{}".format(RFCC_COMMIT),
     url = "https://github.com/bazel-contrib/rules_foreign_cc/archive/{}.tar.gz".format(RFCC_COMMIT),
 )
