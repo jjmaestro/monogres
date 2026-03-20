@@ -32,5 +32,7 @@ Fast checks first. Remind user to run the full build (last step).
 2. Integration tests (minutes, Docker):
    `docker exec -u postgres -w /src/workspace/examples bzlsndbx-monogres_x86_64 bazel test //...`
      - Invariants only (faster): append `--test_size_filters=small,medium`
-3. Full build (1h+, ask the user): Never build all targets. Remind user to run.
+3. Full bazel tests (minutes, Docker):
+   `nix develop --command bash -c 'prek run bazel-test-all'`
+4. Full build (1h+, ask the user): Never build all targets. Remind user to run.
 <!-- markdownlint-restore -->

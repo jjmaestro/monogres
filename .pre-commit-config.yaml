@@ -123,9 +123,37 @@ repos:
       - id: jsonnetfmt
   - repo: local
     hooks:
-      - id: bazel-test
-        name: bazel-test
-        entry: cd build && bazel test //...
+      - id: bazel-query
+        name: bazel-query
+        entry: >-
+          make -C build/docker exec-image
+            RUN_MODE=-i
+            EXEC_CMD=/src/repo/.pre-commit-hooks/bazel-all-modules.sh
+        args:
+          - EXEC_ARGS=query //...
+        language: system
+        pass_filenames: false
+        verbose: false
+      - id: bazel-analyze
+        name: bazel-analyze
+        entry: >-
+          make -C build/docker exec-image
+            RUN_MODE=-i
+            EXEC_CMD=/src/repo/.pre-commit-hooks/bazel-all-modules.sh
+        args:
+          - EXEC_ARGS=build --nobuild //...
+        language: system
+        pass_filenames: false
+        verbose: false
+        stages: [manual]
+      - id: bazel-test-all
+        name: bazel-test-all
+        entry: >-
+          make -C build/docker exec-image
+            RUN_MODE=-i
+            EXEC_CMD=/src/repo/.pre-commit-hooks/bazel-all-modules.sh
+        args:
+          - EXEC_ARGS=test //...
         language: system
         pass_filenames: false
         verbose: false

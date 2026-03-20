@@ -27,6 +27,16 @@ build --guard_against_concurrent_changes
 build --repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
 build --action_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
 
+# Default to `bazel test //...` ONLY building and running test targets and
+# their deps, never every target matched by the pattern. This way it stays fast
+# and never kicks off the full Postgres x option_set x extension matrix by
+# accident.
+test --build_tests_only
+
+# Explicit config to opt back into building EVERY matched target alongside the
+# tests (the full matrix).
+test:build-all --nobuild_tests_only
+
 # Build Event Service (BES):
 # build events can be uploaded to services like BuildBuddy to get
 # a nice UI and a URL that you can share with others to debug or

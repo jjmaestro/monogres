@@ -135,9 +135,11 @@ DETACHED ?= false
 
 ifeq ($(DETACHED),false)
 EXEC_CMD := /bin/bash
+EXEC_ARGS :=
 RUN_MODE := --tty --interactive
 else
-EXEC_CMD := sleep infinity
+EXEC_CMD := sleep
+EXEC_ARGS := infinity
 RUN_MODE := --detach
 endif
 
@@ -164,7 +166,7 @@ ENTRYPOINT_SCRIPT := \
 		--reuid=$$USER_UID \
 		--regid=$$USER_GID \
 		--groups=$$USER_GID,0,$$HOST_GID \
-		-- $(EXEC_CMD)
+		-- $(EXEC_CMD) $(EXEC_ARGS)
 
 # Extra read-only bind mounts. Space-separated NAME=PATH pairs.
 # Each is mounted at /src/NAME:ro inside the container.
@@ -211,6 +213,15 @@ run-image:
 
 .PHONY: run-image
 
+exec-image:
+	$(DOCKER) exec $(RUN_MODE) \
+		--user "$(USERNAME)" \
+		--workdir /src/workspace \
+		"$(CONTAINER_NAME)" \
+		$(EXEC_CMD) $(EXEC_ARGS)
+
+.PHONY: exec-image
+
 gen-image: $(DOCKER_TARGET_LOCK)
 
 .PHONY: gen-image
@@ -237,11 +248,15 @@ pull-image:
 
 .PHONY: pull-image
 
+container-name:
+	@echo "$(CONTAINER_NAME)"
+
+.PHONY: container-name
+
 test:
 	@echo "No tests — run project-level tests instead"
 
 .PHONY: test
-
 clean:
 	rm -f .*.lock
 
