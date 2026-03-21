@@ -1,0 +1,3 @@
+load(":meson.bzl", meson_test_suite = "test_suite")
+
+meson_test_suite()

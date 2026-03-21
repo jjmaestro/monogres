@@ -140,9 +140,9 @@ def _get_contrib_names(introspect_json):
 
         contrib_names.append(chunks[1])
 
-    return contrib_names
+    return sorted({name: True for name in contrib_names}.keys())
 
-def _get_contrib_features(contrib_name, meson_build):
+def _get_contrib_features(contrib_name, meson_build, _fail = fail):
     """
     Get the features required to compile the contrib extension.
 
@@ -180,14 +180,14 @@ def _get_contrib_features(contrib_name, meson_build):
         ]
 
         if len(dep) > 1:
-            fail("assert only one dep failed")
+            return _fail("assert only one dep failed")
 
         if dep:
             deps.append(DEP_TO_FEATURE.get(dep[0], dep[0]))
 
     return (deps[0] if len(deps) == 1 else deps) if deps else None
 
-def _validate_contrib_features(contrib_features, fail_on_unknown = False):
+def _validate_contrib_features(contrib_features, fail_on_unknown = False, _fail = fail):
     unknown_contrib_features = {}
     for contrib, features in contrib_features.items():
         if features == None:
@@ -206,7 +206,9 @@ def _validate_contrib_features(contrib_features, fail_on_unknown = False):
     if unknown_contrib_features and fail_on_unknown:
         msg = "Unknown features: %r. " % unknown_contrib_features
         msg += "You have to resolve the dependencies by hand first"
-        fail(msg)
+        return _fail(msg)
+
+    return None
 
 def _get_objects_from_list(introspect_json, section, **attrs):
     return [
@@ -321,11 +323,15 @@ def _get_postgres_installed_paths(installed_paths):
 
     return sorted(rest_paths)
 
-def _validate_contrib_paths(contrib_paths, contrib_names, fail_on_empty = False):
+def _validate_contrib_paths(
+        contrib_paths,
+        contrib_names,
+        fail_on_empty = False,
+        _fail = fail):
     if len(contrib_paths) != len(contrib_names):
         missing_contrib = [c for c in contrib_names if c not in contrib_paths]
         msg = "ERROR: These contrib names are not in 'installed': %r"
-        fail(msg % missing_contrib)
+        return _fail(msg % missing_contrib)
 
     empty_paths = [
         contrib
@@ -335,7 +341,9 @@ def _validate_contrib_paths(contrib_paths, contrib_names, fail_on_empty = False)
 
     if empty_paths and fail_on_empty:
         msg = "ERROR: Empty contrib paths, check for missing dependencies): %r"
-        fail(msg % empty_paths)
+        return _fail(msg % empty_paths)
+
+    return None
 
 meson = struct(
     get_installed_paths = _get_installed_paths,
