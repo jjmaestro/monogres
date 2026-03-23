@@ -3,7 +3,7 @@ Starlark codegen unit tests
 """
 
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
-load("//starlark:starlark.bzl", Starlark = "starlark")
+load("//starlark:starlark.bzl", Star = "starlark")
 load("//tests:suite.bzl", _test_suite = "test_suite")
 
 _DICT = dict(
@@ -26,7 +26,7 @@ def _escape_test_impl(ctx):
     }
 
     for s, expected in parameters.items():
-        actual = Starlark.__test__._escape(s)
+        actual = Star.__test__._escape(s)
         asserts.equals(env, expected, actual)
 
     return unittest.end(env)
@@ -51,7 +51,7 @@ def _indent_test_impl(ctx):
       "42": None,
    }
     """.strip()
-    actual = Starlark.igen(_DICT, indent_count = 1, indent_size = 3)
+    actual = Star.igen(_DICT, indent_count = 1, indent_size = 3)
 
     asserts.equals(env, expected, actual)
 
@@ -71,7 +71,7 @@ def _inline_test_impl(ctx):
         '"42": None',
         "}",
     ])
-    actual = Starlark.gen(_DICT)
+    actual = Star.gen(_DICT)
 
     asserts.equals(env, expected, actual)
 
@@ -86,7 +86,7 @@ def _list_empty_test_impl(ctx):
 
     ll = []
     expected = str(ll)
-    actual = Starlark.igen(ll)
+    actual = Star.igen(ll)
 
     asserts.equals(env, expected, actual)
 
@@ -103,7 +103,7 @@ def _list_1_element_test_impl(ctx):
     "a",
 ]
     """.strip()
-    actual = Starlark.igen(ll)
+    actual = Star.igen(ll)
 
     asserts.equals(env, expected, actual)
 
@@ -121,7 +121,7 @@ def _list_2p_elements_test_impl(ctx):
     1,
 ]
     """.strip()
-    actual = Starlark.igen(ll)
+    actual = Star.igen(ll)
 
     asserts.equals(env, expected, actual)
 
@@ -138,7 +138,7 @@ def _list_indent_test_impl(ctx):
       "a",
    ]
     """.strip()
-    actual = Starlark.igen(ll, indent_count = 1, indent_size = 3)
+    actual = Star.igen(ll, indent_count = 1, indent_size = 3)
 
     asserts.equals(env, expected, actual)
 
@@ -155,7 +155,7 @@ def _list_quote_test_impl(ctx):
     a,
 ]
     """.strip()
-    actual = Starlark.igen(ll, quote_strings = False)
+    actual = Star.igen(ll, quote_strings = False)
 
     asserts.equals(env, expected, actual)
 
@@ -170,7 +170,7 @@ def _dict_empty_test_impl(ctx):
 
     d = {}
     expected = str(d)
-    actual = Starlark.igen(d)
+    actual = Star.igen(d)
 
     asserts.equals(env, expected, actual)
 
@@ -187,7 +187,7 @@ def _dict_1_element_test_impl(ctx):
     "a": "foo",
 }
     """.strip()
-    actual = Starlark.igen(d)
+    actual = Star.igen(d)
 
     asserts.equals(env, expected, actual)
 
@@ -205,7 +205,7 @@ def _dict_2p_elements_test_impl(ctx):
     "1": "bar",
 }
     """.strip()
-    actual = Starlark.igen(d)
+    actual = Star.igen(d)
 
     asserts.equals(env, expected, actual)
 
@@ -222,7 +222,7 @@ def _dict_indent_test_impl(ctx):
       "a": "foo",
    }
     """.strip()
-    actual = Starlark.igen(d, indent_count = 1, indent_size = 3)
+    actual = Star.igen(d, indent_count = 1, indent_size = 3)
 
     asserts.equals(env, expected, actual)
 
@@ -239,7 +239,7 @@ def _dict_quote_test_impl(ctx):
     a: foo,
 }
     """.strip()
-    actual = Starlark.igen(d, quote_strings = False, quote_keys = False)
+    actual = Star.igen(d, quote_strings = False, quote_keys = False)
 
     asserts.equals(env, expected, actual)
 
@@ -260,13 +260,13 @@ depset([
     3,
 ])
     """.strip()
-    actual = Starlark.igen(ds)
+    actual = Star.igen(ds)
 
     asserts.equals(env, expected, actual)
 
     expected = "depset([1, 2, 3])"
 
-    actual = Starlark.gen(ds)
+    actual = Star.gen(ds)
 
     asserts.equals(env, expected, actual)
 
@@ -286,13 +286,13 @@ struct(
     bar = 42,
 )
     """.strip()
-    actual = Starlark.igen(s)
+    actual = Star.igen(s)
 
     asserts.equals(env, expected, actual)
 
     expected = 'struct(foo = "foo", bar = 42)'
 
-    actual = Starlark.gen(s)
+    actual = Star.gen(s)
 
     asserts.equals(env, expected, actual)
 
@@ -308,7 +308,7 @@ def _assignments_test_impl(ctx):
     def test(assignments):
         # inline (default)
         expected = 'FOO = 42, BAR = "foobar"'
-        actual = Starlark.assignments(assignments)
+        actual = Star.assignments(assignments)
 
         asserts.equals(env, expected, actual)
 
@@ -317,7 +317,7 @@ def _assignments_test_impl(ctx):
 FOO = 42
 BAR = "foobar"
         """.strip()
-        actual = Starlark.assignments(assignments, inline = False)
+        actual = Star.assignments(assignments, inline = False)
 
         asserts.equals(env, expected, actual)
 
@@ -340,7 +340,7 @@ def _load_args_test_impl(ctx):
     env = unittest.begin(ctx)
 
     expected = 'load("//foo:bar.bzl", "FOO", "foobar")'
-    actual = Starlark.load_("//foo:bar.bzl", "FOO", "foobar")
+    actual = Star.load_("//foo:bar.bzl", "FOO", "foobar")
 
     asserts.equals(env, expected, actual)
 
@@ -352,7 +352,7 @@ def _load_args_and_kwargs_test_impl(ctx):
     env = unittest.begin(ctx)
 
     expected = 'load("//foo:bar.bzl", "FOO", _foobar = "foobar")'
-    actual = Starlark.load_("//foo:bar.bzl", "FOO", _foobar = "foobar")
+    actual = Star.load_("//foo:bar.bzl", "FOO", _foobar = "foobar")
 
     asserts.equals(env, expected, actual)
 
