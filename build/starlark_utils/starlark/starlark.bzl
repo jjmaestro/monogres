@@ -166,7 +166,12 @@ def _gen(
 
     return "".join(result)
 
-def _assignments(assignments, inline = True, quote_values = True):
+def _assignments(
+        assignments,
+        inline = True,
+        quote_values = True,
+        indent_count = 0,
+        indent_size = 4):
     """Generates a Starlark assignment strings from a `dict` or `list` of key-value pairs.
 
     Args:
@@ -174,10 +179,14 @@ def _assignments(assignments, inline = True, quote_values = True):
         inline (bool): If `True`, return a single-line comma-separated list. If
             `False`, return a newline-separated block.
         quote_values (bool): If `True`, quote string values.
+        indent_count (int): Base indentation level (only used when `inline` is
+            `False`).
+        indent_size (int): Number of spaces per indent level.
 
     Returns:
         A string of the form `key1 = value1, key2 = value2, ...`.
     """
+    prefix = "" if inline else " " * (indent_size * indent_count)
     sep = ", " if inline else "\n"
 
     if type(assignments) == "dict":
@@ -188,7 +197,7 @@ def _assignments(assignments, inline = True, quote_values = True):
         fail("Invalid assignments type: %s" % type(assignments))
 
     return sep.join([
-        ("%s = %r" if quote_values else "%s = %s") % (k, v)
+        ("%s%s = %r" if quote_values else "%s%s = %s") % (prefix, k, v)
         for k, v in items
     ])
 
