@@ -15,7 +15,10 @@ The `starlark` module has the following functions:
 - `load_(label, *args, **kwargs)`: Generate a Starlark `load()` statement.
 """
 
-__MAX_ITERATIONS__ = 2 << 31 - 2
+# Starlark prohibits recursion and while loops, so _gen() uses an explicit stack
+# driven by a for loop. range() caps at signed 32-bit ((1 << 31) - 1):
+# https://github.com/bazelbuild/bazel/blob/37654e5/src/main/java/net/starlark/java/eval/RangeList.java#L88-L91
+__MAX_ITERATIONS__ = (1 << 31) - 2
 
 _BRACKETS = {
     "close": {
@@ -74,9 +77,10 @@ def _gen(
         if not stack:
             break
 
-        if i == __MAX_ITERATIONS__:
-            msg = "starlark.gen: __MAX_ITERATIONS__ reached trying to codegen: %r"
-            fail(msg % value)
+        if i == __MAX_ITERATIONS__ - 1:
+            msg = "starlark.gen: iteration limit reached (%d); "
+            msg += "value too deeply nested or cyclic: %r"
+            fail(msg % (__MAX_ITERATIONS__, value))
 
         current, current_type, context = stack.pop()
 
