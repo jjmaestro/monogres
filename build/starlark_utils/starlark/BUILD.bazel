@@ -9,4 +9,8 @@ exports_files([
 bzl_library(
     name = "starlark",
     srcs = ["starlark.bzl"],
+    deps = [
+        "//starlark/private:gen",
+        "//starlark/private:helpers",
+    ],
 )
