@@ -1,21 +1,24 @@
-"""Higher-level Starlark formatting helpers."""
+"""File-level helpers: assignments and file composition."""
 
-def assignments(
+load("//starlark/private:expr.bzl", "expr")
+load("//starlark/private:gen.bzl", "gen")
+load("//starlark/private:node.bzl", "SENTINEL")
+
+def _assignments(
         assignments,
         inline = True,
         quote_values = True,
         indent_count = 0,
         indent_size = 4):
-    """Generates a Starlark assignment strings from a `dict` or `list` of key-value pairs.
+    """Generate Starlark `key = value` assignment strings.
 
     Args:
         assignments: A `dict`, `list` of 2-tuples, or `tuple` of 2-tuples.
-        inline (bool): If `True`, return a single-line comma-separated list. If
+        inline: If `True`, return a single-line comma-separated string. If
             `False`, return a newline-separated block.
-        quote_values (bool): If `True`, quote string values.
-        indent_count (int): Base indentation level (only used when `inline` is
-            `False`).
-        indent_size (int): Number of spaces per indent level.
+        quote_values: If `True`, quote string values.
+        indent_count: Base indentation level (only when `inline` is `False`).
+        indent_size: Spaces per indent level.
 
     Returns:
         A string of the form `key1 = value1, key2 = value2, ...`.
@@ -30,28 +33,47 @@ def assignments(
     else:
         fail("Invalid assignments type: %s" % type(assignments))
 
+    def render_value(v):
+        if type(v) == "dict" and SENTINEL in v:
+            return gen.gen(v)
+        return ("%r" if quote_values else "%s") % v
+
     return sep.join([
-        ("%s%s = %r" if quote_values else "%s%s = %s") % (prefix, k, v)
+        "%s%s = %s" % (prefix, k, render_value(v))
         for k, v in items
     ])
 
-def load_(*args, **kwargs):
-    """
-    Generates a Starlark `load()` statement.
+def _file(*parts, header = None):
+    """Compose a generated Starlark file.
+
+    Joins an optional header and parts with blank lines, terminated by a single
+    newline.
 
     Args:
-        *args: Positional arguments — first must be the label of the file,
-            followed by symbols to import.
-        **kwargs: Keyword arguments for symbol renaming (e.g., `alias =
-            "actual"`).
+        *parts: Top-level statements. Each may be a pre-rendered string or a
+            node value. Falsy parts (`""`, `None`, `[]`, etc.) are filtered out
+            automatically.
+        header: Optional top-of-file header. May be a plain string (auto-wrapped
+            via `tstr()`) or a pre-built node value.
 
     Returns:
-        A valid Starlark `load()` statement as a string.
+        The composed file content with trailing newline.
     """
-    load_ = [", ".join(["%r" % arg for arg in args])]
 
-    kwargs_ = assignments(kwargs)
-    if kwargs_:
-        load_.append(kwargs_)
+    def _render(p):
+        return p if type(p) == "string" else gen.auto(p)
 
-    return "load(%s)" % ", ".join(load_)
+    items = []
+
+    if header:
+        h = header if type(header) != "string" else expr.tstr(header)
+        items.append(_render(h))
+
+    items += [_render(p) for p in parts if p]
+
+    return "\n\n".join(items) + "\n"
+
+helpers = struct(
+    assignments = _assignments,
+    file = _file,
+)

@@ -10,7 +10,11 @@ bzl_library(
     name = "starlark",
     srcs = ["starlark.bzl"],
     deps = [
+        "//starlark/private:bazel",
+        "//starlark/private:expr",
+        "//starlark/private:fn",
         "//starlark/private:gen",
         "//starlark/private:helpers",
+        "//starlark/private:stmt",
     ],
 )

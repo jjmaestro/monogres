@@ -119,7 +119,7 @@ def _write_subrepo(rctx, pg_version, option_set, introspection, meson_options_bz
 
     deps = Starlark.igen([dep], indent_count = 1)
 
-    loads = Starlark.load_("%s.bzl" % dep, "OPTIONS")
+    loads = Starlark.gen(Starlark.load_("%s.bzl" % dep, "OPTIONS"))
 
     assignments = Starlark.assignments(
         dict(
@@ -137,7 +137,10 @@ def _write_subrepo(rctx, pg_version, option_set, introspection, meson_options_bz
 def _write_root(rctx, name, deps_, loads_, introspections, meson_options):
     rctx_file = _rctx_file(rctx)
 
-    loads = "\n".join([Starlark.load_(*ll[0], **ll[1]) for ll in loads_])
+    loads = "\n".join([
+        Starlark.gen(Starlark.load_(*ll[0], **ll[1]))
+        for ll in loads_
+    ])
 
     assignments = Starlark.assignments(
         dict(
