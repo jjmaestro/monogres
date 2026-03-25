@@ -15,8 +15,7 @@ def _expr(text):
         text: Expression text to emit verbatim.
 
     Returns:
-        A node dict that `gen()` / `igen()` / `assignments()` render as the bare
-        text.
+        A node dict that `gen()` / `igen()` / `auto()` render as the bare text.
     """
     return node("expr", text = text)
 

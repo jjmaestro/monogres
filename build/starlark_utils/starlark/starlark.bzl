@@ -15,8 +15,6 @@ The `starlark` module API:
   `for_()`, `def_()`.
 - Renderers: `gen()` (single-line), `igen()` (indented), `auto()`
   (inline if it fits, else indented).
-- Helpers: `assignments(assignments, ...)` generates `key = value`
-  assignments.
 - File composition: `file()` joins parts with blank lines.
 - BUILD helpers: `package()`, `alias()`, `exports_files()`,
   `bzl_library()`.
@@ -24,15 +22,14 @@ The `starlark` module API:
 
 load("//starlark/private:bazel.bzl", "bazel")
 load("//starlark/private:expr.bzl", "expr")
+load("//starlark/private:file.bzl", "file")
 load("//starlark/private:fn.bzl", "fn")
 load("//starlark/private:gen.bzl", "gen")
-load("//starlark/private:helpers.bzl", "helpers")
 load("//starlark/private:stmt.bzl", "stmt")
 
 starlark = struct(
     alias = bazel.alias,
     assign = stmt.assign,
-    assignments = helpers.assignments,
     auto = gen.auto,
     binop = expr.binop,
     block = stmt.block,
@@ -43,7 +40,7 @@ starlark = struct(
     docstring = expr.tstr,
     exports_files = bazel.exports_files,
     expr = expr.expr,
-    file = helpers.file,
+    file = file,
     fn = fn.fn,
     for_ = stmt.for_,
     gen = gen.gen,

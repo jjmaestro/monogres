@@ -854,36 +854,36 @@ def _ref_in_list_test_impl(ctx):
 
 ref_in_list_test = unittest.make(_ref_in_list_test_impl)
 
-def _ref_in_assignments_test_impl(ctx):
+def _ref_in_assign_test_impl(ctx):
     env = unittest.begin(ctx)
 
     expected = "MESON_OPTIONS = OPTIONS"
-    actual = Star.assignments({"MESON_OPTIONS": Star.ref("OPTIONS")})
+    actual = Star.gen(Star.assign("MESON_OPTIONS", Star.ref("OPTIONS")))
 
     asserts.equals(env, expected, actual)
 
     return unittest.end(env)
 
-ref_in_assignments_test = unittest.make(_ref_in_assignments_test_impl)
+ref_in_assign_test = unittest.make(_ref_in_assign_test_impl)
 
-def _ref_assignments_mixed_test_impl(ctx):
-    """Refs coexist with quoted strings in the same assignments() call."""
+def _ref_assign_mixed_test_impl(ctx):
+    """Refs coexist with quoted strings in assign blocks."""
     env = unittest.begin(ctx)
 
     expected = """\
 FOO = "bar"
 MESON_OPTIONS = OPTIONS\
 """
-    actual = Star.assignments(
-        [("FOO", "bar"), ("MESON_OPTIONS", Star.ref("OPTIONS"))],
-        inline = False,
-    )
+    actual = Star.gen(Star.block(
+        Star.assign("FOO", "bar"),
+        Star.assign("MESON_OPTIONS", Star.ref("OPTIONS")),
+    ))
 
     asserts.equals(env, expected, actual)
 
     return unittest.end(env)
 
-ref_assignments_mixed_test = unittest.make(_ref_assignments_mixed_test_impl)
+ref_assign_mixed_test = unittest.make(_ref_assign_mixed_test_impl)
 
 def _ref_indent_test_impl(ctx):
     env = unittest.begin(ctx)
@@ -970,7 +970,7 @@ TEST_SUITE_TESTS = dict(
     ref_in_fn_kwarg = ref_in_fn_kwarg_test,
     ref_in_fn_positional = ref_in_fn_positional_test,
     ref_in_list = ref_in_list_test,
-    ref_in_assignments = ref_in_assignments_test,
-    ref_assignments_mixed = ref_assignments_mixed_test,
+    ref_in_assign = ref_in_assign_test,
+    ref_assign_mixed = ref_assign_mixed_test,
     ref_indent = ref_indent_test,
 )

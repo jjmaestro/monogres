@@ -38,12 +38,11 @@ bzl_library(
 )
 
 bzl_library(
-    name = "helpers",
-    srcs = ["helpers.bzl"],
+    name = "file",
+    srcs = ["file.bzl"],
     deps = [
         ":expr",
         ":gen",
-        ":node",
     ],
 )
 

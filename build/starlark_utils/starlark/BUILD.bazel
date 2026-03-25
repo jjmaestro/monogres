@@ -12,9 +12,9 @@ bzl_library(
     deps = [
         "//starlark/private:bazel",
         "//starlark/private:expr",
+        "//starlark/private:file",
         "//starlark/private:fn",
         "//starlark/private:gen",
-        "//starlark/private:helpers",
         "//starlark/private:stmt",
     ],
 )
