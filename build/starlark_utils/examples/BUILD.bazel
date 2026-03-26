@@ -1,0 +1,9 @@
+load(":build_files.bzl", build_files_test_suite = "test_suite")
+load(":bzl_modules.bzl", bzl_modules_test_suite = "test_suite")
+load(":starlark_logic.bzl", starlark_logic_test_suite = "test_suite")
+
+build_files_test_suite()
+
+bzl_modules_test_suite()
+
+starlark_logic_test_suite()
