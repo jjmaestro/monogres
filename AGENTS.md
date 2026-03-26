@@ -36,3 +36,8 @@ Fast checks first. Remind user to run the full build (last step).
    `nix develop --command bash -c 'prek run bazel-test-all'`
 4. Full build (1h+, ask the user): Never build all targets. Remind user to run.
 <!-- markdownlint-restore -->
+
+## Starlark codegen
+
+Use `starlark_utils`, not string templates. Read
+`build/starlark_utils/docs/CODEGEN_GUIDE.md` first.

@@ -1,0 +1,27 @@
+module(
+    name = "starlark_utils_docs",
+    bazel_compatibility = [">=9.1.0"],
+)
+
+bazel_dep(name = "starlark_utils", version = "", dev_dependency = True)
+bazel_dep(name = "aspect_bazel_lib", version = "2.22.5", dev_dependency = True)
+
+# Render docs by building Stardoc's renderer from source, with NO CC toolchain.
+# The renderer pulls java_proto_library -> proto_library -> protoc, and protoc
+# is normally compiled from C++ (which forces a CC toolchain; see stardoc#305).
+# protobuf >= 33.4 ships a prebuilt protoc, and the .bazelrc flags
+# --incompatible_enable_proto_toolchain_resolution +
+# --@protobuf//bazel/toolchains:prefer_prebuilt_protoc route proto codegen
+# through it instead of building protoc.
+bazel_dep(name = "protobuf", version = "35.0", dev_dependency = True)
+
+# We need to pin a modern rules_python (>=1.8.0) to have fmeum's fix for the
+# _windows_launcher_maker, see:
+# https://github.com/bazel-contrib/rules_python/commit/c2ff89f
+bazel_dep(name = "rules_python", version = "2.0.2", dev_dependency = True)
+bazel_dep(name = "stardoc", version = "0.8.1", dev_dependency = True)
+
+local_path_override(
+    module_name = "starlark_utils",
+    path = "..",
+)

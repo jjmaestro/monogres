@@ -1,0 +1,6 @@
+package(default_visibility = ["//:__subpackages__"])
+
+alias(
+    name = "renderer",
+    actual = "@stardoc//stardoc:renderer",
+)

@@ -48,6 +48,7 @@ MODULE=(
   docs
   starlark_utils
   starlark_utils/examples
+  starlark_utils/docs
   tests
   examples
   e2e
