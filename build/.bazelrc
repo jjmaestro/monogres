@@ -58,20 +58,20 @@ common:linux-amd64 --extra_toolchains=@llvm_toolchain_system_linux_amd64//:cc-to
 common:linux-arm64 --extra_toolchains=@llvm_toolchain_system_linux_arm64//:cc-toolchain-aarch64-linux
 
 common:linux-amd64-buildbuddy --config=linux-amd64
-common:linux-amd64-buildbuddy --platforms=//toolchains:linux_amd64_rbe_buildbuddy
-common:linux-amd64-buildbuddy --extra_execution_platforms=//toolchains:linux_amd64_rbe_buildbuddy
+common:linux-amd64-buildbuddy --platforms=//platforms:linux_amd64_rbe_buildbuddy
+common:linux-amd64-buildbuddy --extra_execution_platforms=//platforms:linux_amd64_rbe_buildbuddy
 
 common:linux-arm64-buildbuddy --config=linux-arm64
-common:linux-arm64-buildbuddy --platforms=//toolchains:linux_arm64_rbe_buildbuddy
-common:linux-arm64-buildbuddy --extra_execution_platforms=//toolchains:linux_arm64_rbe_buildbuddy
+common:linux-arm64-buildbuddy --platforms=//platforms:linux_arm64_rbe_buildbuddy
+common:linux-arm64-buildbuddy --extra_execution_platforms=//platforms:linux_arm64_rbe_buildbuddy
 
 common:linux-amd64-buildbarn --config=linux-amd64
-common:linux-amd64-buildbarn --platforms=//toolchains:linux_amd64_rbe_buildbarn
-common:linux-amd64-buildbarn --extra_execution_platforms=//toolchains:linux_amd64_rbe_buildbarn
+common:linux-amd64-buildbarn --platforms=//platforms:linux_amd64_rbe_buildbarn
+common:linux-amd64-buildbarn --extra_execution_platforms=//platforms:linux_amd64_rbe_buildbarn
 
 common:linux-arm64-buildbarn --config=linux-arm64
-common:linux-arm64-buildbarn --platforms=//toolchains:linux_arm64_rbe_buildbarn
-common:linux-arm64-buildbarn --extra_execution_platforms=//toolchains:linux_arm64_rbe_buildbarn
+common:linux-arm64-buildbarn --platforms=//platforms:linux_arm64_rbe_buildbarn
+common:linux-arm64-buildbarn --extra_execution_platforms=//platforms:linux_arm64_rbe_buildbarn
 
 build:remote --define=EXECUTOR=remote
 build:remote --strategy=remote

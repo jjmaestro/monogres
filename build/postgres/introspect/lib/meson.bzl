@@ -7,7 +7,7 @@ load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@starlark_utils//starlark:starlark.bzl", Starlark = "starlark")
 load("@version_utils//spec:spec.bzl", Spec = "spec")
 load("@version_utils//version:version.bzl", Version = "version")
-load("//utils:arch.bzl", "ARCH_MAP")
+load("//platforms:targets.bzl", "ARCH_CPU")
 load(":metadata.bzl", "CONTRIB_INSTALLED_PATHS_OVERRIDE", "DEP_TO_FEATURE", "FEATURES_OVERRIDE", "FEATURES_TO_DEB_PKGS")
 
 def _meson_options_bzl(meson_options_txt):
@@ -275,7 +275,7 @@ def _get_installed_paths(introspect_json, arch):
         for path_build, path_installed in installed_paths_.items()
     }
 
-    arch_ = ARCH_MAP.get(arch, arch)
+    arch_ = ARCH_CPU[arch]
     expanded = {
         k.format(arch = arch_): v.format(arch = arch_)
         for k, v in res.items()
@@ -296,7 +296,7 @@ def _get_contrib_installed_paths(installed_paths, contrib_name, pg_version, arch
 
             if is_compatible:
                 contrib_paths = [
-                    p.format(arch = ARCH_MAP.get(arch, arch))
+                    p.format(arch = ARCH_CPU[arch])
                     for p in overrides[cspec]
                 ]
                 break
