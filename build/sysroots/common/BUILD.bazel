@@ -1,0 +1,50 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "archs.bzl",
+    "codegen.bzl",
+    "extra_files.bzl",
+    "lock.bzl",
+    "normalize.bzl",
+    "stable_key.bzl",
+    "tag_key.bzl",
+])
+
+bzl_library(
+    name = "archs",
+    srcs = ["archs.bzl"],
+)
+
+bzl_library(
+    name = "lock",
+    srcs = ["lock.bzl"],
+)
+
+bzl_library(
+    name = "stable_key",
+    srcs = ["stable_key.bzl"],
+)
+
+bzl_library(
+    name = "tag_key",
+    srcs = ["tag_key.bzl"],
+    deps = [":stable_key"],
+)
+
+bzl_library(
+    name = "codegen",
+    srcs = ["codegen.bzl"],
+    deps = ["@starlark_utils//starlark"],
+)
+
+bzl_library(
+    name = "normalize",
+    srcs = ["normalize.bzl"],
+)
+
+bzl_library(
+    name = "extra_files",
+    srcs = ["extra_files.bzl"],
+)

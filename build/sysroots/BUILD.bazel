@@ -1,0 +1,19 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["extension.bzl"])
+
+bzl_library(
+    name = "extension",
+    srcs = ["extension.bzl"],
+    deps = [
+        "//apt:tag",
+        "//apt/private:alias_hub",
+        "//apt/private:manifest",
+        "//apt/private:repo",
+        "//apt/private:resolve",
+        "//common:lock",
+        "//common:stable_key",
+    ],
+)

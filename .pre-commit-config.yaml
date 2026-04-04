@@ -11,6 +11,7 @@ default_language_version:
 exclude: >-
   (?x)^(
     .*\.(patch|diff)$
+    |.*\.lock$
     |.*/postgres/introspect/.*\.json$
     |rbe/auth/.*\.json$
   )$

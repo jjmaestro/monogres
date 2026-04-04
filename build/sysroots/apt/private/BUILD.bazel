@@ -1,0 +1,75 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = ["//apt:__subpackages__"])
+
+exports_files([
+    "alias_hub.bzl",
+    "apt_resolve.bzl",
+    "closure.bzl",
+    "deb.bzl",
+    "known_patches.bzl",
+    "manifest.bzl",
+    "repo.bzl",
+    "resolve.bzl",
+])
+
+bzl_library(
+    name = "alias_hub",
+    srcs = ["alias_hub.bzl"],
+    visibility = ["//visibility:public"],
+    deps = ["//common:codegen"],
+)
+
+bzl_library(
+    name = "apt_resolve",
+    srcs = ["apt_resolve.bzl"],
+    # @rules_distroless//apt/private:* bzl_libraries (apt_deb_repository,
+    # apt_dep_resolver, lockfile, version_constraint) are loaded by
+    # apt_resolve.bzl but have private visibility upstream; not listed here.
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "closure",
+    srcs = ["closure.bzl"],
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "deb",
+    srcs = ["deb.bzl"],
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "manifest",
+    srcs = ["manifest.bzl"],
+    visibility = ["//visibility:public"],
+    deps = ["//common:archs"],
+)
+
+bzl_library(
+    name = "resolve",
+    srcs = ["resolve.bzl"],
+    visibility = ["//visibility:public"],
+    deps = [":apt_resolve"],
+)
+
+bzl_library(
+    name = "known_patches",
+    srcs = ["known_patches.bzl"],
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "repo",
+    srcs = ["repo.bzl"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":deb",
+        ":known_patches",
+        "//common:codegen",
+        "//common:extra_files",
+        "//common:normalize",
+    ],
+)

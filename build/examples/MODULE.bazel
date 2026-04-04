@@ -16,6 +16,11 @@ local_path_override(
     path = "../starlark_utils",
 )
 
+local_path_override(
+    module_name = "sysroots",
+    path = "../sysroots",
+)
+
 # Root-module overrides do not propagate through dependencies, so the examples
 # workspace must mirror the monogres RFCC override to exercise the same tool
 # stack as a downstream consumer.

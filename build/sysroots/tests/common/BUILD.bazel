@@ -1,0 +1,20 @@
+load(":codegen.bzl", codegen_test_suite = "test_suite")
+load(":extra_files.bzl", extra_files_test_suite = "test_suite")
+load(":lock.bzl", lock_test_suite = "test_suite")
+load(":normalize.bzl", normalize_test_suite = "test_suite")
+load(":stable_key.bzl", stable_key_test_suite = "test_suite")
+load(":tag_key.bzl", tag_key_test_suite = "test_suite")
+
+package(default_visibility = ["//tests/common:__subpackages__"])
+
+codegen_test_suite()
+
+extra_files_test_suite()
+
+lock_test_suite()
+
+normalize_test_suite()
+
+stable_key_test_suite()
+
+tag_key_test_suite()

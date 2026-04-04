@@ -1,0 +1,11 @@
+load(":closure.bzl", closure_test_suite = "test_suite")
+load(":known_patches.bzl", known_patches_test_suite = "test_suite")
+load(":manifest.bzl", manifest_test_suite = "test_suite")
+
+package(default_visibility = ["//tests/apt:__subpackages__"])
+
+closure_test_suite()
+
+known_patches_test_suite()
+
+manifest_test_suite()

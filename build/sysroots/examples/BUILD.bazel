@@ -1,0 +1,11 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+
+package(default_visibility = ["//visibility:public"])
+
+build_test(
+    name = "all_examples",
+    targets = [
+        "//llvm_sysroot:hello",
+        "//buildtime_sysroot:extracted_files.txt",
+    ],
+)

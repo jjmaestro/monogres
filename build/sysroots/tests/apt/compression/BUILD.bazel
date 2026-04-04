@@ -1,0 +1,22 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+
+package(default_visibility = ["//tests/apt:__subpackages__"])
+
+# Integration test: materialize one `.deb` of each Bazel-supported `data.tar.*`
+# compression through `//apt/private:deb.bzl`. Forces each
+# `@compression_*//:sysroot` filegroup to build, which runs deb.bzl's full
+# pipeline against the corresponding pinned snapshot URL. A failure means
+# `_DATA_TAR_CANDIDATES` lost a candidate, Bazel's `DecompressorValue` routing
+# shifted, or a pinned URL/sha256 went stale.
+#
+# `data.tar` (uncompressed) and `data.tar.lzma` are intentionally excluded; see
+# `extension.bzl` for rationale.
+build_test(
+    name = "compression_coverage",
+    targets = [
+        "@compression_bzip2//:sysroot",
+        "@compression_gzip//:sysroot",
+        "@compression_xz//:sysroot",
+        "@compression_zstd//:sysroot",
+    ],
+)

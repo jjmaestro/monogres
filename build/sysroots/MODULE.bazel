@@ -1,0 +1,41 @@
+module(
+    name = "sysroots",
+    bazel_compatibility = [">=7.1.0"],
+    compatibility_level = 0,
+)
+
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "rules_distroless", version = "0.8.0")
+bazel_dep(name = "starlark_utils", version = "0.0.1")
+bazel_dep(name = "tar.bzl", version = "0.10.5")
+
+local_path_override(
+    module_name = "starlark_utils",
+    path = "../starlark_utils",
+)
+
+# `_make_sysroot_tar` resolves `@bsd_tar_toolchains_<host_platform>//:tar` at
+# load phase via `rctx.path(Label(...))`, so the per-host-platform repos must be
+# `use_repo`'d explicitly for the labels to resolve.
+bsd_tar_toolchains = use_extension("@tar.bzl//tar:extensions.bzl", "toolchains")
+use_repo(
+    bsd_tar_toolchains,
+    "bsd_tar_toolchains_linux_amd64",
+    "bsd_tar_toolchains_linux_arm64",
+)
+
+# --- Tests ---
+
+compression_tests = use_extension(
+    "//tests/apt/compression:extension.bzl",
+    "compression_tests",
+    dev_dependency = True,
+)
+use_repo(
+    compression_tests,
+    "compression_bzip2",
+    "compression_gzip",
+    "compression_xz",
+    "compression_zstd",
+)

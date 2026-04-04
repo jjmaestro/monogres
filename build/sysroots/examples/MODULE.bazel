@@ -1,0 +1,81 @@
+module(
+    name = "sysroots_examples",
+    version = "0.0.1",
+    bazel_compatibility = [">=8.4.2"],
+)
+
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "rules_cc", version = "0.2.18")
+bazel_dep(name = "starlark_utils", version = "0.0.1")
+local_path_override(
+    module_name = "starlark_utils",
+    path = "../../starlark_utils",
+)
+
+bazel_dep(name = "sysroots", version = "0.0.1")
+local_path_override(
+    module_name = "sysroots",
+    path = "..",
+)
+
+# --- LLVM toolchain bound to the hermetic sysroot below ---
+#
+# The example `cc_binary` in `llvm_sysroot/` resolves to this toolchain through
+# Bazel's toolchain resolution. The `--sysroot=` flag baked from the
+# `llvm.sysroot(label=...)` value points at the materialized hub repo, so the
+# compile + link runs against the apt-resolved Debian 12 sysroot.
+
+bazel_dep(name = "toolchains_llvm", version = "1.7.0")
+
+llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
+llvm.toolchain(
+    name = "llvm_toolchain",
+    llvm_version = "14.0.6",
+    stdlib = {"": "stdc++"},
+)
+llvm.sysroot(
+    name = "llvm_toolchain",
+    label = "@llvm_sysroot//debian/12/amd64:sysroot",
+    targets = ["linux-x86_64"],
+)
+use_repo(llvm, "llvm_toolchain", "llvm_toolchain_llvm")
+
+register_toolchains("@llvm_toolchain//:all")
+
+# --- Sysroot hubs ---
+
+APT_SNAPSHOT = "20250113T000000Z"
+
+sysroots = use_extension("@sysroots//:extension.bzl", "sysroots")
+
+# Compile-and-link sysroot: enough libc / libgcc / libstdc++ to build a small C
+# / C++ binary against the hermetic LLVM toolchain above.
+sysroots.apt(
+    name = "llvm_sysroot",
+    archs = ["amd64"],
+    distro = "debian",
+    lock = "//locks:llvm_sysroot.lock",
+    packages = [
+        "libc6-dev",
+        "libgcc-12-dev",
+        "libstdc++-12-dev",
+        "linux-libc-dev",
+    ],
+    snapshot = APT_SNAPSHOT,
+    version = "12",
+)
+use_repo(sysroots, "llvm_sysroot")
+
+# Buildtime-style sysroot: a handful of packages an action-time consumer wants
+# to extract from `:sysroot.tar` at build time (e.g. headers for a `genrule` or
+# `rules_foreign_cc` configure-and-build step).
+sysroots.apt(
+    name = "buildtime_sysroot",
+    archs = ["amd64"],
+    distro = "debian",
+    lock = "//locks:buildtime_sysroot.lock",
+    packages = ["zlib1g-dev"],
+    snapshot = APT_SNAPSHOT,
+    version = "12",
+)
+use_repo(sysroots, "buildtime_sysroot")

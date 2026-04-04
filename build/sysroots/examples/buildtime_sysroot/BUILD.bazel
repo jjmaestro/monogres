@@ -1,0 +1,28 @@
+package(default_visibility = ["//visibility:public"])
+
+# Action-time tar extraction of @buildtime_sysroot's :sysroot.tar.
+#
+# Extracts the tar into a tmpdir at action time, asserts `usr/include/zlib.h` is
+# present (proving the zlib1g-dev headers landed in the sysroot), and writes a
+# sorted listing of `usr/include/` to the output file. The tar-mode pattern is
+# what `genrule` / `rules_foreign_cc` / custom rules use when they need a
+# writable per-action copy of the normalized sysroot tree.
+genrule(
+    name = "extracted_files.txt",
+    srcs = ["@buildtime_sysroot//debian/12/amd64:sysroot.tar"],
+    outs = ["extracted_files.out"],
+    cmd = """
+        TMPDIR=$$(mktemp -d)
+        trap 'rm -rf "$$TMPDIR"' EXIT
+
+        tar -xf $(execpath @buildtime_sysroot//debian/12/amd64:sysroot.tar) \
+            -C "$$TMPDIR"
+
+        if [ ! -f "$$TMPDIR/usr/include/zlib.h" ]; then
+            echo "FAIL: usr/include/zlib.h missing from extracted sysroot" >&2
+            exit 1
+        fi
+
+        ls "$$TMPDIR/usr/include" | sort > $@
+    """,
+)

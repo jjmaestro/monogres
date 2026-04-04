@@ -22,6 +22,7 @@ bazel_dep(name = "rules_m4", version = "0.3.bcr.1")
 bazel_dep(name = "rules_pkg", version = "1.2.0")
 bazel_dep(name = "rules_python", version = "1.9.0")
 bazel_dep(name = "starlark_utils", version = "0.0.1")
+bazel_dep(name = "sysroots", version = "0.0.1")
 bazel_dep(name = "tar.bzl", version = "0.10.5")
 bazel_dep(name = "version_utils", version = "0.1.0")
 
@@ -30,6 +31,11 @@ bazel_dep(name = "toolchains_llvm", version = "1.7.0", dev_dependency = True)
 local_path_override(
     module_name = "starlark_utils",
     path = "starlark_utils",
+)
+
+local_path_override(
+    module_name = "sysroots",
+    path = "sysroots",
 )
 
 RFCC_COMMIT = "006ae82d9b4953a9b1c170827aef660f9f0f9ec0"

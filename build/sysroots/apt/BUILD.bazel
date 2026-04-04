@@ -1,0 +1,36 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "apt_group.bzl",
+    "hub_repo.bzl",
+    "layout.bzl",
+    "tag.bzl",
+])
+
+bzl_library(
+    name = "apt_group",
+    srcs = ["apt_group.bzl"],
+    deps = [
+        "//apt/private:closure",
+        "//apt/private:repo",
+    ],
+)
+
+bzl_library(
+    name = "hub_repo",
+    srcs = ["hub_repo.bzl"],
+    deps = ["//apt/private:repo"],
+)
+
+bzl_library(
+    name = "layout",
+    srcs = ["layout.bzl"],
+    deps = ["//common:archs"],
+)
+
+bzl_library(
+    name = "tag",
+    srcs = ["tag.bzl"],
+)

@@ -1,0 +1,15 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# Compile + link a tiny C binary against the @llvm_sysroot hermetic sysroot via
+# the LLVM toolchain registered in MODULE.bazel.
+#
+# The bytes that go into the link line all come from the apt-resolved Debian 12
+# sysroot (crt*.o from libgcc-12-dev, libc.so / linker scripts from libc6-dev,
+# etc.), proving the `:sysroot` filegroup and `--sysroot=` baking work
+# end-to-end.
+cc_binary(
+    name = "hello",
+    srcs = ["hello.c"],
+)

@@ -49,6 +49,8 @@ MODULE=(
   starlark_utils
   starlark_utils/examples
   starlark_utils/docs
+  sysroots
+  sysroots/examples
   tests
   examples
   e2e

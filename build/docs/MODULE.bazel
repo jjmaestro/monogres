@@ -23,6 +23,11 @@ local_path_override(
     path = "../starlark_utils",
 )
 
+local_path_override(
+    module_name = "sysroots",
+    path = "../sysroots",
+)
+
 # version_utils 0.1.0 defines its own `isinstance` helper, which Bazel 9 rejects
 # now that it reserves `isinstance` as a predeclared builtin. The renderer
 # reaches version_utils through the monogres introspect rules, so patch the
