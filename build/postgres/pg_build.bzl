@@ -10,6 +10,7 @@ variables, toolchain references, and Meson options needed for the build.
 
 load("@rules_foreign_cc//foreign_cc:meson.bzl", "meson")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("@sysroots//common:stable_key.bzl", "stable_key")
 load(":toolchain.bzl", "pg_template_variable_info")
 
 def _meson_common_args(pg_src, build_options, auto_features, sysroot = None):
@@ -260,10 +261,10 @@ def _sysroot(deps):
     """
     Declares or reuses a shared sysroot target for the given dependencies.
 
-    This helper canonicalizes the dependency labels into a sorted, deduplicated
-    key, derives the shared sysroot target name from that key, and ensures the
-    target exists as a `pkg_tar`. If an existing rule already uses that name, it
-    must be the expected sysroot target kind.
+    This helper canonicalizes the dependency labels via `stable_key()` from
+    `@sysroots//common:stable_key.bzl`, derives the shared sysroot target name
+    from that key, and ensures the target exists as a `pkg_tar`. If an existing
+    rule already uses that name, it must be the expected sysroot target kind.
 
     Args:
         deps (list[str]): Dependency tarball labels to merge into the sysroot.
@@ -276,16 +277,7 @@ def _sysroot(deps):
     # sysroot target.
     deps_ = tuple(sorted({dep: None for dep in deps}.keys()))
 
-    # Derive a stable shared sysroot target name from the canonicalized
-    # dependency set. `hash()` is deterministic in Bazel Starlark for strings;
-    # using both the forward and reversed dependency order plus the number of
-    # dependencies keeps the name short while making accidental collisions
-    # vanishingly unlikely.
-    sysroot_name = "sysroot-{}-{}-{}".format(
-        abs(hash("\n".join(deps_))),
-        abs(hash("\n".join(reversed(deps_)))),
-        len(deps_),
-    )
+    sysroot_name = stable_key(deps, prefix = "sysroot")
 
     existing_sysroot = native.existing_rule(sysroot_name)
 
