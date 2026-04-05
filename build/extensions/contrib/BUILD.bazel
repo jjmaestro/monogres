@@ -22,6 +22,7 @@ bzl_library(
     name = "pgext_contrib",
     srcs = ["pgext_contrib.bzl"],
     deps = [
+        "//postgres:build_options",
         "//utils:declare_outputs",
         "@tar.bzl//tar:mtree",
         "@tar.bzl//tar:tar",

@@ -19,7 +19,7 @@ load(":version.bzl", "is_compatible_with")
 # in sandboxes and will be installing the binaries at a different path, we've
 # added a patch that adds a new prefix_distro build option to set the prefix of
 # the "final install path in the distro".
-_PREFIX_DISTRO = "/postgres"
+DEFAULT_PREFIX_DISTRO = "/postgres"
 
 _DEFAULT_OPTIONS = dict(
     # NOTE:
@@ -125,7 +125,7 @@ def is_compatible(option, version, build_options_metadata, debug = False):
 
     return is_compatible_with(version, version_constraints, debug_prefix)
 
-def build_options(version, option_set, build_options_metadata, debug = False):
+def build_options(version, option_set, build_options_metadata, debug = False, prefix_distro = DEFAULT_PREFIX_DISTRO):
     """
     Computes Postgres build options and auto-feature settings.
 
@@ -137,6 +137,8 @@ def build_options(version, option_set, build_options_metadata, debug = False):
             options to their compatible PG version constraints spec.
         debug (bool): If `True`, prints debug messages when build options are
             incompatible with the given Postgre version.
+        prefix_distro (str): The base prefix path for the distro install
+            (defaults to `DEFAULT_PREFIX_DISTRO`).
 
     Returns:
         (options, auto_features)
@@ -186,7 +188,7 @@ def build_options(version, option_set, build_options_metadata, debug = False):
                 options[option] = value
 
     options = options | dict(
-        prefix_distro = "%s/%s" % (_PREFIX_DISTRO, version),
+        prefix_distro = "%s/%s" % (prefix_distro, version),
     )
 
     return options, auto_features

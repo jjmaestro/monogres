@@ -13,7 +13,7 @@ into individual tar archives for distribution or reuse.
 <pre>
 load("@monogres//extensions/contrib:pgext_contrib.bzl", "pgext_contrib")
 
-pgext_contrib(<a href="#pgext_contrib-name">name</a>, <a href="#pgext_contrib-files">files</a>, <a href="#pgext_contrib-pg_target">pg_target</a>)
+pgext_contrib(<a href="#pgext_contrib-name">name</a>, <a href="#pgext_contrib-files">files</a>, <a href="#pgext_contrib-pg_target">pg_target</a>, <a href="#pgext_contrib-prefix_distro">prefix_distro</a>)
 </pre>
 
 Create a Postgres contrib extension.
@@ -33,6 +33,7 @@ This macro:
 | <a id="pgext_contrib-name"></a>name |  The name of the contrib extension.   |  none |
 | <a id="pgext_contrib-files"></a>files |  The list of file paths (relative to the Postgres base dir) that make the contrib extension.   |  none |
 | <a id="pgext_contrib-pg_target"></a>pg_target |  A struct with the Postgres build configuration.   |  none |
+| <a id="pgext_contrib-prefix_distro"></a>prefix_distro |  The base prefix path for the distro install (defaults to `DEFAULT_PREFIX_DISTRO`).   |  `"/postgres"` |
 
 
 <a id="pgext_contrib_all"></a>
@@ -42,7 +43,7 @@ This macro:
 <pre>
 load("@monogres//extensions/contrib:pgext_contrib.bzl", "pgext_contrib_all")
 
-pgext_contrib_all(<a href="#pgext_contrib_all-name">name</a>, <a href="#pgext_contrib_all-cfgs">cfgs</a>)
+pgext_contrib_all(<a href="#pgext_contrib_all-name">name</a>, <a href="#pgext_contrib_all-cfgs">cfgs</a>, <a href="#pgext_contrib_all-prefix_distro">prefix_distro</a>)
 </pre>
 
 Generate `pgext_contrib` targets for multiple Postgres contrib extensions.
@@ -54,5 +55,6 @@ Generate `pgext_contrib` targets for multiple Postgres contrib extensions.
 | :------------- | :------------- | :------------- |
 | <a id="pgext_contrib_all-name"></a>name |  A base name for the macro call (not used internally, but required by Bazel).   |  none |
 | <a id="pgext_contrib_all-cfgs"></a>cfgs |  A list of contrib extension `cfg` `struct`s.   |  none |
+| <a id="pgext_contrib_all-prefix_distro"></a>prefix_distro |  The base prefix path for the distro install (defaults to `DEFAULT_PREFIX_DISTRO`).   |  `"/postgres"` |
 
 

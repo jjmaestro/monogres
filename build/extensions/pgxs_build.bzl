@@ -2,7 +2,9 @@
 Rules to build Postgres PGXS extensions from source.
 """
 
-def pgxs_build(name, pgxs_src, deps_buildtime, pg_version, debug = False):
+load("//postgres:build_options.bzl", "DEFAULT_PREFIX_DISTRO")
+
+def pgxs_build(name, pgxs_src, deps_buildtime, pg_version, prefix_distro = DEFAULT_PREFIX_DISTRO, debug = False):
     """Generates a Bazel target to build a PGXS extension with the [PGXS build system].
 
     [PGXS build system]: https://www.postgresql.org/docs/current/extend-pgxs.html
@@ -14,9 +16,15 @@ def pgxs_build(name, pgxs_src, deps_buildtime, pg_version, debug = False):
             extension.
         pg_version (struct): `struct` containing metadata to select the Postgres
             build that will be used when building the extension.
+        prefix_distro (str): The base prefix path for the distro install
+            (defaults to `DEFAULT_PREFIX_DISTRO`).
         debug (bool): If `True`, prints a debug message for each command
             executed.
     """
+
+    # remove leading slash for use in relative paths within the tar
+    prefix_distro_rel = prefix_distro.lstrip("/")
+
     tar_file, log_file = ["%s%s" % (name, file) for file in (".tar", ".log")]
 
     native.genrule(
@@ -283,8 +291,8 @@ def pgxs_build(name, pgxs_src, deps_buildtime, pg_version, debug = False):
         {{
             setup_deps_buildtime "$$DEPS_BUILDTIME_PATH" "$${{DEPS_BUILDTIME[@]}}"
             compile_extension "$$CC" "$$PGXS_SRC" "$$DEPS_BUILDTIME_PATH" "$$INSTALLDIR"
-            mkdir -p "$$RELOCATED_PGXS_INSTALLDIR/postgres/{pg_version}"
-            mv -t "$$RELOCATED_PGXS_INSTALLDIR/postgres/{pg_version}/." "$$PGXS_INSTALLDIR"/*
+            mkdir -p "$$RELOCATED_PGXS_INSTALLDIR/{prefix_distro_rel}/{pg_version}"
+            mv -t "$$RELOCATED_PGXS_INSTALLDIR/{prefix_distro_rel}/{pg_version}/." "$$PGXS_INSTALLDIR"/*
             tar_ "$$TAR_FILE" --directory "$$RELOCATED_PGXS_INSTALLDIR" .
         }} >> "$$LOG_FILE" 2>&1
         """.format(
@@ -301,6 +309,7 @@ def pgxs_build(name, pgxs_src, deps_buildtime, pg_version, debug = False):
             ]),
             tar_file = "$(locations %s)" % tar_file,
             log_file = "$(locations %s)" % log_file,
+            prefix_distro_rel = prefix_distro_rel,
             pg_version = pg_version.version,
             pgxs_src = "$(locations %s)" % pgxs_src,
             deps_buildtime = " ".join([
@@ -323,7 +332,7 @@ def pgxs_build(name, pgxs_src, deps_buildtime, pg_version, debug = False):
         visibility = ["//visibility:public"],
     )
 
-def pgxs_build_all(name, cfg):
+def pgxs_build_all(name, cfg, prefix_distro = DEFAULT_PREFIX_DISTRO):
     """
     Defines Bazel targets for building all configured PGXS extensions.
 
@@ -333,6 +342,8 @@ def pgxs_build_all(name, cfg):
     Args:
         name (str): The base name for the default target.
         cfg (struct): A `pgext` config `struct`.
+        prefix_distro (str): The base prefix path for the distro install
+            (defaults to `DEFAULT_PREFIX_DISTRO`).
     """
     for target in cfg.targets:
         pgxs_build(
@@ -340,6 +351,7 @@ def pgxs_build_all(name, cfg):
             pgxs_src = target.pgxs_src,
             deps_buildtime = target.deps_buildtime,
             pg_version = target.pg_version,
+            prefix_distro = prefix_distro,
         )
 
         for dep in set(target.deps_buildtime + target.deps_runtime):

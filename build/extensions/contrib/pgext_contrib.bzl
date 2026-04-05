@@ -8,9 +8,10 @@ into individual tar archives for distribution or reuse.
 
 load("@tar.bzl//tar:mtree.bzl", "mtree_mutate", "mtree_spec")
 load("@tar.bzl//tar:tar.bzl", "tar")
+load("//postgres:build_options.bzl", "DEFAULT_PREFIX_DISTRO")
 load("//utils:declare_outputs.bzl", "declare_outputs")
 
-def pgext_contrib(name, files, pg_target):
+def pgext_contrib(name, files, pg_target, prefix_distro = DEFAULT_PREFIX_DISTRO):
     """
     Create a Postgres contrib extension.
 
@@ -25,7 +26,13 @@ def pgext_contrib(name, files, pg_target):
         files (list[str]): The list of file paths (relative to the Postgres base
             dir) that make the contrib extension.
         pg_target (struct): A struct with the Postgres build configuration.
+        prefix_distro (str): The base prefix path for the distro install
+            (defaults to `DEFAULT_PREFIX_DISTRO`).
     """
+
+    # remove leading slash and construct the full prefix path with version
+    prefix_distro_rel = prefix_distro.lstrip("/")
+    package_dir = "%s/%s" % (prefix_distro_rel, pg_target.pg_version.version)
     name_files = "%s--files" % name
     declare_outputs(
         name = name_files,
@@ -51,6 +58,7 @@ def pgext_contrib(name, files, pg_target):
             pg_target.name,
             name_files,
         ]),
+        package_dir = package_dir,
         ownername = "postgres",
         visibility = ["//visibility:private"],
     )
@@ -63,7 +71,7 @@ def pgext_contrib(name, files, pg_target):
         visibility = ["//visibility:public"],
     )
 
-def pgext_contrib_all(name, cfgs):
+def pgext_contrib_all(name, cfgs, prefix_distro = DEFAULT_PREFIX_DISTRO):
     """
     Generate `pgext_contrib` targets for multiple Postgres contrib extensions.
 
@@ -71,6 +79,8 @@ def pgext_contrib_all(name, cfgs):
         name (str): A base name for the macro call (not used internally, but
             required by Bazel).
         cfgs (list[struct]): A list of contrib extension `cfg` `struct`s.
+        prefix_distro (str): The base prefix path for the distro install
+            (defaults to `DEFAULT_PREFIX_DISTRO`).
     """
     for cfg in cfgs:
         for target in cfg.targets:
@@ -78,4 +88,5 @@ def pgext_contrib_all(name, cfgs):
                 name = target.name,
                 files = target.files,
                 pg_target = target.pg_target,
+                prefix_distro = prefix_distro,
             )

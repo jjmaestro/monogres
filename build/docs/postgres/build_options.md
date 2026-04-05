@@ -18,7 +18,7 @@ For the full list of available options, see [PostgreSQL Features] and
 <pre>
 load("@monogres//postgres:build_options.bzl", "build_options")
 
-build_options(<a href="#build_options-version">version</a>, <a href="#build_options-option_set">option_set</a>, <a href="#build_options-build_options_metadata">build_options_metadata</a>, <a href="#build_options-debug">debug</a>)
+build_options(<a href="#build_options-version">version</a>, <a href="#build_options-option_set">option_set</a>, <a href="#build_options-build_options_metadata">build_options_metadata</a>, <a href="#build_options-debug">debug</a>, <a href="#build_options-prefix_distro">prefix_distro</a>)
 </pre>
 
 Computes Postgres build options and auto-feature settings.
@@ -32,6 +32,7 @@ Computes Postgres build options and auto-feature settings.
 | <a id="build_options-option_set"></a>option_set |  One of the predefined build option sets (e.g. "barebones", "full", etc).   |  none |
 | <a id="build_options-build_options_metadata"></a>build_options_metadata |  A dictionary mapping Postgres build options to their compatible PG version constraints spec.   |  none |
 | <a id="build_options-debug"></a>debug |  If `True`, prints debug messages when build options are incompatible with the given Postgre version.   |  `False` |
+| <a id="build_options-prefix_distro"></a>prefix_distro |  The base prefix path for the distro install (defaults to `DEFAULT_PREFIX_DISTRO`).   |  `"/postgres"` |
 
 **RETURNS**
 

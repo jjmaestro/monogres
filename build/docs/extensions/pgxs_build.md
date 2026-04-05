@@ -9,7 +9,7 @@ Rules to build Postgres PGXS extensions from source.
 <pre>
 load("@monogres//extensions:pgxs_build.bzl", "pgxs_build")
 
-pgxs_build(<a href="#pgxs_build-name">name</a>, <a href="#pgxs_build-pgxs_src">pgxs_src</a>, <a href="#pgxs_build-deps_buildtime">deps_buildtime</a>, <a href="#pgxs_build-pg_version">pg_version</a>, <a href="#pgxs_build-debug">debug</a>)
+pgxs_build(<a href="#pgxs_build-name">name</a>, <a href="#pgxs_build-pgxs_src">pgxs_src</a>, <a href="#pgxs_build-deps_buildtime">deps_buildtime</a>, <a href="#pgxs_build-pg_version">pg_version</a>, <a href="#pgxs_build-prefix_distro">prefix_distro</a>, <a href="#pgxs_build-debug">debug</a>)
 </pre>
 
 Generates a Bazel target to build a PGXS extension with the [PGXS build system].
@@ -26,6 +26,7 @@ Generates a Bazel target to build a PGXS extension with the [PGXS build system].
 | <a id="pgxs_build-pgxs_src"></a>pgxs_src |  The repo with the extension source code.   |  none |
 | <a id="pgxs_build-deps_buildtime"></a>deps_buildtime |  List of dependencies needed to build the extension.   |  none |
 | <a id="pgxs_build-pg_version"></a>pg_version |  `struct` containing metadata to select the Postgres build that will be used when building the extension.   |  none |
+| <a id="pgxs_build-prefix_distro"></a>prefix_distro |  The base prefix path for the distro install (defaults to `DEFAULT_PREFIX_DISTRO`).   |  `"/postgres"` |
 | <a id="pgxs_build-debug"></a>debug |  If `True`, prints a debug message for each command executed.   |  `False` |
 
 
@@ -36,7 +37,7 @@ Generates a Bazel target to build a PGXS extension with the [PGXS build system].
 <pre>
 load("@monogres//extensions:pgxs_build.bzl", "pgxs_build_all")
 
-pgxs_build_all(<a href="#pgxs_build_all-name">name</a>, <a href="#pgxs_build_all-cfg">cfg</a>)
+pgxs_build_all(<a href="#pgxs_build_all-name">name</a>, <a href="#pgxs_build_all-cfg">cfg</a>, <a href="#pgxs_build_all-prefix_distro">prefix_distro</a>)
 </pre>
 
 Defines Bazel targets for building all configured PGXS extensions.
@@ -52,5 +53,6 @@ creates aliases for the default version.
 | :------------- | :------------- | :------------- |
 | <a id="pgxs_build_all-name"></a>name |  The base name for the default target.   |  none |
 | <a id="pgxs_build_all-cfg"></a>cfg |  A `pgext` config `struct`.   |  none |
+| <a id="pgxs_build_all-prefix_distro"></a>prefix_distro |  The base prefix path for the distro install (defaults to `DEFAULT_PREFIX_DISTRO`).   |  `"/postgres"` |
 
 
