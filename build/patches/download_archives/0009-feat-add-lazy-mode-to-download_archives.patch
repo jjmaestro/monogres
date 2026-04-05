@@ -1,0 +1,422 @@
+From 5a938004bc58f4f0f69029dfeebd948ad6e78471 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sat, 4 Apr 2026 09:18:21 +0000
+Subject: [PATCH 09/14] feat: add lazy mode to download_archives
+
+When lazy=True, the archives rule generates per-version stub BUILD
+files that alias to per-version download repos instead of downloading
+all archives eagerly. Only the versions referenced by a build are
+fetched.
+---
+ docs/download/archives/repository.md |  11 +-
+ download/archives/BUILD.bazel        |   1 +
+ download/archives/repository.bzl     | 145 ++++++++++++++++++---------
+ examples/MODULE.bazel                |  16 +++
+ examples/repos/BUILD.bazel           |   3 +
+ examples/repos/wget_lazy.bzl         |  64 ++++++++++++
+ 6 files changed, 188 insertions(+), 52 deletions(-)
+ create mode 100644 examples/repos/wget_lazy.bzl
+
+diff --git a/docs/download/archives/repository.md b/docs/download/archives/repository.md
+index 376521f..4e8086c 100644
+--- a/docs/download/archives/repository.md
++++ b/docs/download/archives/repository.md
+@@ -14,8 +14,8 @@ to download and extract an archive: the archive's `version`(s) and the
+ <pre>
+ load("@download_archives//download/archives:repository.bzl", "archives")
+ 
+-archives(<a href="#archives-name">name</a>, <a href="#archives-index">index</a>, <a href="#archives-patches">patches</a>, <a href="#archives-repo_mapping">repo_mapping</a>, <a href="#archives-sources">sources</a>, <a href="#archives-spec_syntax">spec_syntax</a>, <a href="#archives-strict_integrity">strict_integrity</a>, <a href="#archives-version_scheme">version_scheme</a>,
+-         <a href="#archives-versions">versions</a>)
++archives(<a href="#archives-name">name</a>, <a href="#archives-index">index</a>, <a href="#archives-lazy">lazy</a>, <a href="#archives-patches">patches</a>, <a href="#archives-repo_mapping">repo_mapping</a>, <a href="#archives-sources">sources</a>, <a href="#archives-spec_syntax">spec_syntax</a>, <a href="#archives-strict_integrity">strict_integrity</a>,
++         <a href="#archives-version_scheme">version_scheme</a>, <a href="#archives-versions">versions</a>)
+ </pre>
+ 
+ This repository rule wraps [`rctx.download_and_extract`] and creates a Bazel
+@@ -166,7 +166,7 @@ Finally, to simplify patch maintenance, it's good practice to keep a dedicated
+ generate the list of patches using [`git format-patch`].
+ 
+ [unified diff format]: https://en.wikipedia.org/wiki/Diff#Unified_format
+-+[`version_utils` `spec` extension]: https://github.com/jjmaestro/bazel_version_utils/blob/main/docs/specs/spec.md
++[`version_utils` `spec` extension]: https://github.com/jjmaestro/bazel_version_utils/blob/main/docs/specs/spec.md
+ [`git format-patch`]: https://git-scm.com/docs/git-format-patch
+ 
+ ### Usage:
+@@ -409,10 +409,11 @@ In this case, the list of targets would look like:
+ | Name  | Description | Type | Mandatory | Default |
+ | :------------- | :------------- | :------------- | :------------- | :------------- |
+ | <a id="archives-name"></a>name |  A unique name for this repository.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+-| <a id="archives-index"></a>index |  Label of the repo JSON index   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
++| <a id="archives-index"></a>index |  Label of the repo JSON index file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
++| <a id="archives-lazy"></a>lazy |  Internal. When True, creates index-only repos with stub BUILD files that alias to per-version download repositories instead of downloading archives eagerly. The per-version repos must be created separately.   | Boolean | optional |  `False`  |
+ | <a id="archives-patches"></a>patches |  Diff files to apply as patches at the root of the downloaded archive. The `dict` values represent "patch specs" in the `<VERSION_SPEC>/<SOURCE>` format, and determine when patches apply to the downloaded archive. Patches must be in standard [unified diff format], created from the root of the archive. All patches are applied from the root of the archive with `patch -p1`. For more details, see ["Patching"].   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
+ | <a id="archives-repo_mapping"></a>repo_mapping |  In `WORKSPACE` context only: a dictionary from local repository name to global repository name. This allows controls over workspace dependency resolution for dependencies of this repository.<br><br>For example, an entry `"@foo": "@bar"` declares that, for any time this repository depends on `@foo` (such as a dependency on `@foo//some:target`, it should actually resolve that dependency within globally-declared `@bar` (`@bar//some:target`).<br><br>This attribute is _not_ supported in `MODULE.bazel` context (when invoking a repository rule inside a module extension's implementation function).   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  |
+-| <a id="archives-sources"></a>sources |  Source names from which to download the archive. If none is specified, it will use all of the sources available in the repo index to try to download and extract the archive.   | List of strings | optional |  `[]`  |
++| <a id="archives-sources"></a>sources |  Source names from which to download the archive. If none, all sources from the index are tried in order.   | List of strings | optional |  `[]`  |
+ | <a id="archives-spec_syntax"></a>spec_syntax |  The syntax of the version constraints specification. The available syntaxes are those supported by `version_utils` (see `SYNTAX` in [`version_utils`' `spec` extension](https://github.com/jjmaestro/bazel_version_utils/blob/main/spec/spec.bzl)). Defaults to `SYNTAX.SIMPLE`.   | String | optional |  `"simple"`  |
+ | <a id="archives-strict_integrity"></a>strict_integrity |  If `True`, all sources of a given archive version must share the same integrity hash. If they differ, the download will fail. Defaults to `True`.   | Boolean | optional |  `True`  |
+ | <a id="archives-version_scheme"></a>version_scheme |  The scheme of the versions in `index` and `patches`. The available version schemes are those supported by `version_utils` (see `SCHEME` in [`version_utils`' `version` extension](https://github.com/jjmaestro/bazel_version_utils/blob/main/version/version.bzl)). Defaults to `SCHEME.SEMVER`.   | String | optional |  `"semver"`  |
+diff --git a/download/archives/BUILD.bazel b/download/archives/BUILD.bazel
+index dc871ea..9a22e50 100644
+--- a/download/archives/BUILD.bazel
++++ b/download/archives/BUILD.bazel
+@@ -13,6 +13,7 @@ bzl_library(
+         "//lib:download",
+         "//lib:index",
+         "@version_utils//spec",
++        "@version_utils//version",
+     ],
+ )
+ 
+diff --git a/download/archives/repository.bzl b/download/archives/repository.bzl
+index 52ef86b..7573bc0 100644
+--- a/download/archives/repository.bzl
++++ b/download/archives/repository.bzl
+@@ -161,7 +161,7 @@ Finally, to simplify patch maintenance, it's good practice to keep a dedicated
+ generate the list of patches using [`git format-patch`].
+ 
+ [unified diff format]: https://en.wikipedia.org/wiki/Diff#Unified_format
+-+[`version_utils` `spec` extension]: https://github.com/jjmaestro/bazel_version_utils/blob/main/docs/specs/spec.md
++[`version_utils` `spec` extension]: https://github.com/jjmaestro/bazel_version_utils/blob/main/docs/specs/spec.md
+ [`git format-patch`]: https://git-scm.com/docs/git-format-patch
+ 
+ ### Usage:
+@@ -409,15 +409,15 @@ METADATA = {metadata}
+ LOCK = {lock}
+ '''
+ 
+-BUILD_TARGETS = """
++_BUILD_TARGETS = """
+ alias(
+     name = "files",
+-    actual = "//{{}}/{{}}:files".format(VERSION, SOURCE),
++    actual = "{actual_prefix}:files",
+ )
+ 
+ alias(
+     name = "dir",
+-    actual = "//{{}}/{{}}:dir".format(VERSION, SOURCE),
++    actual = "{actual_prefix}:dir",
+ )
+ 
+ alias(
+@@ -426,14 +426,7 @@ alias(
+ )
+ """
+ 
+-BUILD_ROOT = '''\
+-"""Generated by download_archives. DO NOT EDIT."""
+-
+-load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+-load("//:repo.bzl", "DEFAULT_VERSION", "VERSIONS")
+-
+-package(default_visibility = ["//visibility:public"])
+-
++_BUILD_ROOT_EXPORTS = """
+ exports_files([
+     "repo.bzl",
+     "index.json",
+@@ -445,23 +438,37 @@ bzl_library(
+     name = "repo",
+     srcs = ["repo.bzl"],
+ )
++"""
+ 
+-VERSION = DEFAULT_VERSION
++BUILD_ROOT = '''\
++"""Generated by download_archives. DO NOT EDIT."""
++
++load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
++load("//{version}:source.bzl", "SOURCE")
+ 
+-SOURCE = VERSIONS[VERSION]
+-''' + BUILD_TARGETS
++package(default_visibility = ["//visibility:public"])
++''' + _BUILD_ROOT_EXPORTS + '''\
++VERSION = "{version}"
++''' + _BUILD_TARGETS
+ 
+ BUILD_VERSION = '''\
+ """Generated by download_archives. DO NOT EDIT."""
+ 
+-load("//:repo.bzl", "VERSIONS")
++load("//{version}:source.bzl", "SOURCE")
+ 
+ package(default_visibility = ["//visibility:public"])
+ 
+ VERSION = "{version}"
++''' + _BUILD_TARGETS
++
++SOURCE_BZL_LAZY = '''\
++"""Generated by download_archives. DO NOT EDIT."""
+ 
+-SOURCE = VERSIONS[VERSION]
+-''' + BUILD_TARGETS
++load("@{dl_repo}//{version}:source.bzl", _SOURCE = "SOURCE", _URL = "URL")
++
++SOURCE = _SOURCE
++URL = _URL
++'''
+ 
+ BUILD_SOURCE = '''\
+ """Generated by download_archives. DO NOT EDIT."""
+@@ -518,26 +525,53 @@ def _impl(rctx, _print = print, _fail = fail):
+ 
+     rctx.report_progress("{}: creating repo".format(repo_name))
+ 
++    lazy = rctx.attr.lazy
+     repo_lock = {}
+     failed_versions = []
+ 
+     for version, repos in index.repos.items():
+-        dl = Download.try_sources(
+-            rctx,
+-            repo_name,
+-            version,
+-            repos,
+-            patches = rctx.attr.patches,
+-            spec_syntax = rctx.attr.spec_syntax,
+-            version_scheme = rctx.attr.version_scheme,
+-            strict_integrity = rctx.attr.strict_integrity,
+-            _print = _print,
+-            _fail = _fail,
+-        )
+-
+-        if not dl:
+-            failed_versions.append(version)
+-            continue
++        if lazy:
++            first_repo = repos[0]
++            dl_repo_name = "%s-%s" % (repo_name, version)
++
++            dl = struct(
++                source = first_repo.source,
++                url = first_repo.context["url"],
++                integrity = first_repo.context.get("integrity", ""),
++                patches = [],
++            )
++            actual_prefix = "@%s//%s" % (dl_repo_name, version)
++
++            rctx.file(
++                "%s/source.bzl" % version,
++                SOURCE_BZL_LAZY.format(dl_repo = dl_repo_name, version = version),
++                executable = False,
++            )
++        else:
++            dl = Download.try_sources(
++                rctx,
++                repo_name,
++                version,
++                repos,
++                patches = rctx.attr.patches,
++                spec_syntax = rctx.attr.spec_syntax,
++                version_scheme = rctx.attr.version_scheme,
++                strict_integrity = rctx.attr.strict_integrity,
++                _print = _print,
++                _fail = _fail,
++            )
++
++            if not dl:
++                failed_versions.append(version)
++                continue
++
++            actual_prefix = "//%s/%s" % (version, dl.source)
++
++            rctx.file(
++                "%s/%s/BUILD.bazel" % (version, dl.source),
++                BUILD_SOURCE.format(alias = dl.source, version = version),
++                executable = False,
++            )
+ 
+         repo_lock[version] = dict(
+             source = dl.source,
+@@ -546,15 +580,13 @@ def _impl(rctx, _print = print, _fail = fail):
+             patches = [str(p) for p in dl.patches] if dl.patches else None,
+         )
+ 
+-        rctx.file(
+-            "%s/%s/BUILD.bazel" % (version, dl.source),
+-            BUILD_SOURCE.format(alias = dl.source, version = version),
+-            executable = False,
+-        )
+-
+         rctx.file(
+             "%s/BUILD.bazel" % version,
+-            BUILD_VERSION.format(alias = version, version = version),
++            BUILD_VERSION.format(
++                version = version,
++                actual_prefix = actual_prefix,
++                alias = version,
++            ),
+             executable = False,
+         )
+ 
+@@ -565,9 +597,18 @@ def _impl(rctx, _print = print, _fail = fail):
+     versions = {version: repo["source"] for version, repo in repo_lock.items()}
+     default_version = versions.keys()[0]
+ 
++    if rctx.attr.lazy:
++        actual_prefix = "//%s" % default_version
++    else:
++        actual_prefix = "//%s/%s" % (default_version, versions[default_version])
++
+     rctx.file(
+         "BUILD.bazel",
+-        BUILD_ROOT.format(alias = repo_name),
++        BUILD_ROOT.format(
++            version = default_version,
++            actual_prefix = actual_prefix,
++            alias = repo_name,
++        ),
+         executable = False,
+     )
+ 
+@@ -602,7 +643,7 @@ def _impl(rctx, _print = print, _fail = fail):
+ 
+ ATTRS = dict(
+     index = attr.label(
+-        doc = "Label of the repo JSON index",
++        doc = "Label of the repo JSON index file.",
+         allow_single_file = True,
+         mandatory = True,
+     ),
+@@ -614,9 +655,8 @@ ATTRS = dict(
+     ),
+     sources = attr.string_list(
+         doc = """
+-        Source names from which to download the archive. If none is specified,
+-        it will use all of the sources available in the repo index to try to
+-        download and extract the archive.
++        Source names from which to download the archive. If none, all sources
++        from the index are tried in order.
+         """,
+     ),
+     # TODO: in 7.4 we can use string_keyed_label_dict
+@@ -661,8 +701,19 @@ ATTRS = dict(
+     ),
+ )
+ 
++_ATTRS = ATTRS | dict(
++    lazy = attr.bool(
++        default = False,
++        doc = """
++        Internal. When True, creates index-only repos with stub BUILD files
++        that alias to per-version download repositories instead of downloading
++        archives eagerly. The per-version repos must be created separately.
++        """,
++    ),
++)
++
+ archives = repository_rule(
+     doc = DOC,
+-    attrs = ATTRS,
++    attrs = _ATTRS,
+     implementation = _impl,
+ )
+diff --git a/examples/MODULE.bazel b/examples/MODULE.bazel
+index b6f0555..dcf900d 100644
+--- a/examples/MODULE.bazel
++++ b/examples/MODULE.bazel
+@@ -32,3 +32,19 @@ download_archives(
+     version_scheme = "pgver",
+     versions = ["16.0"],
+ )
++
++# lazy mode: index repo + per-version download repo (manual wiring)
++download_archives(
++    name = "wget_lazy",
++    index = "//third-party/wget:repo.json",
++    lazy = True,
++    strict_integrity = False,
++    versions = ["1.24.5"],
++)
++
++download_archives(
++    name = "wget_lazy-1.24.5",
++    index = "//third-party/wget:repo.json",
++    strict_integrity = False,
++    versions = ["1.24.5"],
++)
+diff --git a/examples/repos/BUILD.bazel b/examples/repos/BUILD.bazel
+index 0b8c838..f94d174 100644
+--- a/examples/repos/BUILD.bazel
++++ b/examples/repos/BUILD.bazel
+@@ -1,6 +1,9 @@
+ load(":pg_src.bzl", pg_src_suite = "examples_suite")
++load(":wget_lazy.bzl", wget_lazy_suite = "examples_suite")
+ load(":wget_src.bzl", wget_src_suite = "examples_suite")
+ 
+ pg_src_suite()
+ 
++wget_lazy_suite()
++
+ wget_src_suite()
+diff --git a/examples/repos/wget_lazy.bzl b/examples/repos/wget_lazy.bzl
+new file mode 100644
+index 0000000..2cedc92
+--- /dev/null
++++ b/examples/repos/wget_lazy.bzl
+@@ -0,0 +1,64 @@
++"""e2e wget_lazy tests (lazy mode via manual download_archives wiring)"""
++
++load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
++load("@wget_lazy//:repo.bzl", "DEFAULT_VERSION", "REPO_NAME", "VERSIONS")
++load("@wget_lazy//1.24.5:source.bzl", "SOURCE", "URL")
++load("//:suite.bzl", _examples_suite = "test_suite")
++
++def _repo_name_impl(ctx):
++    env = unittest.begin(ctx)
++
++    asserts.equals(env, "wget_lazy", REPO_NAME)
++
++    return unittest.end(env)
++
++repo_name_test = unittest.make(_repo_name_impl)
++
++def _default_version_impl(ctx):
++    env = unittest.begin(ctx)
++
++    asserts.equals(env, "1.24.5", DEFAULT_VERSION)
++
++    return unittest.end(env)
++
++default_version_test = unittest.make(_default_version_impl)
++
++def _versions_has_entry_impl(ctx):
++    env = unittest.begin(ctx)
++
++    asserts.true(env, "1.24.5" in VERSIONS)
++
++    return unittest.end(env)
++
++versions_has_entry_test = unittest.make(_versions_has_entry_impl)
++
++def _source_from_download_repo_impl(ctx):
++    env = unittest.begin(ctx)
++
++    # SOURCE comes from the download repo via source.bzl re-export
++    known_sources = ["github.com", "gitlab.com"]
++    asserts.true(
++        env,
++        SOURCE in known_sources,
++        "SOURCE %r not in %r" % (SOURCE, known_sources),
++    )
++    asserts.true(
++        env,
++        "1.24.5" in URL or "v1.24.5" in URL,
++        "URL %r doesn't contain version" % URL,
++    )
++
++    return unittest.end(env)
++
++source_from_download_repo_test = unittest.make(_source_from_download_repo_impl)
++
++SUITE_NAME = "wget_lazy"
++
++SUITE = dict(
++    repo_name = repo_name_test,
++    default_version = default_version_test,
++    versions_has_entry = versions_has_entry_test,
++    source_from_download_repo = source_from_download_repo_test,
++)
++
++examples_suite = lambda: _examples_suite(SUITE_NAME, SUITE)

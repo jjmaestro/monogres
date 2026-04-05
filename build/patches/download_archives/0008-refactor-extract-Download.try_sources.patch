@@ -1,0 +1,514 @@
+From 1a40e0a970b5a2c75809ffe07748554e399e7b4b Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sat, 4 Apr 2026 04:56:32 +0000
+Subject: [PATCH 08/14] refactor: extract Download.try_sources
+
+The inline download loop in _impl was ~90 lines handling source
+failover, integrity warnings, patch application and failure tracking.
+Extract it into a single function to simplify _impl and make the
+download logic testable in isolation.
+---
+ download/archives/BUILD.bazel    |   1 -
+ download/archives/repository.bzl | 137 ++++++++---------------
+ lib/download.bzl                 |  96 ++++++++++++++++
+ tests/lib/download.bzl           | 182 +++++++++++++++++++++++++++++++
+ 4 files changed, 323 insertions(+), 93 deletions(-)
+
+diff --git a/download/archives/BUILD.bazel b/download/archives/BUILD.bazel
+index ada178f..dc871ea 100644
+--- a/download/archives/BUILD.bazel
++++ b/download/archives/BUILD.bazel
+@@ -12,7 +12,6 @@ bzl_library(
+     deps = [
+         "//lib:download",
+         "//lib:index",
+-        "//lib:utils",
+         "@version_utils//spec",
+     ],
+ )
+diff --git a/download/archives/repository.bzl b/download/archives/repository.bzl
+index 5651a47..52ef86b 100644
+--- a/download/archives/repository.bzl
++++ b/download/archives/repository.bzl
+@@ -11,7 +11,6 @@ load("@version_utils//spec:spec.bzl", Spec = "spec")
+ load("@version_utils//version:version.bzl", Version = "version")
+ load("//lib:download.bzl", Download = "download")
+ load("//lib:index.bzl", Index = "index")
+-load("//lib:utils.bzl", Utils = "utils")
+ 
+ DOC = """
+ This repository rule wraps [`rctx.download_and_extract`] and creates a Bazel
+@@ -518,106 +517,60 @@ def _impl(rctx, _print = print, _fail = fail):
+     )
+ 
+     rctx.report_progress("{}: creating repo".format(repo_name))
+-    rctx.file(
+-        "BUILD.bazel",
+-        BUILD_ROOT.format(alias = repo_name),
+-        executable = False,
+-    )
+ 
+     repo_lock = {}
+-    failed_downloads = {}
++    failed_versions = []
+ 
+     for version, repos in index.repos.items():
+-        if rctx.attr.strict_integrity:
+-            Download.check_strict_integrity(repos, version, _fail)
+-
+-        for repo in repos:
+-            if version in repo_lock:
+-                if not rctx.attr.strict_integrity:
+-                    # we've already successfully downloaded one of the sources
+-                    # and the integrity is the same or strict_integrity is False
+-                    continue
+-
+-                # check for the case where the integrity of the downloaded
+-                # version was None but was set for the second+ source
+-                integrity_repo = repo.context.get("integrity", False)
+-                integrity_down = repo_lock[version]["integrity"]
+-
+-                if integrity_repo and integrity_repo != integrity_down:
+-                    msg = "Integrity mismatch between downloaded ('{}') and "
+-                    msg += "other source(s) ('{}') while strict_integrity=True "
+-                    msg += "for version {}"
+-                    _fail(msg.format(repo_lock[version]["source"], repo.source, version))
+-
+-                continue
+-
+-            repo_path = "/".join([repo.version, repo.source])
+-            download_args = Download.make_download_args(repo_path, repo.context)
+-
+-            download = rctx.download_and_extract(
+-                output = repo_path,
+-                allow_fail = True,
+-                **download_args
+-            )
+-
+-            if not download.success:
+-                if version not in failed_downloads:
+-                    failed_downloads[version] = []
+-                failed_downloads[version].append(repo.source)
+-                continue
+-
+-            if "integrity" not in repo.context:
+-                msg = "{}/{}: WARNING: integrity missing. "
+-                msg += "Please add the integrity / sha256 to the index: {} / {}"
+-                _print(msg.format(repo_name, repo_path, download.integrity, download.sha256))
+-
+-            repo_lock[repo.version] = dict(
+-                source = repo.source,
+-                url = repo.context["url"],
+-                integrity = download.integrity,
+-                patches = None,
+-            )
+-
+-            alias = "{}".format(repo.version)
+-            rctx.file(
+-                "%s/BUILD.bazel" % repo.version,
+-                BUILD_VERSION.format(alias = alias, version = repo.version),
+-                executable = False,
+-            )
+-
+-            alias = "{}".format(repo.source)
+-            rctx.file(
+-                "%s/BUILD.bazel" % repo_path,
+-                BUILD_SOURCE.format(alias = alias, version = repo.version),
+-                executable = False,
+-            )
+-
+-            matching = Utils.matching_patches(
+-                rctx.attr.patches,
+-                repo.version,
+-                repo.source,
+-                rctx.attr.spec_syntax,
+-                rctx.attr.version_scheme,
+-            )
+-
+-            for patch in matching:
+-                Download.apply_patch(rctx, repo.version, repo.source, patch)
+-
+-            if matching:
+-                repo_lock[repo.version]["patches"] = [str(p) for p in matching]
+-
+-    failed_all_versions = []
+-    for version, failures in failed_downloads.items():
+-        if len(failures) == len(index.repos[version]):
+-            failed_all_versions.append(version)
+-
+-    if failed_all_versions:
++        dl = Download.try_sources(
++            rctx,
++            repo_name,
++            version,
++            repos,
++            patches = rctx.attr.patches,
++            spec_syntax = rctx.attr.spec_syntax,
++            version_scheme = rctx.attr.version_scheme,
++            strict_integrity = rctx.attr.strict_integrity,
++            _print = _print,
++            _fail = _fail,
++        )
++
++        if not dl:
++            failed_versions.append(version)
++            continue
++
++        repo_lock[version] = dict(
++            source = dl.source,
++            url = dl.url,
++            integrity = dl.integrity,
++            patches = [str(p) for p in dl.patches] if dl.patches else None,
++        )
++
++        rctx.file(
++            "%s/%s/BUILD.bazel" % (version, dl.source),
++            BUILD_SOURCE.format(alias = dl.source, version = version),
++            executable = False,
++        )
++
++        rctx.file(
++            "%s/BUILD.bazel" % version,
++            BUILD_VERSION.format(alias = version, version = version),
++            executable = False,
++        )
++
++    if failed_versions:
+         msg = "{}: failed to download all sources for versions: {}"
+-        _fail(msg.format(repo_name, failed_all_versions))
++        _fail(msg.format(repo_name, failed_versions))
+ 
+     versions = {version: repo["source"] for version, repo in repo_lock.items()}
+     default_version = versions.keys()[0]
+ 
++    rctx.file(
++        "BUILD.bazel",
++        BUILD_ROOT.format(alias = repo_name),
++        executable = False,
++    )
++
+     rctx.file(
+         "repo.bzl",
+         REPO.format(
+diff --git a/lib/download.bzl b/lib/download.bzl
+index 3082296..48f0a39 100644
+--- a/lib/download.bzl
++++ b/lib/download.bzl
+@@ -1,5 +1,14 @@
+ """Shared download helpers for archive repository rules."""
+ 
++load("//lib:utils.bzl", Utils = "utils")
++
++_SOURCE_BZL = '''\
++"""Generated by download_archives. DO NOT EDIT."""
++
++SOURCE = "{source}"
++URL = "{url}"
++'''
++
+ _BUILD_PATCHES = '''\
+ """Generated by download_archives. DO NOT EDIT."""
+ 
+@@ -101,8 +110,95 @@ def _apply_patch(rctx, version, source, patch):
+ 
+     rctx.patch(patch_file, strip = 1)
+ 
++def _try_sources(
++        rctx,
++        repo_name,
++        version,
++        repos,
++        patches = {},
++        spec_syntax = "",
++        version_scheme = "",
++        strict_integrity = False,
++        _print = print,
++        _fail = fail):
++    """Try downloading a version from each source in order.
++
++    Handles the full download-level workflow: strict integrity check, download,
++    integrity warning, source.bzl generation, and patch application. Archives
++    are extracted to `version/source/` and patches are rewritten to match the
++    nested layout.
++
++    Args:
++        rctx: Repository context.
++        repo_name: Name for log/error messages.
++        version: Version being downloaded.
++        repos: List of repo struct sources to try, in order.
++        patches: label_keyed_string_dict of patch labels to version specs.
++            Matching is computed per-source; only the winning source's patches
++            are applied.
++        spec_syntax: Spec syntax for patch matching.
++        version_scheme: Version scheme for patch matching.
++        strict_integrity: If True, fail when sources have different integrity
++            hashes.
++        _print: Print function for warnings.
++        _fail: Fail function for errors.
++
++    Returns:
++        struct(source, url, integrity, sha256, output, patches) on first
++        success, or None if all sources failed.
++    """
++    if strict_integrity:
++        _check_strict_integrity(repos, version, _fail)
++
++    for repo in repos:
++        repo_path = "%s/%s" % (version, repo.source)
++        download_args = _make_download_args(repo_path, repo.context, _print)
++
++        result = rctx.download_and_extract(
++            output = repo_path,
++            allow_fail = True,
++            **download_args
++        )
++
++        if not result.success:
++            continue
++
++        if "integrity" not in repo.context:
++            msg = "{}/{}: WARNING: integrity missing. "
++            msg += "Please add the integrity / sha256 to the index: {} / {}"
++            _print(msg.format(repo_name, repo_path, result.integrity, result.sha256))
++
++        rctx.file(
++            "%s/source.bzl" % version,
++            _SOURCE_BZL.format(source = repo.source, url = repo.context["url"]),
++            executable = False,
++        )
++
++        matched_patches = Utils.matching_patches(
++            patches,
++            version,
++            repo.source,
++            spec_syntax,
++            version_scheme,
++        )
++
++        for patch in matched_patches:
++            _apply_patch(rctx, version, repo.source, patch)
++
++        return struct(
++            source = repo.source,
++            url = repo.context["url"],
++            integrity = result.integrity,
++            sha256 = result.sha256,
++            output = repo_path,
++            patches = matched_patches,
++        )
++
++    return None
++
+ download = struct(
+     check_strict_integrity = _check_strict_integrity,
+     make_download_args = _make_download_args,
+     apply_patch = _apply_patch,
++    try_sources = _try_sources,
+ )
+diff --git a/tests/lib/download.bzl b/tests/lib/download.bzl
+index 94a8e8b..18d6526 100644
+--- a/tests/lib/download.bzl
++++ b/tests/lib/download.bzl
+@@ -9,6 +9,54 @@ def _mock_fail(errors):
+     """Returns a _fail function that appends errors to a list."""
+     return lambda msg: errors.append(msg)
+ 
++def _mock_rctx(download_results):
++    """Create a mock rctx for testing try_sources.
++
++    Args:
++        download_results: list of struct(success, integrity, sha256), one per
++            download_and_extract call. Results are consumed in order.
++
++    Returns:
++        (rctx, files, patches, logs) where files is a dict of written files,
++        patches is a list of applied patch labels, and logs is a list of
++        printed messages.
++    """
++    files = {}
++    patches = []
++    logs = []
++    call_idx = [0]
++
++    def _download_and_extract(**_kwargs):
++        i = call_idx[0]
++        call_idx[0] = i + 1
++        return download_results[i]
++
++    def _file(path, content = "", **_kwargs):
++        files[path] = content
++
++    def _patch(label, **_kwargs):
++        patches.append(label)
++
++    return struct(
++        download_and_extract = _download_and_extract,
++        file = _file,
++        patch = _patch,
++    ), files, patches, logs
++
++def _make_repos(sources, url_tpl = "https://{source}/{version}.tar.gz", version = "1.0"):
++    """Create a list of repo structs for testing."""
++    return [
++        struct(
++            version = version,
++            source = source,
++            context = {
++                "integrity": "sha256-AAAA",
++                "url": url_tpl.format(source = source, version = version),
++            },
++        )
++        for source in sources
++    ]
++
+ def _check_strict_integrity__all_same_impl(ctx):
+     env = unittest.begin(ctx)
+ 
+@@ -240,6 +288,134 @@ apply_patch__rewrites_paths_test = unittest.make(
+     _apply_patch__rewrites_paths_impl,
+ )
+ 
++def _try_sources__first_success_wins_impl(ctx):
++    env = unittest.begin(ctx)
++
++    repos = _make_repos(["github.com", "gitlab.com"])
++    rctx, files, _, _ = _mock_rctx([
++        struct(success = True, integrity = "sha256-AAAA", sha256 = "deadbeef"),
++    ])
++
++    dl = Download.try_sources(rctx, "test", "1.0", repos)
++    asserts.equals(env, "github.com", dl.source)
++    asserts.true(env, "1.0/source.bzl" in files)
++
++    return unittest.end(env)
++
++try_sources__first_success_wins_test = unittest.make(
++    _try_sources__first_success_wins_impl,
++)
++
++def _try_sources__failover_to_second_impl(ctx):
++    env = unittest.begin(ctx)
++
++    repos = _make_repos(["github.com", "gitlab.com"])
++    rctx, _, _, _ = _mock_rctx([
++        struct(success = False, integrity = "", sha256 = ""),
++        struct(success = True, integrity = "sha256-AAAA", sha256 = "deadbeef"),
++    ])
++
++    dl = Download.try_sources(rctx, "test", "1.0", repos)
++    asserts.equals(env, "gitlab.com", dl.source)
++    asserts.true(env, "https://gitlab.com/1.0.tar.gz" in dl.url)
++
++    return unittest.end(env)
++
++try_sources__failover_to_second_test = unittest.make(
++    _try_sources__failover_to_second_impl,
++)
++
++def _try_sources__all_fail_returns_none_impl(ctx):
++    env = unittest.begin(ctx)
++
++    repos = _make_repos(["github.com", "gitlab.com"])
++    rctx, _, _, _ = _mock_rctx([
++        struct(success = False, integrity = "", sha256 = ""),
++        struct(success = False, integrity = "", sha256 = ""),
++    ])
++
++    dl = Download.try_sources(rctx, "test", "1.0", repos)
++    asserts.equals(env, None, dl)
++
++    return unittest.end(env)
++
++try_sources__all_fail_returns_none_test = unittest.make(
++    _try_sources__all_fail_returns_none_impl,
++)
++
++def _try_sources__missing_integrity_warns_impl(ctx):
++    env = unittest.begin(ctx)
++
++    repos = [struct(
++        version = "1.0",
++        source = "github.com",
++        context = {"url": "https://github.com/1.0.tar.gz"},
++    )]
++    rctx, _, _, logs = _mock_rctx([
++        struct(success = True, integrity = "sha256-AAAA", sha256 = "deadbeef"),
++    ])
++
++    Download.try_sources(rctx, "test", "1.0", repos, _print = Mock.print(logs))
++    asserts.equals(env, 1, len(logs))
++    asserts.true(env, "integrity missing" in logs[0])
++
++    return unittest.end(env)
++
++try_sources__missing_integrity_warns_test = unittest.make(
++    _try_sources__missing_integrity_warns_impl,
++)
++
++def _try_sources__output_path_impl(ctx):
++    env = unittest.begin(ctx)
++
++    repos = _make_repos(["github.com"])
++    rctx, _, _, _ = _mock_rctx([
++        struct(success = True, integrity = "sha256-AAAA", sha256 = "deadbeef"),
++    ])
++
++    dl = Download.try_sources(rctx, "test", "1.0", repos)
++    asserts.equals(env, "1.0/github.com", dl.output)
++
++    return unittest.end(env)
++
++try_sources__output_path_test = unittest.make(
++    _try_sources__output_path_impl,
++)
++
++def _try_sources__strict_integrity_checked_impl(ctx):
++    env = unittest.begin(ctx)
++
++    repos = [
++        struct(version = "1.0", source = "s1", context = {
++            "integrity": "sha256-AAA",
++            "url": "https://s1/1.0.tar.gz",
++        }),
++        struct(version = "1.0", source = "s2", context = {
++            "integrity": "sha256-BBB",
++            "url": "https://s2/1.0.tar.gz",
++        }),
++    ]
++    _noop = struct(success = False, integrity = "", sha256 = "")
++    rctx, _, _, _ = _mock_rctx([_noop, _noop])
++
++    errors = []
++    Download.try_sources(
++        rctx,
++        "test",
++        "1.0",
++        repos,
++        strict_integrity = True,
++        _fail = _mock_fail(errors),
++    )
++    asserts.equals(env, 1, len(errors))
++    asserts.true(env, "different integrities" in errors[0])
++
++    return unittest.end(env)
++
++try_sources__strict_integrity_checked_test = unittest.make(
++    _try_sources__strict_integrity_checked_impl,
++)
++
+ TEST_SUITE_NAME = "lib/download"
+ 
+ TEST_SUITE_TESTS = {
+@@ -253,6 +429,12 @@ TEST_SUITE_TESTS = {
+     "make_download_args/ignored_keys": make_download_args__ignored_keys_test,
+     "make_download_args/sha256_integrity_conflict": make_download_args__sha256_integrity_conflict_test,
+     "make_download_args/unknown_keys_skipped": make_download_args__unknown_keys_skipped_test,
++    "try_sources/all_fail_returns_none": try_sources__all_fail_returns_none_test,
++    "try_sources/failover_to_second": try_sources__failover_to_second_test,
++    "try_sources/first_success_wins": try_sources__first_success_wins_test,
++    "try_sources/missing_integrity_warns": try_sources__missing_integrity_warns_test,
++    "try_sources/output_path": try_sources__output_path_test,
++    "try_sources/strict_integrity_checked": try_sources__strict_integrity_checked_test,
+ }
+ 
+ test_suite = lambda: _test_suite(TEST_SUITE_NAME, TEST_SUITE_TESTS)

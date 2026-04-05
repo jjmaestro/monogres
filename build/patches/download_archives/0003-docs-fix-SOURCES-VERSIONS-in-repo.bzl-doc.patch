@@ -1,0 +1,42 @@
+From 08337016fb50fec5826b246175e14c1151749ceb Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Fri, 3 Apr 2026 07:07:27 +0000
+Subject: [PATCH 03/14] =?UTF-8?q?docs:=20fix=20SOURCES=20=E2=86=92=20VERSI?=
+ =?UTF-8?q?ONS=20in=20repo.bzl=20doc?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The DOC string said SOURCES but the generated repo.bzl constant is
+VERSIONS.
+---
+ docs/download/archives/repository.md | 2 +-
+ download/archives/repository.bzl     | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/docs/download/archives/repository.md b/docs/download/archives/repository.md
+index 4ce50ee..7bfc128 100644
+--- a/docs/download/archives/repository.md
++++ b/docs/download/archives/repository.md
+@@ -94,7 +94,7 @@ The root package also has the following:
+ - `//:metadata.json`: the repo metadata.
+ - `//:repo.bzl`: extension with the following constants:
+   - `REPO_NAME`: The short repo name.
+-  - `SOURCES`: a mapping of the downloaded `version`s to the `source` from
++  - `VERSIONS`: a mapping of the downloaded `version`s to the `source` from
+     which the archive was downloaded.
+   - `DEFAULT_VERSION`: the default `version` of the archive.
+   - `LOCK`: a `dict` with the contents of the repo `lock.json`.
+diff --git a/download/archives/repository.bzl b/download/archives/repository.bzl
+index 48212ce..e83fea5 100644
+--- a/download/archives/repository.bzl
++++ b/download/archives/repository.bzl
+@@ -88,7 +88,7 @@ The root package also has the following:
+ - `//:metadata.json`: the repo metadata.
+ - `//:repo.bzl`: extension with the following constants:
+   - `REPO_NAME`: The short repo name.
+-  - `SOURCES`: a mapping of the downloaded `version`s to the `source` from
++  - `VERSIONS`: a mapping of the downloaded `version`s to the `source` from
+     which the archive was downloaded.
+   - `DEFAULT_VERSION`: the default `version` of the archive.
+   - `LOCK`: a `dict` with the contents of the repo `lock.json`.

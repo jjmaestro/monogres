@@ -1,0 +1,253 @@
+From 10e5d82437c8da336cd89ad8543fa7010881d7ec Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sat, 4 Apr 2026 22:23:49 +0000
+Subject: [PATCH 12/14] docs: rewrite README
+
+Restructure the README to reflect the current two-mode architecture:
+module extension (lazy, recommended) and repository rule (eager).
+
+Add Features and How it works sections explaining multi-source failover,
+per-version lazy downloads, patching, integrity checking, source tracking,
+and custom version schemes.
+---
+ README.md | 171 ++++++++++++++++++++++++++++++++++++++----------------
+ 1 file changed, 122 insertions(+), 49 deletions(-)
+
+diff --git a/README.md b/README.md
+index 98a185e..3350300 100644
+--- a/README.md
++++ b/README.md
+@@ -7,11 +7,13 @@
+     ../../actions/workflows/ci.yaml/badge.svg
+ )](../../actions/workflows/ci.yaml)
+ 
+-Bazel module to help create and maintain Bazel external repos.
++Bazel module to manage multi-version, multi-source archive repositories. Define
++your versions and sources once in a JSON index, and Bazel downloads only what
++your build actually needs.
+ 
+ ## 📦 Install
+ 
+-First, make sure you are running Bazel with [Bzlmod]. Then, add the module as a
++Make sure you are running Bazel with [Bzlmod]. Then, add the module as a
+ dependency in your `MODULE.bazel`:
+ 
+ ```starlark
+@@ -49,39 +51,18 @@ the contents of the downloaded artifact, copy the printed hash and update
+ 
+ ## 🚀 Getting Started
+ 
+-[`download_archives`] is a [repository rule] to create and maintain Bazel
+-external repos. It helps reduce boilerplate code by keeping a JSON index file
+-with all of the metadata required to download and extract an archive: the
+-archive's `version`(s) and the `source`(s) from which to try to download the
+-archive.
+-
+-This repository rule wraps [`rctx.download_and_extract`] and creates a Bazel
+-repo under `@<NAME>`, downloading and extracting *one archive* from *one* of
+-the sources for *each* of the archive versions in the [repo JSON index].
+-
+-When downloading the archive, if a source fails it will try the next one, and
+-only fail if all sources are exhausted.
+-
+-On top of just reducing boilerplate code, the `download_archives` repository
+-rule also adds helper constants and `alias`es to the Bazel repo. Please read
+-the docs for more information about all of their additional functionality.
+-
+-Here's an example that shows how to create a `@wget_src` repo for [GNU wget]:
++Here's how to create a `@wget_src` repo for [GNU wget] with two mirror sources:
+ 
+ ### 1. Create the repo index
+ 
+-First, define a `repo.json` JSON index file in a package. Don't forget to add a
+-`BUILD.bazel` file in it if one doesn't already exists).
+-
+-E.g. for a `//third-party/wget` package:
++Create a package with a `repo.json` [index file][repo JSON index] that declares
++the download sources and versions:
+ 
+ ```sh
+ mkdir -p third-party/wget
+ touch third-party/wget/BUILD.bazel
+ ```
+ 
+-Then add the following to the `repo.json` file:
+-
+ ```json
+ {
+   "version": 1,
+@@ -109,47 +90,132 @@ Then add the following to the `repo.json` file:
+       }
+     },
+     "1.21.3": {
++      "integrity": {
+         "github.com": "sha256-VbH6fHnent2TtbYxbNoatK4RNkY3MVPXokJhRzPZBg8=",
+         "gitlab.com": "sha256-3w3ImvW4t/H2eMkZbUH+F1zkARSI3cIJSgJFg4ULPU4="
++      }
+     }
+   }
+ }
+ ```
+ 
+-### 2. Add the `download_archives` repo to `MODULE.bazel`
++Source contexts can be templated with `{placeholders}` that are [materialized]
++from the combined source and version context. See the [repo JSON index] docs
++for details.
+ 
+-Then, add the following to `MODULE.bazel`:
++### 2. Add to `MODULE.bazel`
++
++#### Module extension (lazy, recommended)
++
++The [module extension] creates a lightweight index repo and downloads each
++version on demand (lazily), only when your build actually references it:
++
++```starlark
++download = use_extension(
++    "@download_archives//download/archives:extensions.bzl",
++    "download_archives",
++)
++
++download.archives(
++    name = "wget_src",
++    index = "//third-party/wget:repo.json",
++)
++
++use_repo(download, "wget_src")
++```
++
++#### Repository rule (eager)
++
++Alternatively, use the [repository rule] directly. This downloads all declared
++versions eagerly when the repo is first fetched:
+ 
+-<!-- markdownlint-capture -->
+-<!-- markdownlint-disable MD013 -->
+ ```starlark
+-download_archives = use_repo_rule("@download_archives//download/archives:defs.bzl", "download_archives")
++download_archives = use_repo_rule(
++    "@download_archives//download/archives:defs.bzl",
++    "download_archives",
++)
+ 
+ download_archives(
+     name = "wget_src",
+     index = "//third-party/wget:repo.json",
+-    # NOTE:
+-    # This is how you would add a custom patch for one of the versions. See
+-    # "Patching" docs for more information about patches.
+-    # patches = {
+-    #    "//third-party/wget/patches:0001-1.24.5-test-patch.patch": ">=1.24.5/*",
+-    # },
+ )
+ ```
+-<!-- markdownlint-restore -->
+ 
+ ### 3. Test it
+ 
+-To test the Bazel repo, run `bazel fetch @wget_src`. This will attempt to
+-download and extract all the versions defined in the repo index from the
+-available sources.
++Fetch the repo and list its targets:
+ 
+-And, to list all the targets in the repo, run `bazel query @wget_src//...`.
++```sh
++bazel fetch @wget_src
++bazel query @wget_src//...
++```
++
++To build against a specific version:
++
++```starlark
++# BUILD.bazel
++cc_binary(
++    name = "my_tool",
++    srcs = ["main.c"],
++    data = ["@wget_src//1.24.5:files"],
++)
++```
++
++## ✨ Features
++
++- **Lazy per-version downloads**: only fetch what your build needs
++- **Multi-source failover**: mirrors tried in order, transparent to the build
++- **Patching**: apply patches selectively by version and/or source using
++  [version spec][patching] patterns (e.g. `>=1.24.5/*`, `<2.0.0/github.com`)
++- **Integrity checking**: [SRI hashes][Subresource Integrity (SRI)] per source
++  with optional [`strict_integrity`] mode requiring all sources to agree
++- **Source tracking**: `source.bzl` records which source and URL were used
++- **Custom version schemes**: supports [semantic versioning] by default, with
++  pluggable schemes via [`version_utils`]
++
++## ⚙️ How it works
++
++### Lazy mode (module extension)
++
++The module extension creates two kinds of repositories:
++
++- **Index repo** (`@<NAME>`): created immediately. Parses the JSON index,
++  generates per-version BUILD files with aliases pointing to download repos,
++  and writes repo metadata (`repo.bzl`, `index.json`). No archives are
++  downloaded.
++
++- **Download repos** (`@<NAME>-<VERSION>`): one per version, created on demand.
++  Each downloads and extracts its version from the first source that succeeds.
++
++When you reference `@wget_src//1.24.5:files`, Bazel resolves the alias in the
++index repo and fetches only the `@wget_src-1.24.5` download repo.
++
++### Eager mode (repository rule)
++
++When using `use_repo_rule`, all versions are downloaded eagerly in a single
++repository rule evaluation. Simpler, but slower for large indices with many
++versions.
++
++### Multi-source failover
++
++Sources are tried in order. If a download fails, the next source is attempted.
++The download only fails if all sources are exhausted.
++
++### Source tracking
++
++Each version's package includes a `source.bzl` file that exports `SOURCE` (the
++source name that succeeded) and `URL` (the URL that was used). This makes it
++easy to audit which mirror actually provided each archive:
++
++```starlark
++load("@wget_src//1.24.5:source.bzl", "SOURCE", "URL")
++```
+ 
+ ## 📄 [Docs]
+ 
+-* [`download/archives`]
+-* [`lib/index`]
++- [`download/archives` repository rule]
++- [`download/archives` module extension]
++- [`lib/index`]
+ 
+ ## 💡 Contributing
+ 
+@@ -161,11 +227,18 @@ See [CONTRIBUTING.md] for more info on how to work with this repo.
+ [Docs]: docs/README.md
+ [GNU wget]: https://www.gnu.org/software/wget/
+ [PRs]: ../../pulls
++[Subresource Integrity (SRI)]: https://w3c.github.io/webappsec-subresource-integrity/
+ [`archive_override`]: https://bazel.build/rules/lib/globals/module#archive_override
+-[`download_archives`]: docs/download/archives/repository.md
+-[`download/archives`]: docs/download/archives/repository.md
+-[issues]: ../../issues
++[`download/archives` module extension]: docs/download/archives/extensions.md
++[`download/archives` repository rule]: docs/download/archives/repository.md
+ [`lib/index`]: docs/lib/index.md
++[`strict_integrity`]: docs/download/archives/repository.md
++[`version_utils`]: https://github.com/jjmaestro/bazel_version_utils
++[issues]: ../../issues
++[materialized]: docs/lib/index.md#materialized-repo-context
++[module extension]: docs/download/archives/extensions.md
+ [non-registry override]: https://bazel.build/external/module#non-registry_overrides
+-[`rctx.download_and_extract`]: https://bazel.build/rules/lib/builtins/repository_ctx#download_and_extract
+-[repository rule]: https://bazel.build/extending/repo
++[patching]: docs/download/archives/repository.md#patching
++[repo JSON index]: docs/lib/index.md
++[repository rule]: docs/download/archives/repository.md
++[semantic versioning]: https://semver.org

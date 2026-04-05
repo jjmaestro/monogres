@@ -1,0 +1,828 @@
+From f5465edde7af338f17848229a650253ff3d20499 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sat, 4 Apr 2026 13:40:10 +0000
+Subject: [PATCH 10/14] feat: add download_archives module extension
+
+User-facing entry point for per-version lazy downloads. Creates an
+index repo plus one download repo per version, so archives are only
+fetched when a build references a specific version.
+
+The `archives()` function implementing the extension's `archives` tag,
+is public so other module extensions can reuse the same two-phase
+pattern directly.
+---
+ docs/README.md                       |   6 +-
+ docs/download/archives/BUILD.bazel   |   6 +
+ docs/download/archives/extensions.md | 199 ++++++++++++++++++++++++
+ docs/download/archives/repository.md |  38 ++++-
+ download/archives/BUILD.bazel        |  12 ++
+ download/archives/extensions.bzl     | 224 +++++++++++++++++++++++++++
+ download/archives/repository.bzl     |  50 +++++-
+ examples/MODULE.bazel                |  16 ++
+ examples/repos/BUILD.bazel           |   3 +
+ examples/repos/wget_ext.bzl          |  56 +++++++
+ 10 files changed, 598 insertions(+), 12 deletions(-)
+ create mode 100644 docs/download/archives/extensions.md
+ create mode 100644 download/archives/extensions.bzl
+ create mode 100644 examples/repos/wget_ext.bzl
+
+diff --git a/docs/README.md b/docs/README.md
+index d211c40..3f5c504 100644
+--- a/docs/README.md
++++ b/docs/README.md
+@@ -2,11 +2,13 @@
+ 
+ ## `download/`
+ 
+-* [`download/archives`]
++* [`download/archives` repository rule]
++* [`download/archives` module extension]
+ 
+ ## `lib/`
+ 
+ * [`lib/index`]
+ 
+-[`download/archives`]: download/archives/repository.md
++[`download/archives` repository rule]: download/archives/repository.md
++[`download/archives` module extension]: download/archives/extensions.md
+ [`lib/index`]: lib/index.md
+diff --git a/docs/download/archives/BUILD.bazel b/docs/download/archives/BUILD.bazel
+index 4d69663..2cc5a17 100644
+--- a/docs/download/archives/BUILD.bazel
++++ b/docs/download/archives/BUILD.bazel
+@@ -8,4 +8,10 @@ stardoc_with_diff_test(
+     renderer = "//:renderer",
+ )
+ 
++stardoc_with_diff_test(
++    name = "extensions",
++    bzl_library_target = "@download_archives//download/archives:extensions",
++    renderer = "//:renderer",
++)
++
+ update_docs(name = "update")
+diff --git a/docs/download/archives/extensions.md b/docs/download/archives/extensions.md
+new file mode 100644
+index 0000000..e30eaa5
+--- /dev/null
++++ b/docs/download/archives/extensions.md
+@@ -0,0 +1,199 @@
++<!-- Generated with Stardoc: http://skydoc.bazel.build -->
++
++# `download_archives` module extension
++
++Module extension for per-version archive downloads.
++
++<a id="archives"></a>
++
++## archives
++
++<pre>
++load("@download_archives//download/archives:extensions.bzl", "archives")
++
++archives(<a href="#archives-ctx">ctx</a>, <a href="#archives-name">name</a>, <a href="#archives-index">index</a>, <a href="#archives-patches">patches</a>, <a href="#archives-version_scheme">version_scheme</a>, <a href="#archives-spec_syntax">spec_syntax</a>, <a href="#archives-versions">versions</a>, <a href="#archives-sources">sources</a>,
++         <a href="#archives-strict_integrity">strict_integrity</a>)
++</pre>
++
++Create a `@<NAME>` index repo and `@<NAME>-<VERSION>` download repos.
++
++The index repo parses the JSON index, generates per-version BUILD files
++with aliases pointing to the download repos, and writes repo metadata.
++No archives are downloaded at this stage.
++
++Each download repo parses the same index for its version and uses the
++same download logic as the eager `archives` rule â trying each source
++in order with full per-source download args from the materialized context.
++
++
++**PARAMETERS**
++
++
++| Name  | Description | Default Value |
++| :------------- | :------------- | :------------- |
++| <a id="archives-ctx"></a>ctx |  The module extension context.   |  none |
++| <a id="archives-name"></a>name |  Name for the index repository.   |  none |
++| <a id="archives-index"></a>index |  Label of the repo JSON index file.   |  none |
++| <a id="archives-patches"></a>patches |  Dict of patch labels to version spec strings.   |  `{}` |
++| <a id="archives-version_scheme"></a>version_scheme |  Version scheme (default: `SEMVER`).   |  `"semver"` |
++| <a id="archives-spec_syntax"></a>spec_syntax |  Spec syntax (default: `SIMPLE`).   |  `"simple"` |
++| <a id="archives-versions"></a>versions |  Optional list of versions to include.   |  `[]` |
++| <a id="archives-sources"></a>sources |  Optional list of sources to use.   |  `[]` |
++| <a id="archives-strict_integrity"></a>strict_integrity |  If True, all sources must share the same integrity.   |  `True` |
++
++**RETURNS**
++
++List of per-version download repo names (`["<NAME>-<VERSION>", ...]`).
++
++
++<a id="download_archives"></a>
++
++## download_archives
++
++<pre>
++download_archives = use_extension("@download_archives//download/archives:extensions.bzl", "download_archives")
++download_archives.archives(<a href="#download_archives.archives-name">name</a>, <a href="#download_archives.archives-expose_internal_repos">expose_internal_repos</a>, <a href="#download_archives.archives-index">index</a>, <a href="#download_archives.archives-patches">patches</a>, <a href="#download_archives.archives-sources">sources</a>, <a href="#download_archives.archives-spec_syntax">spec_syntax</a>,
++                           <a href="#download_archives.archives-strict_integrity">strict_integrity</a>, <a href="#download_archives.archives-version_scheme">version_scheme</a>, <a href="#download_archives.archives-versions">versions</a>)
++</pre>
++
++Module extension for per-version archive downloads.
++
++Use `download.archives(...)` to declare archive repositories. Each
++declaration creates an index repository (`@<NAME>`) and one download
++repository per version (`@<NAME>-<VERSION>`). Archives are only
++downloaded when a build references a specific version.
++
++### How it works
++
++The module extension creates two kinds of repositories:
++
++**Index repository (`@<NAME>`)**: created eagerly when the extension is
++evaluated. It parses the [repo JSON index], generates per-version BUILD files
++with aliases pointing to the download repositories, and writes repo metadata.
++No archives are downloaded at this stage. It contains:
++- Per-version packages with aliases: `@<NAME>//<VERSION>:files`, `:dir`
++- Per-version `source.bzl` with `SOURCE` and `URL` of the actual download
++- `repo.bzl` with `VERSIONS`, `DEFAULT_VERSION`, `METADATA`, `LOCK`
++- `index.json`, `lock.json`, `metadata.json`
++
++**Download repositories (`@<NAME>-<VERSION>`)**: one per version, created
++lazily. Each download repository parses the same index for its version and
++uses the same download logic as the `archives` rule, trying each source in
++order with full per-source download args from the ["materialized repo
++`context`"]. Each contains:
++- `:files`: all files in the downloaded archive.
++- `:dir`: the path to the directory where the archive was extracted.
++- `:<VERSION>`: alias of `:files`.
++- `source.bzl`: exports `SOURCE` (the source name) and `URL` (the URL used).
++
++### Version scheme
++
++The `version_scheme` attribute defines the format used for versions in both the
++`index` and `patches`. The supported schemes are those in [`version_utils`'
++`version` extension], with `SCHEME.SEMVER` ([semantic versioning]) being the
++default.
++
++[semantic versioning]: https://semver.org
++[`version_utils`' `version` extension]: https://github.com/jjmaestro/bazel_version_utils/blob/main/docs/version/version.md
++
++### Patching
++
++The downloaded archive can also be patched by passing a `patches` argument, a
++map of `Label`s of [unified diff format] patch files (applied from the root of
++the downloaded archive) to "patch specs" that determine if the patch is to be
++applied.
++
++The "patch spec" format is `<VERSION_SPEC>[/<SOURCE>]`, where:
++
++- `<VERSION_SPEC>` is a version constraints requirement spec that
++  to specify the versions to which the patch applies.
++- `<SOURCE>` (optional, defaults to `*`) is the source of the downloaded
++  archive to which the patch should be applied. It's optional and it can also
++  be `*`, a wildcard to apply the patch to the archives downloaded from any
++  source.
++
++The `<VERSION_SPEC>` syntax is specified with the `spec_syntax` attribute. It's
++one of the syntaxes supported by [`version_utils`' `spec` extension] and the
++default is `SYNTAX.SIMPLE`.
++
++This helps to maintain patches that apply to e.g.:
++
++- a specific version and source: `1.24.5/github`
++- a specific version and all sources: `1.24.5/*` or `1.24.5`
++- a range of versions and all sources: `>=1.24.5, <2.0.0/*`
++- all versions and sources: `*` or `*/*`
++
++Finally, to simplify patch maintenance, it's good practice to keep a dedicated
++"patched branch" for each version we want to maintain, making it easy to
++generate the list of patches using [`git format-patch`].
++
++[unified diff format]: https://en.wikipedia.org/wiki/Diff#Unified_format
++[`version_utils` `spec` extension]: https://github.com/jjmaestro/bazel_version_utils/blob/main/docs/specs/spec.md
++[`git format-patch`]: https://git-scm.com/docs/git-format-patch
++
++### Usage:
++
++```starlark
++download = use_extension(
++    "@download_archives//download/archives:extensions.bzl",
++    "download_archives",
++)
++
++download.archives(
++    name = "my_src",
++    index = "//third-party:repo.json",
++)
++
++use_repo(download, "my_src")
++```
++
++Building `@my_src//18.1:files` downloads only version 18.1, not all versions
++in the index.
++
++To expose the per-version download repositories as direct dependencies (e.g.
++for use in `use_repo`), set `expose_internal_repos = True`:
++
++```starlark
++download.archives(
++    name = "my_src",
++    index = "//third-party:repo.json",
++    expose_internal_repos = True,
++)
++
++use_repo(download, "my_src", "my_src-18.1")
++```
++
++["Patching"]: #patching
++[Subresource Integrity (SRI)]: https://w3c.github.io/webappsec-subresource-integrity/
++["materialized repo `context`"]: ../../lib/index.md#materialized-repo-context
++[`rctx.download_and_extract`]: https://bazel.build/rules/lib/builtins/repository_ctx#download_and_extract
++[repo JSON index]: ../../lib/index.md
++
++
++**TAG CLASSES**
++
++<a id="download_archives.archives"></a>
++
++### archives
++
++Declare an archive repository with per-version downloads.
++
++Creates an index repository (`@<NAME>`) with per-version aliases, and
++one download repository (`@<NAME>-<VERSION>`) per version. Archives
++are only downloaded when a build references a specific version.
++
++**Attributes**
++
++| Name  | Description | Type | Mandatory | Default |
++| :------------- | :------------- | :------------- | :------------- | :------------- |
++| <a id="download_archives.archives-name"></a>name |  Name for the index repository.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
++| <a id="download_archives.archives-expose_internal_repos"></a>expose_internal_repos |  When True, the per-version download repositories (`@<NAME>-<VERSION>`) are exposed as direct dependencies, allowing them to be listed in `use_repo` and referenced directly. Defaults to False.   | Boolean | optional |  `False`  |
++| <a id="download_archives.archives-index"></a>index |  Label of the repo JSON index file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
++| <a id="download_archives.archives-patches"></a>patches |  Diff files to apply as patches at the root of the downloaded archive. The `dict` values represent "patch specs" in the `<VERSION_SPEC>/<SOURCE>` format, and determine when patches apply to the downloaded archive. Patches must be in standard [unified diff format], created from the root of the archive. All patches are applied from the root of the archive with `patch -p1`. For more details, see ["Patching"].   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
++| <a id="download_archives.archives-sources"></a>sources |  Source names from which to download the archive. If none, all sources from the index are tried in order.   | List of strings | optional |  `[]`  |
++| <a id="download_archives.archives-spec_syntax"></a>spec_syntax |  The syntax of the version constraints specification. The available syntaxes are those supported by `version_utils` (see `SYNTAX` in [`version_utils`' `spec` extension](https://github.com/jjmaestro/bazel_version_utils/blob/main/spec/spec.bzl)). Defaults to `SYNTAX.SIMPLE`.   | String | optional |  `"simple"`  |
++| <a id="download_archives.archives-strict_integrity"></a>strict_integrity |  If `True`, all sources of a given archive version must share the same integrity hash. If they differ, the download will fail. Defaults to `True`.   | Boolean | optional |  `True`  |
++| <a id="download_archives.archives-version_scheme"></a>version_scheme |  The scheme of the versions in `index` and `patches`. The available version schemes are those supported by `version_utils` (see `SCHEME` in [`version_utils`' `version` extension](https://github.com/jjmaestro/bazel_version_utils/blob/main/version/version.bzl)). Defaults to `SCHEME.SEMVER`.   | String | optional |  `"semver"`  |
++| <a id="download_archives.archives-versions"></a>versions |  Versions of the archive to download. If none is specified it will download all of the versions available in the repo index.   | List of strings | optional |  `[]`  |
++
++
+diff --git a/docs/download/archives/repository.md b/docs/download/archives/repository.md
+index 4e8086c..c4ecbf5 100644
+--- a/docs/download/archives/repository.md
++++ b/docs/download/archives/repository.md
+@@ -110,12 +110,6 @@ object" with the following properties:
+   - `integrity`: the SRI ([Subresource Integrity (SRI)]) of the downloaded archive.
+   - `patches`: the list of patches applied to the archive after download, if any.
+ 
+-["Patching"]: #patching
+-[Subresource Integrity (SRI)]: https://w3c.github.io/webappsec-subresource-integrity/
+-["materialized repo `context`"]: ../../lib/index.md#materialized-repo-context
+-[`rctx.download_and_extract`]: https://bazel.build/rules/lib/builtins/repository_ctx#download_and_extract
+-[repo JSON index]: ../../lib/index.md
+-
+ ### Selecting `versions` and `sources`
+ 
+ Users can also override the default selection of versions and sources with the
+@@ -403,6 +397,36 @@ In this case, the list of targets would look like:
+ 
+ </details>
+ 
++### Per-version downloads (module extension)
++
++For repositories with many versions, use the `download_archives` module
++extension from `extensions.bzl` instead of this rule. The module extension
++creates one download repository per version, so archives are only downloaded
++when a build references a specific version:
++
++```starlark
++download = use_extension(
++    "@download_archives//download/archives:extensions.bzl",
++    "download_archives",
++)
++
++download.archives(
++    name = "my_src",
++    index = "//third-party:repo.json",
++)
++
++use_repo(download, "my_src")
++```
++
++Building `@my_src//18.1:files` downloads only version 18.1, not all versions
++in the index.
++
++["Patching"]: #patching
++[Subresource Integrity (SRI)]: https://w3c.github.io/webappsec-subresource-integrity/
++["materialized repo `context`"]: ../../lib/index.md#materialized-repo-context
++[`rctx.download_and_extract`]: https://bazel.build/rules/lib/builtins/repository_ctx#download_and_extract
++[repo JSON index]: ../../lib/index.md
++
+ **ATTRIBUTES**
+ 
+ 
+@@ -410,7 +434,7 @@ In this case, the list of targets would look like:
+ | :------------- | :------------- | :------------- | :------------- | :------------- |
+ | <a id="archives-name"></a>name |  A unique name for this repository.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+ | <a id="archives-index"></a>index |  Label of the repo JSON index file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+-| <a id="archives-lazy"></a>lazy |  Internal. When True, creates index-only repos with stub BUILD files that alias to per-version download repositories instead of downloading archives eagerly. The per-version repos must be created separately.   | Boolean | optional |  `False`  |
++| <a id="archives-lazy"></a>lazy |  Internal. When True, creates index-only repos with stub BUILD files that alias to per-version download repositories instead of downloading archives eagerly. Used by the `download_archives` module extension, should not be set directly.   | Boolean | optional |  `False`  |
+ | <a id="archives-patches"></a>patches |  Diff files to apply as patches at the root of the downloaded archive. The `dict` values represent "patch specs" in the `<VERSION_SPEC>/<SOURCE>` format, and determine when patches apply to the downloaded archive. Patches must be in standard [unified diff format], created from the root of the archive. All patches are applied from the root of the archive with `patch -p1`. For more details, see ["Patching"].   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
+ | <a id="archives-repo_mapping"></a>repo_mapping |  In `WORKSPACE` context only: a dictionary from local repository name to global repository name. This allows controls over workspace dependency resolution for dependencies of this repository.<br><br>For example, an entry `"@foo": "@bar"` declares that, for any time this repository depends on `@foo` (such as a dependency on `@foo//some:target`, it should actually resolve that dependency within globally-declared `@bar` (`@bar//some:target`).<br><br>This attribute is _not_ supported in `MODULE.bazel` context (when invoking a repository rule inside a module extension's implementation function).   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  |
+ | <a id="archives-sources"></a>sources |  Source names from which to download the archive. If none, all sources from the index are tried in order.   | List of strings | optional |  `[]`  |
+diff --git a/download/archives/BUILD.bazel b/download/archives/BUILD.bazel
+index 9a22e50..75d64f2 100644
+--- a/download/archives/BUILD.bazel
++++ b/download/archives/BUILD.bazel
+@@ -4,6 +4,7 @@ package(default_visibility = ["//visibility:public"])
+ 
+ exports_files([
+     "defs.bzl",
++    "extensions.bzl",
+ ])
+ 
+ bzl_library(
+@@ -24,3 +25,14 @@ bzl_library(
+         ":repository",
+     ],
+ )
++
++bzl_library(
++    name = "extensions",
++    srcs = ["extensions.bzl"],
++    deps = [
++        ":repository",
++        "//lib:index",
++        "@version_utils//spec",
++        "@version_utils//version",
++    ],
++)
+diff --git a/download/archives/extensions.bzl b/download/archives/extensions.bzl
+new file mode 100644
+index 0000000..d2d3ecf
+--- /dev/null
++++ b/download/archives/extensions.bzl
+@@ -0,0 +1,224 @@
++"""
++# `download_archives` module extension
++
++Module extension for per-version archive downloads.
++"""
++
++load("@version_utils//spec:spec.bzl", Spec = "spec")
++load("@version_utils//version:version.bzl", Version = "version")
++load("//lib:index.bzl", Index = "index")
++load(
++    ":repository.bzl",
++    _ATTRS = "ATTRS",
++    _DOC_LINK_REFS = "DOC_LINK_REFS",
++    _DOC_PATCHING = "DOC_PATCHING",
++    _DOC_VERSION_SCHEME = "DOC_VERSION_SCHEME",
++    _archives = "archives",
++)
++
++_DOC_INTRO = """
++Module extension for per-version archive downloads.
++
++Use `download.archives(...)` to declare archive repositories. Each
++declaration creates an index repository (`@<NAME>`) and one download
++repository per version (`@<NAME>-<VERSION>`). Archives are only
++downloaded when a build references a specific version.
++
++### How it works
++
++The module extension creates two kinds of repositories:
++
++**Index repository (`@<NAME>`)**: created eagerly when the extension is
++evaluated. It parses the [repo JSON index], generates per-version BUILD files
++with aliases pointing to the download repositories, and writes repo metadata.
++No archives are downloaded at this stage. It contains:
++- Per-version packages with aliases: `@<NAME>//<VERSION>:files`, `:dir`
++- Per-version `source.bzl` with `SOURCE` and `URL` of the actual download
++- `repo.bzl` with `VERSIONS`, `DEFAULT_VERSION`, `METADATA`, `LOCK`
++- `index.json`, `lock.json`, `metadata.json`
++
++**Download repositories (`@<NAME>-<VERSION>`)**: one per version, created
++lazily. Each download repository parses the same index for its version and
++uses the same download logic as the `archives` rule, trying each source in
++order with full per-source download args from the ["materialized repo
++`context`"]. Each contains:
++- `:files`: all files in the downloaded archive.
++- `:dir`: the path to the directory where the archive was extracted.
++- `:<VERSION>`: alias of `:files`.
++- `source.bzl`: exports `SOURCE` (the source name) and `URL` (the URL used).
++"""
++
++_DOC_USAGE = """
++### Usage:
++
++```starlark
++download = use_extension(
++    "@download_archives//download/archives:extensions.bzl",
++    "download_archives",
++)
++
++download.archives(
++    name = "my_src",
++    index = "//third-party:repo.json",
++)
++
++use_repo(download, "my_src")
++```
++
++Building `@my_src//18.1:files` downloads only version 18.1, not all versions
++in the index.
++
++To expose the per-version download repositories as direct dependencies (e.g.
++for use in `use_repo`), set `expose_internal_repos = True`:
++
++```starlark
++download.archives(
++    name = "my_src",
++    index = "//third-party:repo.json",
++    expose_internal_repos = True,
++)
++
++use_repo(download, "my_src", "my_src-18.1")
++```
++"""
++
++_DOC = (
++    _DOC_INTRO +
++    _DOC_VERSION_SCHEME +
++    _DOC_PATCHING +
++    _DOC_USAGE +
++    _DOC_LINK_REFS
++)
++
++def archives(
++        ctx,
++        name,
++        index,
++        patches = {},
++        version_scheme = Version.SCHEME.SEMVER,
++        spec_syntax = Spec.SYNTAX.SIMPLE,
++        versions = [],
++        sources = [],
++        strict_integrity = True):
++    """Create a `@<NAME>` index repo and `@<NAME>-<VERSION>` download repos.
++
++    The index repo parses the JSON index, generates per-version BUILD files
++    with aliases pointing to the download repos, and writes repo metadata.
++    No archives are downloaded at this stage.
++
++    Each download repo parses the same index for its version and uses the
++    same download logic as the eager `archives` rule — trying each source
++    in order with full per-source download args from the materialized context.
++
++    Args:
++        ctx: The module extension context.
++        name: Name for the index repository.
++        index: Label of the repo JSON index file.
++        patches: Dict of patch labels to version spec strings.
++        version_scheme: Version scheme (default: `SEMVER`).
++        spec_syntax: Spec syntax (default: `SIMPLE`).
++        versions: Optional list of versions to include.
++        sources: Optional list of sources to use.
++        strict_integrity: If True, all sources must share the same integrity.
++
++    Returns:
++        List of per-version download repo names (`["<NAME>-<VERSION>", ...]`).
++    """
++
++    # index repo: parses the JSON index, generates stub BUILD files and metadata
++    _archives(
++        name = name,
++        index = index,
++        patches = patches,
++        version_scheme = version_scheme,
++        spec_syntax = spec_syntax,
++        versions = versions,
++        sources = sources,
++        strict_integrity = strict_integrity,
++        lazy = True,
++    )
++
++    # per-version download repos: each downloads one version eagerly
++    index_json = ctx.read(index)
++    idx = Index.new(name, index_json, versions, sources)
++    dl_repos = []
++
++    for version in idx.repos.keys():
++        _archives(
++            name = "%s-%s" % (name, version),
++            index = index,
++            versions = [version],
++            sources = sources,
++            patches = patches,
++            spec_syntax = spec_syntax,
++            version_scheme = version_scheme,
++            strict_integrity = strict_integrity,
++            lazy = False,
++        )
++
++        dl_repos.append("%s-%s" % (name, version))
++
++    return dl_repos
++
++def _impl(ctx):
++    direct_deps = []
++
++    for mod in ctx.modules:
++        for tag in mod.tags.archives:
++            dl_repos = archives(
++                ctx = ctx,
++                name = tag.name,
++                index = tag.index,
++                patches = tag.patches,
++                version_scheme = tag.version_scheme,
++                spec_syntax = tag.spec_syntax,
++                versions = tag.versions,
++                sources = tag.sources,
++                strict_integrity = tag.strict_integrity,
++            )
++
++            if mod.is_root:
++                direct_deps.append(tag.name)
++
++                if tag.expose_internal_repos:
++                    direct_deps.extend(dl_repos)
++
++    return ctx.extension_metadata(
++        reproducible = True,
++        root_module_direct_deps = sorted(direct_deps),
++        root_module_direct_dev_deps = [],
++    )
++
++_ARCHIVES_TAG = tag_class(
++    doc = """
++    Declare an archive repository with per-version downloads.
++
++    Creates an index repository (`@<NAME>`) with per-version aliases, and
++    one download repository (`@<NAME>-<VERSION>`) per version. Archives
++    are only downloaded when a build references a specific version.
++    """,
++    attrs = dict(
++        name = attr.string(
++            doc = "Name for the index repository.",
++            mandatory = True,
++        ),
++        expose_internal_repos = attr.bool(
++            default = False,
++            doc = """
++            When True, the per-version download repositories
++            (`@<NAME>-<VERSION>`) are exposed as direct dependencies, allowing
++            them to be listed in `use_repo` and referenced directly. Defaults
++            to False.
++            """,
++        ),
++        **_ATTRS
++    ),
++)
++
++download_archives = module_extension(
++    doc = _DOC,
++    implementation = _impl,
++    tag_classes = {
++        "archives": _ARCHIVES_TAG,
++    },
++)
+diff --git a/download/archives/repository.bzl b/download/archives/repository.bzl
+index 7573bc0..37b0b60 100644
+--- a/download/archives/repository.bzl
++++ b/download/archives/repository.bzl
+@@ -12,7 +12,7 @@ load("@version_utils//version:version.bzl", Version = "version")
+ load("//lib:download.bzl", Download = "download")
+ load("//lib:index.bzl", Index = "index")
+ 
+-DOC = """
++_DOC_INTRO = """
+ This repository rule wraps [`rctx.download_and_extract`] and creates a Bazel
+ repo under `@<NAME>`, downloading and extracting *one archive* from *one*
+ of the sources for *each* of the archive versions in the [repo JSON index].
+@@ -104,13 +104,17 @@ object" with the following properties:
+   - `url`: the URL from which the archive was downloaded.
+   - `integrity`: the SRI ([Subresource Integrity (SRI)]) of the downloaded archive.
+   - `patches`: the list of patches applied to the archive after download, if any.
++"""
+ 
++DOC_LINK_REFS = """
+ ["Patching"]: #patching
+ [Subresource Integrity (SRI)]: https://w3c.github.io/webappsec-subresource-integrity/
+ ["materialized repo `context`"]: ../../lib/index.md#materialized-repo-context
+ [`rctx.download_and_extract`]: https://bazel.build/rules/lib/builtins/repository_ctx#download_and_extract
+ [repo JSON index]: ../../lib/index.md
++"""
+ 
++_DOC_SELECTING = """
+ ### Selecting `versions` and `sources`
+ 
+ Users can also override the default selection of versions and sources with the
+@@ -118,7 +122,9 @@ Users can also override the default selection of versions and sources with the
+ 
+ Note that selecting specific versions and/or arguments will change the values
+ of `VERSIONS` and `DEFAULT_VERSION`.
++"""
+ 
++DOC_VERSION_SCHEME = """
+ ### Version scheme
+ 
+ The `version_scheme` attribute defines the format used for versions in both the
+@@ -128,7 +134,9 @@ default.
+ 
+ [semantic versioning]: https://semver.org
+ [`version_utils`' `version` extension]: https://github.com/jjmaestro/bazel_version_utils/blob/main/docs/version/version.md
++"""
+ 
++DOC_PATCHING = """
+ ### Patching
+ 
+ The downloaded archive can also be patched by passing a `patches` argument, a
+@@ -163,7 +171,9 @@ generate the list of patches using [`git format-patch`].
+ [unified diff format]: https://en.wikipedia.org/wiki/Diff#Unified_format
+ [`version_utils` `spec` extension]: https://github.com/jjmaestro/bazel_version_utils/blob/main/docs/specs/spec.md
+ [`git format-patch`]: https://git-scm.com/docs/git-format-patch
++"""
+ 
++_DOC_USAGE = """
+ ### Usage:
+ 
+ Here's an example that shows how to create a `@wget_src` repo for [GNU wget]:
+@@ -397,8 +407,41 @@ In this case, the list of targets would look like:
+ ```
+ 
+ </details>
++
++### Per-version downloads (module extension)
++
++For repositories with many versions, use the `download_archives` module
++extension from `extensions.bzl` instead of this rule. The module extension
++creates one download repository per version, so archives are only downloaded
++when a build references a specific version:
++
++```starlark
++download = use_extension(
++    "@download_archives//download/archives:extensions.bzl",
++    "download_archives",
++)
++
++download.archives(
++    name = "my_src",
++    index = "//third-party:repo.json",
++)
++
++use_repo(download, "my_src")
++```
++
++Building `@my_src//18.1:files` downloads only version 18.1, not all versions
++in the index.
+ """
+ 
++_DOC = (
++    _DOC_INTRO +
++    _DOC_SELECTING +
++    DOC_VERSION_SCHEME +
++    DOC_PATCHING +
++    _DOC_USAGE +
++    DOC_LINK_REFS
++)
++
+ REPO = '''\
+ """Generated by download_archives. DO NOT EDIT."""
+ 
+@@ -707,13 +750,14 @@ _ATTRS = ATTRS | dict(
+         doc = """
+         Internal. When True, creates index-only repos with stub BUILD files
+         that alias to per-version download repositories instead of downloading
+-        archives eagerly. The per-version repos must be created separately.
++        archives eagerly. Used by the `download_archives` module extension,
++        should not be set directly.
+         """,
+     ),
+ )
+ 
+ archives = repository_rule(
+-    doc = DOC,
++    doc = _DOC,
+     attrs = _ATTRS,
+     implementation = _impl,
+ )
+diff --git a/examples/MODULE.bazel b/examples/MODULE.bazel
+index dcf900d..d9b2386 100644
+--- a/examples/MODULE.bazel
++++ b/examples/MODULE.bazel
+@@ -17,6 +17,7 @@ download_archives = use_repo_rule("@download_archives//download/archives:defs.bz
+ download_archives(
+     name = "wget_src",
+     index = "//third-party/wget:repo.json",
++    lazy = False,
+     patches = {
+         "//third-party/wget/patches:0001-1.24.5-test-patch.patch": ">=1.24.5/*",
+     },
+@@ -26,6 +27,7 @@ download_archives(
+ download_archives(
+     name = "pg_src",
+     index = "//third-party/postgres:repo.json",
++    lazy = False,
+     patches = {
+         "//third-party/postgres/patches:0001-16.0-fix-pgflex.patch": "<17.0",
+     },
+@@ -45,6 +47,20 @@ download_archives(
+ download_archives(
+     name = "wget_lazy-1.24.5",
+     index = "//third-party/wget:repo.json",
++    lazy = False,
+     strict_integrity = False,
+     versions = ["1.24.5"],
+ )
++
++# module extension: creates index + per-version repos automatically
++download = use_extension(
++    "@download_archives//download/archives:extensions.bzl",
++    "download_archives",
++)
++download.archives(
++    name = "wget_ext",
++    index = "//third-party/wget:repo.json",
++    strict_integrity = False,
++    versions = ["1.24.5"],
++)
++use_repo(download, "wget_ext")
+diff --git a/examples/repos/BUILD.bazel b/examples/repos/BUILD.bazel
+index f94d174..c8a2c8b 100644
+--- a/examples/repos/BUILD.bazel
++++ b/examples/repos/BUILD.bazel
+@@ -1,9 +1,12 @@
+ load(":pg_src.bzl", pg_src_suite = "examples_suite")
++load(":wget_ext.bzl", wget_ext_suite = "examples_suite")
+ load(":wget_lazy.bzl", wget_lazy_suite = "examples_suite")
+ load(":wget_src.bzl", wget_src_suite = "examples_suite")
+ 
+ pg_src_suite()
+ 
++wget_ext_suite()
++
+ wget_lazy_suite()
+ 
+ wget_src_suite()
+diff --git a/examples/repos/wget_ext.bzl b/examples/repos/wget_ext.bzl
+new file mode 100644
+index 0000000..2d969c1
+--- /dev/null
++++ b/examples/repos/wget_ext.bzl
+@@ -0,0 +1,56 @@
++"""e2e wget_ext tests (module extension)"""
++
++load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
++load("@wget_ext//:repo.bzl", "DEFAULT_VERSION", "REPO_NAME", "VERSIONS")
++load("@wget_ext//1.24.5:source.bzl", "SOURCE", "URL")
++load("//:suite.bzl", _examples_suite = "test_suite")
++
++def _repo_name_impl(ctx):
++    env = unittest.begin(ctx)
++
++    asserts.equals(env, "wget_ext", REPO_NAME)
++
++    return unittest.end(env)
++
++repo_name_test = unittest.make(_repo_name_impl)
++
++def _default_version_impl(ctx):
++    env = unittest.begin(ctx)
++
++    asserts.equals(env, "1.24.5", DEFAULT_VERSION)
++
++    return unittest.end(env)
++
++default_version_test = unittest.make(_default_version_impl)
++
++def _versions_has_entry_impl(ctx):
++    env = unittest.begin(ctx)
++
++    asserts.true(env, "1.24.5" in VERSIONS)
++
++    return unittest.end(env)
++
++versions_has_entry_test = unittest.make(_versions_has_entry_impl)
++
++def _source_from_download_repo_impl(ctx):
++    env = unittest.begin(ctx)
++
++    # SOURCE comes from the per-version download repo via source.bzl re-export
++    known_sources = ["github.com", "gitlab.com"]
++    asserts.true(env, SOURCE in known_sources, "SOURCE %r not in %r" % (SOURCE, known_sources))
++    asserts.true(env, "1.24.5" in URL or "v1.24.5" in URL, "URL %r doesn't contain version" % URL)
++
++    return unittest.end(env)
++
++source_from_download_repo_test = unittest.make(_source_from_download_repo_impl)
++
++SUITE_NAME = "wget_ext"
++
++SUITE = dict(
++    repo_name = repo_name_test,
++    default_version = default_version_test,
++    versions_has_entry = versions_has_entry_test,
++    source_from_download_repo = source_from_download_repo_test,
++)
++
++examples_suite = lambda: _examples_suite(SUITE_NAME, SUITE)

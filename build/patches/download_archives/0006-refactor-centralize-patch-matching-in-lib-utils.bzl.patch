@@ -1,0 +1,296 @@
+From d6d2d3f3718dcf841978feff5082e45f5846f133 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Fri, 3 Apr 2026 20:12:54 +0000
+Subject: [PATCH 06/14] refactor: centralize patch matching in lib/utils.bzl
+
+Extract patch matching from repository.bzl into a shared
+Utils.matching_patches helper with a higher-level API (takes a
+patches dict, returns matching keys) and unit tests.
+---
+ download/archives/BUILD.bazel    |   1 +
+ download/archives/repository.bzl |  37 ++++------
+ lib/BUILD.bazel                  |   4 ++
+ lib/utils.bzl                    |  28 ++++++++
+ tests/lib/utils.bzl              | 120 +++++++++++++++++++++++++++++++
+ 5 files changed, 165 insertions(+), 25 deletions(-)
+
+diff --git a/download/archives/BUILD.bazel b/download/archives/BUILD.bazel
+index 68cca71..68f343f 100644
+--- a/download/archives/BUILD.bazel
++++ b/download/archives/BUILD.bazel
+@@ -11,6 +11,7 @@ bzl_library(
+     srcs = ["repository.bzl"],
+     deps = [
+         "//lib:index",
++        "//lib:utils",
+         "@version_utils//spec",
+     ],
+ )
+diff --git a/download/archives/repository.bzl b/download/archives/repository.bzl
+index 43f62ad..f36e1a7 100644
+--- a/download/archives/repository.bzl
++++ b/download/archives/repository.bzl
+@@ -10,6 +10,7 @@ to download and extract an archive: the archive's `version`(s) and the
+ load("@version_utils//spec:spec.bzl", Spec = "spec")
+ load("@version_utils//version:version.bzl", Version = "version")
+ load("//lib:index.bzl", Index = "index")
++load("//lib:utils.bzl", Utils = "utils")
+ 
+ DOC = """
+ This repository rule wraps [`rctx.download_and_extract`] and creates a Bazel
+@@ -503,16 +504,6 @@ exports_files(glob(
+ ))
+ '''
+ 
+-def _should_apply_patch(pattern_spec, version, source, spec_syntax, version_scheme):
+-    if "/" in pattern_spec:
+-        cspec, csource = pattern_spec.split("/", 1)
+-    else:
+-        cspec, csource = pattern_spec, "*"
+-
+-    spec = Spec.new(cspec, syntax = spec_syntax, version_scheme = version_scheme)
+-
+-    return spec.match(version) and (csource == "*" or csource == source)
+-
+ def _apply_patch(rctx, version, source, patch):
+     patch_content = rctx.read(patch)
+ 
+@@ -693,23 +684,19 @@ def _impl(rctx, _print = print, _fail = fail):
+                 executable = False,
+             )
+ 
+-            applied_patches = []
+-
+-            for patch, pattern_spec in rctx.attr.patches.items():
+-                should_apply = _should_apply_patch(
+-                    pattern_spec,
+-                    repo.version,
+-                    repo.source,
+-                    rctx.attr.spec_syntax,
+-                    rctx.attr.version_scheme,
+-                )
++            matching = Utils.matching_patches(
++                rctx.attr.patches,
++                repo.version,
++                repo.source,
++                rctx.attr.spec_syntax,
++                rctx.attr.version_scheme,
++            )
+ 
+-                if should_apply:
+-                    _apply_patch(rctx, repo.version, repo.source, patch)
+-                    applied_patches.append(str(patch))
++            for patch in matching:
++                _apply_patch(rctx, repo.version, repo.source, patch)
+ 
+-            if applied_patches:
+-                repo_lock[repo.version]["patches"] = applied_patches
++            if matching:
++                repo_lock[repo.version]["patches"] = [str(p) for p in matching]
+ 
+     failed_all_versions = []
+     for version, failures in failed_downloads.items():
+diff --git a/lib/BUILD.bazel b/lib/BUILD.bazel
+index fdfda70..1e27b4c 100644
+--- a/lib/BUILD.bazel
++++ b/lib/BUILD.bazel
+@@ -12,6 +12,10 @@ exports_files([
+ bzl_library(
+     name = "utils",
+     srcs = ["utils.bzl"],
++    deps = [
++        "@version_utils//spec",
++        "@version_utils//version",
++    ],
+ )
+ 
+ bzl_library(
+diff --git a/lib/utils.bzl b/lib/utils.bzl
+index 38385b9..422e2b9 100644
+--- a/lib/utils.bzl
++++ b/lib/utils.bzl
+@@ -1,5 +1,8 @@
+ """utils.bzl"""
+ 
++load("@version_utils//spec:spec.bzl", Spec = "spec")
++load("@version_utils//version:version.bzl", Version = "version")
++
+ def _get_dupes(list_):
+     set_ = {}
+     dupes = []
+@@ -32,7 +35,32 @@ def _replace_in_place(d, k_replace, replacement, _fail = fail):
+ 
+     return res
+ 
++def _matching_patches(
++        patches,
++        version,
++        source,
++        spec_syntax = Spec.SYNTAX.SIMPLE,
++        version_scheme = Version.SCHEME.SEMVER):
++    """Return the patch keys from `patches` that match the given version/source."""
++
++    def _should_apply(pattern_spec):
++        if "/" in pattern_spec:
++            cspec, csource = pattern_spec.split("/", 1)
++        else:
++            cspec, csource = pattern_spec, "*"
++
++        spec = Spec.new(cspec, syntax = spec_syntax, version_scheme = version_scheme)
++
++        return spec.match(version) and (csource == "*" or csource == source)
++
++    return [
++        patch
++        for patch, pattern_spec in patches.items()
++        if _should_apply(pattern_spec)
++    ]
++
+ utils = struct(
+     get_dupes = _get_dupes,
+     replace_in_place = _replace_in_place,
++    matching_patches = _matching_patches,
+ )
+diff --git a/tests/lib/utils.bzl b/tests/lib/utils.bzl
+index df65c0e..069e7d0 100644
+--- a/tests/lib/utils.bzl
++++ b/tests/lib/utils.bzl
+@@ -5,6 +5,9 @@ load("//lib:utils.bzl", Utils = "utils")
+ load("//tests:mock.bzl", Mock = "mock")
+ load("//tests:suite.bzl", _test_suite = "test_suite")
+ 
++_PATCH_A = "a.patch"
++_PATCH_B = "b.patch"
++
+ def _get_dupes__no_dupes_impl(ctx):
+     env = unittest.begin(ctx)
+ 
+@@ -54,11 +57,128 @@ def _replace_in_place__valid_key_impl(ctx):
+ 
+ replace_in_place__valid_key_test = unittest.make(_replace_in_place__valid_key_impl)
+ 
++def _matching_patches__wildcard_impl(ctx):
++    env = unittest.begin(ctx)
++
++    patches = {_PATCH_A: "*", _PATCH_B: "*/*"}
++
++    params = {
++        ("1.0.0", "github.com"): [_PATCH_A, _PATCH_B],
++        ("2.5.3", "gitlab.com"): [_PATCH_A, _PATCH_B],
++    }
++
++    for (version, source), expected in params.items():
++        res = Utils.matching_patches(patches, version, source)
++        asserts.equals(env, expected, res)
++
++    return unittest.end(env)
++
++matching_patches__wildcard_test = unittest.make(_matching_patches__wildcard_impl)
++
++def _matching_patches__exact_version_impl(ctx):
++    env = unittest.begin(ctx)
++
++    patches = {_PATCH_A: "1.0.0"}
++
++    params = {
++        "1.0.0": [_PATCH_A],
++        "2.0.0": [],
++    }
++
++    for version, expected in params.items():
++        res = Utils.matching_patches(patches, version, "github.com")
++        asserts.equals(env, expected, res)
++
++    return unittest.end(env)
++
++matching_patches__exact_version_test = unittest.make(_matching_patches__exact_version_impl)
++
++def _matching_patches__version_with_source_impl(ctx):
++    env = unittest.begin(ctx)
++
++    patches = {_PATCH_A: "1.0.0/github.com"}
++
++    params = {
++        ("1.0.0", "github.com"): [_PATCH_A],
++        ("1.0.0", "gitlab.com"): [],
++        ("2.0.0", "github.com"): [],
++    }
++
++    for (version, source), expected in params.items():
++        res = Utils.matching_patches(patches, version, source)
++        asserts.equals(env, expected, res)
++
++    return unittest.end(env)
++
++matching_patches__version_with_source_test = unittest.make(_matching_patches__version_with_source_impl)
++
++def _matching_patches__wildcard_source_impl(ctx):
++    env = unittest.begin(ctx)
++
++    patches = {_PATCH_A: "1.0.0/*"}
++
++    params = {
++        ("1.0.0", "github.com"): [_PATCH_A],
++        ("1.0.0", "gitlab.com"): [_PATCH_A],
++        ("2.0.0", "github.com"): [],
++    }
++
++    for (version, source), expected in params.items():
++        res = Utils.matching_patches(patches, version, source)
++        asserts.equals(env, expected, res)
++
++    return unittest.end(env)
++
++matching_patches__wildcard_source_test = unittest.make(_matching_patches__wildcard_source_impl)
++
++def _matching_patches__version_range_impl(ctx):
++    env = unittest.begin(ctx)
++
++    patches = {_PATCH_A: ">=1.0.0, <2.0.0"}
++
++    params = {
++        "0.9.0": [],
++        "1.5.0": [_PATCH_A],
++        "2.0.0": [],
++    }
++
++    for version, expected in params.items():
++        res = Utils.matching_patches(patches, version, "github.com")
++        asserts.equals(env, expected, res)
++
++    return unittest.end(env)
++
++matching_patches__version_range_test = unittest.make(_matching_patches__version_range_impl)
++
++def _matching_patches__range_with_source_impl(ctx):
++    env = unittest.begin(ctx)
++
++    patches = {_PATCH_A: ">=1.0.0, <2.0.0/github.com"}
++
++    params = {
++        "github.com": [_PATCH_A],
++        "gitlab.com": [],
++    }
++
++    for source, expected in params.items():
++        res = Utils.matching_patches(patches, "1.5.0", source)
++        asserts.equals(env, expected, res)
++
++    return unittest.end(env)
++
++matching_patches__range_with_source_test = unittest.make(_matching_patches__range_with_source_impl)
++
+ TEST_SUITE_NAME = "lib/utils"
+ 
+ TEST_SUITE_TESTS = {
+     "get_dupes/dupes": get_dupes__dupes_test,
+     "get_dupes/no_dupes": get_dupes__no_dupes_test,
++    "matching_patches/exact_version": matching_patches__exact_version_test,
++    "matching_patches/range_with_source": matching_patches__range_with_source_test,
++    "matching_patches/version_range": matching_patches__version_range_test,
++    "matching_patches/version_with_source": matching_patches__version_with_source_test,
++    "matching_patches/wildcard": matching_patches__wildcard_test,
++    "matching_patches/wildcard_source": matching_patches__wildcard_source_test,
+     "replace_in_place/missing_key": replace_in_place__missing_key_test,
+     "replace_in_place/valid_key": replace_in_place__valid_key_test,
+ }

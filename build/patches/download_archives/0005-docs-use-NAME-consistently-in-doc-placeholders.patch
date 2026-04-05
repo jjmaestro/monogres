@@ -1,0 +1,129 @@
+From 6f928cfe6f6f7a04b381b59fe8d24e7c0761ad89 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Fri, 3 Apr 2026 15:51:05 +0000
+Subject: [PATCH 05/14] docs: use <NAME> consistently in doc placeholders
+
+The DOC string used <REPO_NAME> as a placeholder for the repository
+name, but <NAME> matches the actual `name` attr that users pass.
+The REPO_NAME constant in repo.bzl is unchanged.
+---
+ README.md                            |  4 ++--
+ docs/download/archives/repository.md | 14 +++++++-------
+ download/archives/repository.bzl     | 14 +++++++-------
+ 3 files changed, 16 insertions(+), 16 deletions(-)
+
+diff --git a/README.md b/README.md
+index 2e0cbba..98a185e 100644
+--- a/README.md
++++ b/README.md
+@@ -56,8 +56,8 @@ archive's `version`(s) and the `source`(s) from which to try to download the
+ archive.
+ 
+ This repository rule wraps [`rctx.download_and_extract`] and creates a Bazel
+-repo under `@<REPO_NAME>`, downloading and extracting *one archive* from *one*
+-of the sources for *each* of the archive versions in the [repo JSON index].
++repo under `@<NAME>`, downloading and extracting *one archive* from *one* of
++the sources for *each* of the archive versions in the [repo JSON index].
+ 
+ When downloading the archive, if a source fails it will try the next one, and
+ only fail if all sources are exhausted.
+diff --git a/docs/download/archives/repository.md b/docs/download/archives/repository.md
+index 7bfc128..376521f 100644
+--- a/docs/download/archives/repository.md
++++ b/docs/download/archives/repository.md
+@@ -19,7 +19,7 @@ archives(<a href="#archives-name">name</a>, <a href="#archives-index">index</a>,
+ </pre>
+ 
+ This repository rule wraps [`rctx.download_and_extract`] and creates a Bazel
+-repo under `@<REPO_NAME>`, downloading and extracting *one archive* from *one*
++repo under `@<NAME>`, downloading and extracting *one archive* from *one*
+ of the sources for *each* of the archive versions in the [repo JSON index].
+ 
+ When downloading the archive, if a source fails it will try the next one, and
+@@ -32,7 +32,7 @@ To construct the arguments passed to [`rctx.download_and_extract`] it uses the
+ ### Repo structure
+ 
+ ```
+-  @<REPO_NAME>/
++  @<NAME>/
+    |
+    |-- <VERSION>/
+    |   |-- BUILD.bazel
+@@ -55,14 +55,14 @@ To construct the arguments passed to [`rctx.download_and_extract`] it uses the
+ 
+ TL;DR, the repo can be used as follows:
+ 
+-- `@<REPO_NAME>//:<REPO_NAME>`: points to the `:files` target of the
++- `@<NAME>//:<NAME>`: points to the `:files` target of the
+   `DEFAULT_VERSION`.
+-- `@<REPO_NAME>//:<TARGET>`: points to the specific `TARGET` of the
++- `@<NAME>//:<TARGET>`: points to the specific `TARGET` of the
+   `DEFAULT_VERSION`.
+-- `@<REPO_NAME>//<VERSION>:<TARGET>`: points to the specific `TARGET` of that
++- `@<NAME>//<VERSION>:<TARGET>`: points to the specific `TARGET` of that
+   `VERSION`.
+ 
+-The `archives` repository rule creates a `@<REPO_NAME>` Bazel repo with a
++The `archives` repository rule creates a `@<NAME>` Bazel repo with a
+ public `//<VERSION>` package for every version in the index.
+ 
+ Each `//<VERSION>` package has three targets:
+@@ -82,7 +82,7 @@ the `//<VERSION>/<SOURCE>` sub-packages.
+ The root package `//` has three targets:
+ - `:files`: to access all the files in the `DEFAULT_VERSION` package.
+ - `:dir`: the path to the directory of the `DEFAULT_VERSION` package.
+-- `:<REPO_NAME>`: `alias` of `:files`.
++- `:<NAME>`: `alias` of `:files`.
+ 
+ and two constants:
+ - `VERSION`: the `DEFAULT_VERSION` of the archive.
+diff --git a/download/archives/repository.bzl b/download/archives/repository.bzl
+index e83fea5..43f62ad 100644
+--- a/download/archives/repository.bzl
++++ b/download/archives/repository.bzl
+@@ -13,7 +13,7 @@ load("//lib:index.bzl", Index = "index")
+ 
+ DOC = """
+ This repository rule wraps [`rctx.download_and_extract`] and creates a Bazel
+-repo under `@<REPO_NAME>`, downloading and extracting *one archive* from *one*
++repo under `@<NAME>`, downloading and extracting *one archive* from *one*
+ of the sources for *each* of the archive versions in the [repo JSON index].
+ 
+ When downloading the archive, if a source fails it will try the next one, and
+@@ -26,7 +26,7 @@ To construct the arguments passed to [`rctx.download_and_extract`] it uses the
+ ### Repo structure
+ 
+ ```
+-  @<REPO_NAME>/
++  @<NAME>/
+    |
+    |-- <VERSION>/
+    |   |-- BUILD.bazel
+@@ -49,14 +49,14 @@ To construct the arguments passed to [`rctx.download_and_extract`] it uses the
+ 
+ TL;DR, the repo can be used as follows:
+ 
+-- `@<REPO_NAME>//:<REPO_NAME>`: points to the `:files` target of the
++- `@<NAME>//:<NAME>`: points to the `:files` target of the
+   `DEFAULT_VERSION`.
+-- `@<REPO_NAME>//:<TARGET>`: points to the specific `TARGET` of the
++- `@<NAME>//:<TARGET>`: points to the specific `TARGET` of the
+   `DEFAULT_VERSION`.
+-- `@<REPO_NAME>//<VERSION>:<TARGET>`: points to the specific `TARGET` of that
++- `@<NAME>//<VERSION>:<TARGET>`: points to the specific `TARGET` of that
+   `VERSION`.
+ 
+-The `archives` repository rule creates a `@<REPO_NAME>` Bazel repo with a
++The `archives` repository rule creates a `@<NAME>` Bazel repo with a
+ public `//<VERSION>` package for every version in the index.
+ 
+ Each `//<VERSION>` package has three targets:
+@@ -76,7 +76,7 @@ the `//<VERSION>/<SOURCE>` sub-packages.
+ The root package `//` has three targets:
+ - `:files`: to access all the files in the `DEFAULT_VERSION` package.
+ - `:dir`: the path to the directory of the `DEFAULT_VERSION` package.
+-- `:<REPO_NAME>`: `alias` of `:files`.
++- `:<NAME>`: `alias` of `:files`.
+ 
+ and two constants:
+ - `VERSION`: the `DEFAULT_VERSION` of the archive.

@@ -38,6 +38,30 @@ local_path_override(
     path = "sysroots",
 )
 
+BDA_VERSION = "0.1.0"
+
+archive_override(
+    module_name = "download_archives",
+    patch_strip = 1,
+    patches = [
+        "//patches/download_archives:0001-dev-add-flake.nix-and-direnv-for-NixOS-dev-environme.patch",
+        "//patches/download_archives:0002-fix-missing-continue-after-integrity-check-wrong-app.patch",
+        "//patches/download_archives:0003-docs-fix-SOURCES-VERSIONS-in-repo.bzl-doc.patch",
+        "//patches/download_archives:0004-test-add-multi-source-index-test.patch",
+        "//patches/download_archives:0005-docs-use-NAME-consistently-in-doc-placeholders.patch",
+        "//patches/download_archives:0006-refactor-centralize-patch-matching-in-lib-utils.bzl.patch",
+        "//patches/download_archives:0007-refactor-extract-shared-download-helpers-into-lib-do.patch",
+        "//patches/download_archives:0008-refactor-extract-Download.try_sources.patch",
+        "//patches/download_archives:0009-feat-add-lazy-mode-to-download_archives.patch",
+        "//patches/download_archives:0010-feat-add-download_archives-module-extension.patch",
+        "//patches/download_archives:0011-chore-privatize-internal-template-names.patch",
+        "//patches/download_archives:0012-docs-rewrite-README.patch",
+    ],
+    sha256 = "185e9e328ba59ccdc6f97968b2bbe31d7d2f64590aa321df7ca754cf5777f9e4",
+    strip_prefix = "bazel_download_archives-{}".format(BDA_VERSION),
+    url = "https://github.com/jjmaestro/bazel_download_archives/archive/refs/tags/v{}.tar.gz".format(BDA_VERSION),
+)
+
 RFCC_COMMIT = "006ae82d9b4953a9b1c170827aef660f9f0f9ec0"
 
 archive_override(

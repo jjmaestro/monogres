@@ -1,0 +1,39 @@
+From b4362f803fbd2aa442d6198674203229a4a323a8 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Fri, 3 Apr 2026 02:45:38 +0000
+Subject: [PATCH 02/14] fix: missing continue after integrity check + wrong
+ append in failed_downloads
+
+Bug 1: When strict_integrity=True and a version is already in repo_lock,
+after the integrity cross-check passes, execution falls through to
+download_and_extract again instead of continuing to the next source.
+Added missing `continue`.
+
+Bug 2: failed_downloads[version].append(version) appended the version
+string instead of repo.source, making the error data semantically wrong.
+---
+ download/archives/repository.bzl | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/download/archives/repository.bzl b/download/archives/repository.bzl
+index b0eca20..48212ce 100644
+--- a/download/archives/repository.bzl
++++ b/download/archives/repository.bzl
+@@ -650,6 +650,8 @@ def _impl(rctx, _print = print, _fail = fail):
+                     msg += "for version {}"
+                     _fail(msg.format(repo_lock[version]["source"], repo.source, version))
+ 
++                continue
++
+             repo_path = "/".join([repo.version, repo.source])
+             download_args = _make_download_args(repo_path, repo.context)
+ 
+@@ -662,7 +664,7 @@ def _impl(rctx, _print = print, _fail = fail):
+             if not download.success:
+                 if version not in failed_downloads:
+                     failed_downloads[version] = []
+-                failed_downloads[version].append(version)
++                failed_downloads[version].append(repo.source)
+                 continue
+ 
+             if "integrity" not in repo.context:
