@@ -57,6 +57,7 @@ archive_override(
     patch_strip = 1,
     patches = [
         "//patches/rules_foreign_cc:0001-workaround-rfcc-0.15.1-ninja-version-breaks-with-gli.patch",
+        "//patches/rules_foreign_cc:0002-meson-wrapper-clear-runfiles-for-children.patch",
     ],
     sha256 = "6cfda69786df4c539384b1c0031c13bb8d666b0042a4eab59841fa7a6c21fca9",
     strip_prefix = "rules_foreign_cc-{}".format(RFCC_COMMIT),

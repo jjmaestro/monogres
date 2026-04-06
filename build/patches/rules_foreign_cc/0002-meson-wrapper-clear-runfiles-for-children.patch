@@ -1,0 +1,138 @@
+From 35dcb2ffbfbaf36d0fc0c587ac4597983cf7dfa6 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sat, 4 Apr 2026 05:38:08 +0000
+Subject: [PATCH] patch: look runfiles up with the stdlib and clear the child
+ env
+
+Resolve the meson entry point with the stdlib, and stop leaking the wrapper's
+runfiles into the processes meson spawns.
+
+Two problems in `meson_tool_wrapper.py`, both about runfiles.
+
+It locates the real meson through `@rules_python//python/runfiles`, which makes
+the wrapper depend on rules_python's runfiles library and therefore on which
+bootstrap the surrounding build selected: under `bootstrap_impl = "script"`
+that import is not reliably on the path of a plain `py_binary` srcs wrapper.
+The lookup itself is three env-var rules wide, so implement those directly:
+`RUNFILES_DIR`, then a `RUNFILES_MANIFEST_FILE` line, then
+`argv[0] + ".runfiles"`. `REAL_MESON` is passed as `$(rlocationpath ...)`,
+already canonical under bzlmod, so no repository mapping is involved and the
+dependency can go.
+
+Meson spawns child processes freely, for its own steps and for whatever a
+project's `meson.build` invokes. Those children inherit `RUNFILES_DIR`, which
+still points at the wrapper's own runfiles tree, and a child that looks for its
+runfiles there finds the wrong tree and fails; bison is the usual casualty.
+Cleared, the same children fall back to `argv[0] + ".runfiles"` and resolve
+correctly, which is what they would have done had the wrapper never run.
+
+References: https://github.com/jmillikin/rules_bison/issues/17
+---
+ foreign_cc/built_tools/meson_build.bzl       |  2 +-
+ foreign_cc/built_tools/meson_tool_wrapper.py | 61 +++++++++++++++++++-
+ 2 files changed, 59 insertions(+), 4 deletions(-)
+
+diff --git a/foreign_cc/built_tools/meson_build.bzl b/foreign_cc/built_tools/meson_build.bzl
+index 7153f1f..a4019b5 100644
+--- a/foreign_cc/built_tools/meson_build.bzl
++++ b/foreign_cc/built_tools/meson_build.bzl
+@@ -11,7 +11,7 @@ def meson_tool(name, main, data, requirements = [], **kwargs):
+         name = name,
+         srcs = ["@rules_foreign_cc//foreign_cc/built_tools:meson_tool_wrapper.py"],
+         data = data + [main],
+-        deps = requirements + ["@rules_python//python/runfiles"],
++        deps = requirements,
+         python_version = "PY3",
+         main = "@rules_foreign_cc//foreign_cc/built_tools:meson_tool_wrapper.py",
+         **kwargs
+diff --git a/foreign_cc/built_tools/meson_tool_wrapper.py b/foreign_cc/built_tools/meson_tool_wrapper.py
+index 6e13f07..23b9740 100644
+--- a/foreign_cc/built_tools/meson_tool_wrapper.py
++++ b/foreign_cc/built_tools/meson_tool_wrapper.py
+@@ -2,8 +2,6 @@ import os
+ import runpy
+ import sys
+ 
+-from python.runfiles import runfiles
+-
+ 
+ # Meson frequently spawns Python subprocesses, either internally or via
+ # project code such as `python.find_installation()` checks. When Meson is
+@@ -27,12 +25,55 @@ def _site_packages_from_sys_path():
+     return paths
+ 
+ 
++def _rlocation(rlocation_path):
++    """Resolve a Bazel rlocation path to an absolute filesystem path.
++
++    Minimal stdlib-only subset of the Bazel runfiles lookup protocol so this
++    wrapper does not depend on `@rules_python//python/runfiles` -- and
++    therefore does not depend on any specific rules_python bootstrap_impl.
++    The lookup order mirrors Bazel's runfiles env-var contract:
++
++      1. $RUNFILES_DIR + '/' + rlocation_path
++      2. line in $RUNFILES_MANIFEST_FILE matching rlocation_path + ' ' + abspath
++      3. argv[0] + '.runfiles/' + rlocation_path
++
++    REAL_MESON is produced via `$(rlocationpath ...)` which is already a
++    canonical (post-mapping) rlocation under bzlmod, so no repo-mapping
++    support is needed here.
++
++    See
++    https://github.com/bazelbuild/bazel/blob/master/tools/cpp/runfiles/runfiles_src.h
++    for the full env-var contract this implements.
++    """
++    runfiles_dir = os.environ.get("RUNFILES_DIR")
++    if runfiles_dir:
++        candidate = os.path.join(runfiles_dir, rlocation_path)
++        if os.path.isfile(candidate):
++            return candidate
++
++    manifest = os.environ.get("RUNFILES_MANIFEST_FILE")
++    if manifest and os.path.isfile(manifest):
++        with open(manifest) as f:
++            for line in f:
++                parts = line.rstrip("\n").split(" ", 1)
++                if len(parts) == 2 and parts[0] == rlocation_path:
++                    return parts[1] if os.path.isfile(parts[1]) else None
++
++    own_runfiles = sys.argv[0] + ".runfiles"
++    if os.path.isdir(own_runfiles):
++        candidate = os.path.join(own_runfiles, rlocation_path)
++        if os.path.isfile(candidate):
++            return candidate
++
++    return None
++
++
+ def _find_meson_main():
+     rlocation = os.environ.get("REAL_MESON")
+     if not rlocation:
+         raise RuntimeError("REAL_MESON is not set")
+ 
+-    path = runfiles.Create().Rlocation(rlocation)
++    path = _rlocation(rlocation)
+     if path and os.path.isfile(path):
+         return path
+ 
+@@ -51,6 +92,20 @@ def main():
+ 
+     meson_main = _find_meson_main()
+     sys.argv[0] = meson_main
++
++    # Clear runfiles env vars before handing control to meson. Otherwise
++    # meson child processes (notably bison) inherit RUNFILES_DIR pointing
++    # at meson_tool.runfiles and fail to find their own runfiles. Without
++    # these vars set, child binaries fall back to argv[0]+.runfiles which
++    # resolves correctly.
++    #
++    # See https://github.com/jmillikin/rules_bison/issues/17 for the
++    # original bug report and the rules_bison maintainer's diagnosis
++    # explicitly pointing at this wrapper as the place that needs to
++    # adjust or clear RUNFILES_DIR before forking subprocesses.
++    for _var in ("RUNFILES_DIR", "RUNFILES_MANIFEST_FILE", "RUNFILES_MANIFEST_ONLY"):
++        os.environ.pop(_var, None)
++
+     runpy.run_path(meson_main, run_name="__main__")
+ 
+ 
