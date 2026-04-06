@@ -1,0 +1,87 @@
+From a76cf8ebbbc0f1c60ef230a81e8952ae136d443c Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sat, 4 Apr 2026 14:13:44 +0000
+Subject: [PATCH] patch: default the linker to lld when none is pinned
+
+The toolchain downloads ship `lld` / `ld.lld` but no GNU `ld` / `ld.bfd`,
+so `clang`'s default linker search dies with `Executable "ld" doesn't
+exist` whenever something invokes the wrapper outside Bazel's
+cc_toolchain link feature plumbing. Bazel-driven link actions can supply
+`-fuse-ld=lld` via toolchain features, but autoconf-style probes (e.g.
+citus 13.2.0's `configure` `conftest.c` link) drive `$CC conftest.c`
+directly and don't.
+
+Track whether the assembled command is a link invocation (no `-c`,
+`-E`, `-S`, `-M`, `-MM`, `-fsyntax-only`) and whether the caller has
+already pinned a linker via `-fuse-ld=...`. Append `-fuse-ld=lld` only
+when both conditions hold, so:
+
+  - Bazel's compile-only / preprocess-only / dependency-generation
+    invocations pick up nothing extra.
+  - Callers that pass `-fuse-ld=...` (or `-fuse-ld=lld` explicitly)
+    keep their choice.
+  - Direct `$CC conftest.c` link probes succeed without anyone
+    re-stating the flag.
+
+Both the inline-arg branch and the rsp-file branch call the same
+`parse_link_state` helper so the detection sees flags inside `@rsp`
+files too (Bazel's link actions routinely pass `-c` / `-o` through
+rsp files).
+---
+ toolchain/cc_wrapper.sh.tpl | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/toolchain/cc_wrapper.sh.tpl b/toolchain/cc_wrapper.sh.tpl
+index 990bb3d..d6a416f 100644
+--- a/toolchain/cc_wrapper.sh.tpl
++++ b/toolchain/cc_wrapper.sh.tpl
+@@ -92,6 +92,24 @@ fi
+ 
+ OUTPUT=
+ 
++# Track whether this invocation is a link step and whether the caller has
++# already pinned a linker via -fuse-ld=. The toolchain downloads ship only
++# `lld`/`ld.lld` (no GNU `ld`), so clang's default linker search would
++# otherwise fail in autoconf-style probes that invoke `$CC conftest.c`
++# directly (e.g. citus 13.2.0's `configure` surfaces this). Pinning the
++# default to `lld` for link invocations leaves explicit `-fuse-ld=...`
++# choices untouched and adds nothing on compile-only / preprocess-only /
++# dependency-generation calls.
++is_link=1
++has_fuse_ld=0
++
++function parse_link_state() {
++  case "$1" in
++    -c|-E|-S|-M|-MM|-fsyntax-only) is_link=0 ;;
++    -fuse-ld=*) has_fuse_ld=1 ;;
++  esac
++}
++
+ function parse_option() {
+   local -r opt="$1"
+   if [[ "${OUTPUT}" = "1" ]]; then
+@@ -128,6 +146,7 @@ for ((i = 0; i <= $#; i++)); do
+         sanitize_option "${opt}"
+       )"
+       parse_option "${opt}"
++      parse_link_state "${opt}"
+       echo "${opt}" >>"${tmpfile}"
+     done <"${!i:1}"
+     cmd+=("@${tmpfile}")
+@@ -137,10 +156,16 @@ for ((i = 0; i <= $#; i++)); do
+       sanitize_option "${!i}"
+     )"
+     parse_option "${opt}"
++    parse_link_state "${opt}"
+     cmd+=("${opt}")
+   fi
+ done
+ 
++# Default link invocations to `lld` when the caller hasn't picked one.
++if [[ ${is_link} -eq 1 && ${has_fuse_ld} -eq 0 ]]; then
++  cmd+=("-fuse-ld=lld")
++fi
++
+ # Call the C++ compiler.
+ "${cmd[@]}"
+ 
