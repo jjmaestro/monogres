@@ -85,7 +85,7 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot = None):
             SYSROOT_DIR = "$$({cmd})".format(
                 cmd = " && ".join([
                     "mkdir -p $$EXT_BUILD_ROOT/sysroot",
-                    "tar -xf $(execpath {sysroot}) -C $$EXT_BUILD_ROOT/sysroot".format(
+                    "$(BSDTAR_BIN) -xf $(execpath {sysroot}) -C $$EXT_BUILD_ROOT/sysroot".format(
                         sysroot = sysroot,
                     ),
                     "echo $$EXT_BUILD_ROOT/sysroot",
