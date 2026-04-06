@@ -137,23 +137,6 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot = None):
     path_components.append("$$PATH")
 
     env_meson = dict(
-        # NOTE:
-        # https://github.com/jmillikin/rules_bison/issues/17#issuecomment-2399677539
-        #
-        # I'm not sure who's responsible (Bazel or rules_foreign_cc) but
-        # rules_foreign_cc meson is using a wrapper script that does some
-        # runfiles initialization that ends up being wrong: it points to the
-        # Meson runfiles dir when running tools from Meson and Bison can't find
-        # some of its data files.
-        #
-        # Looking at the rules_foreign_cc wrapper script:
-        # https://github.com/bazel-contrib/rules_foreign_cc/blob/0.12.0/foreign_cc/private/runnable_binary_wrapper.sh
-        # I found that if the RUNFILES_DIR was set to the Bison runfiles dir, it
-        # would use it. Now, this hack seems to "fix" it but IMHO it's very
-        # fragile and it seems to work by sheer luck, probably because the rest
-        # of the tools are not needing it. If another tool does, I think it
-        # would probably fail...
-        RUNFILES_DIR = "$(execpath @bison//bin:bison).runfiles/",
         PATH = ":".join(path_components),
     )
 
