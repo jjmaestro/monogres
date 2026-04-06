@@ -64,6 +64,19 @@ archive_override(
     url = "https://github.com/bazel-contrib/rules_foreign_cc/archive/{}.tar.gz".format(RFCC_COMMIT),
 )
 
+TOOLCHAINS_LLVM_VERSION = "1.7.0"
+
+archive_override(
+    module_name = "toolchains_llvm",
+    patch_strip = 1,
+    patches = [
+        "//patches/toolchains_llvm:0001-cc_wrapper-handle-response-files-without-trailing-newline.patch",
+    ],
+    sha256 = "85c341e957ba58482892a8088e4a34391d15bd98917f0993ecb62f008d6986d6",
+    strip_prefix = "toolchains_llvm-v{}".format(TOOLCHAINS_LLVM_VERSION),
+    url = "https://github.com/bazel-contrib/toolchains_llvm/releases/download/v{v}/toolchains_llvm-v{v}.tar.gz".format(v = TOOLCHAINS_LLVM_VERSION),
+)
+
 llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm", dev_dependency = True)
 llvm.toolchain(
     name = "llvm_toolchain_system_linux_amd64",
