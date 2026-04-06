@@ -1,0 +1,3 @@
+# Ignore all bazel-* symlinks (bazel-bin, bazel-out, etc.). Anchored to the
+# workspace root so it does not accidentally match files at deeper paths.
+/bazel-*
