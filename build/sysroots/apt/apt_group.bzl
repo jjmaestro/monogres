@@ -30,7 +30,8 @@ def apt_group(
         version,
         packages,
         requested_names,
-        extra_files = {}):
+        extra_files = {},
+        exports = []):
     """Materialize one apt hub repo scoped to a seed's transitive closure.
 
     Args:
@@ -44,6 +45,10 @@ def apt_group(
         extra_files: Tier-2 file injection map passed through to `hub_repo`:
             `{source_label: in_sysroot_path}`. The path may contain a `{arch}`
             placeholder substituted at write time. Defaults to no injection.
+        exports: List of in-sysroot paths to additionally `exports_files`-expose
+            on each per-arch BUILD file, making each path addressable as
+            `@<name>//<distro>/<version>/<arch>:<path>`. Paths refer to files
+            already present after extraction. Defaults to no extra exports.
 
     Returns:
         None. The hub repo is instantiated as a side effect; its per-arch
@@ -65,4 +70,5 @@ def apt_group(
         name = name,
         distros_json = distros_json,
         extra_files = extra_files,
+        exports = exports,
     )

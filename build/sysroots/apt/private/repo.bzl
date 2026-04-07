@@ -46,7 +46,7 @@ load(
 load("//common:extra_files.bzl", _extra_files = "extra_files")
 load("//common:normalize.bzl", _normalize = "normalize")
 
-def _materialize_arch(rctx, arch_dir, arch, packages, extra_files_map):
+def _materialize_arch(rctx, arch_dir, arch, packages, extra_files_map, exports):
     """Download + extract + normalize + patch + inject extras for one arch.
 
     The sysroot tree gets exposed via two parallel targets:
@@ -76,6 +76,11 @@ def _materialize_arch(rctx, arch_dir, arch, packages, extra_files_map):
             schema).
         extra_files_map: `label_keyed_string_dict` from the tag. Applied after
             the Tier-1 normalizations.
+        exports: List of in-sysroot paths to additionally `exports_files`-expose
+            on the per-arch BUILD file. Each path becomes a label of the form
+            `@<hub>//<distro>/<version>/<arch>:<path>`, addressable by direct
+            consumers. Paths refer to files already present after extraction (no
+            `{arch}` placeholder).
     """
     if not packages:
         fail("//sysroots/apt: no packages for arch %r in %s" % (arch, arch_dir))
@@ -115,7 +120,10 @@ def _materialize_arch(rctx, arch_dir, arch, packages, extra_files_map):
 
     rctx.file(
         "%s/BUILD.bazel" % arch_dir,
-        sysroot_build(extra_files_paths = extra_files_paths),
+        sysroot_build(
+            extra_files_paths = extra_files_paths,
+            extra_exports = exports,
+        ),
     )
 
 _BSDTAR_LABELS = {
@@ -218,6 +226,7 @@ def _hub_impl(rctx):
                     arch,
                     packages,
                     rctx.attr.extra_files,
+                    rctx.attr.exports,
                 )
 
             _materialize_lock(rctx, version_dir, info)
@@ -242,6 +251,15 @@ hub_repo = repository_rule(
                 "written at sysroot_dir/in_sysroot_path with the executable " +
                 "bit. The `{arch}` placeholder in the path is substituted " +
                 "at write time."
+            ),
+        ),
+        exports = attr.string_list(
+            doc = (
+                "Additional in-sysroot paths to `exports_files`-expose on " +
+                "each per-arch BUILD file. Makes each path addressable as " +
+                "`@<hub>//<distro>/<version>/<arch>:<path>`. Paths must NOT " +
+                "include a `{arch}` placeholder; they refer to files already " +
+                "present in every per-arch tree after extraction."
             ),
         ),
     ),

@@ -74,6 +74,19 @@ apt = tag_class(
                 "Tier-1 normalizations."
             ),
         ),
+        exports = attr.string_list(
+            doc = (
+                "Additional in-sysroot paths to `exports_files`-expose on " +
+                "each per-arch package, so consumers can take a label-typed " +
+                "dep on each specific file (e.g. `\"usr/bin/perl\"` makes " +
+                "`@<hub>//<distro>/<version>/<arch>:usr/bin/perl` a valid " +
+                "label, addressable analogously to `@bison//bin:bison`). " +
+                "Paths must NOT include a `{arch}` placeholder; they refer " +
+                "to files already present in every per-arch tree after " +
+                "extraction. The `sysroot.tar` artifact is always exported; " +
+                "this list is additive."
+            ),
+        ),
         deduped = attr.bool(
             default = True,
             doc = (

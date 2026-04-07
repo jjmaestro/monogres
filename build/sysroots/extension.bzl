@@ -195,6 +195,7 @@ def _impl(ctx):
             name = tag.name,
             distros_json = distros_json,
             extra_files = tag.extra_files,
+            exports = tag.exports,
         )
 
     return ctx.extension_metadata(
