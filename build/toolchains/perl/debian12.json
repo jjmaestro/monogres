@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "distro": "debian",
+  "distro_version": "12",
+  "archs": ["amd64", "arm64"],
+  "packages": [
+    "perl-base",
+    "libperl-dev",
+    "libperl5.36"
+  ]
+}

@@ -1,0 +1,23 @@
+load("@platform_debian//:versions.bzl", "RELEASE")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+# Reproducibility guard: assert every checked-in apt lock is pinned to the
+# active release's `apt_snapshot`. A release bump changes `RELEASE.apt_snapshot`
+# in MODULE.bazel; if the locks were not regenerated to match, this test fails
+# in the `bazel test` lane (the manual prek step) instead of the build silently
+# resolving a stale snapshot. The active snapshot is read from the profile, so
+# the assertion tracks the bump automatically.
+
+_APT_LOCKS = [
+    "//toolchains/perl/locks:perl_sysroot.lock",
+]
+
+sh_test(
+    name = "locks_match_active_snapshot",
+    srcs = ["check_snapshot.sh"],
+    args = [RELEASE.apt_snapshot] + [
+        "$(rootpath {})".format(lock)
+        for lock in _APT_LOCKS
+    ],
+    data = _APT_LOCKS,
+)

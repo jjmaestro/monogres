@@ -1,0 +1,55 @@
+load("@platform_debian//:versions.bzl", "RELEASE", "VERSIONS")
+load("//platforms:targets.bzl", "ARCH_CPU", "arch_select")
+load(":perl_toolchain.bzl", "current_perl_toolchain", "perl_toolchains")
+
+package(default_visibility = ["//visibility:public"])
+
+# Custom Perl toolchain: hermetic interpreter + libperl headers + libperl shared
+# library, all materialized from a single Debian snapshot via the
+# `//sysroots:apt` extension. The ABI lockstep that Postgres's `plperl` build
+# requires (interpreter, build-link libperl, runtime libperl all at the same
+# major.minor) is a property of the underlying `@perl_sysroot` hub: every output
+# here is one of its files.
+#
+# See `README.md` (local rationale) and `/REPORT-Postgres_build_and_Perl.md`
+# (full investigation) for context.
+
+exports_files(["debian{}.json".format(v) for v in VERSIONS])
+
+# Toolchain type for the Perl interpreter. Consumed by the per-arch
+# `perl_toolchain` instances `perl_toolchains(...)` generates below and by
+# `current_perl_toolchain`'s resolver.
+toolchain_type(name = "toolchain_type")
+
+# Per-arch perl_toolchain instances + toolchain registrations + the `:perl`
+# alias to the active per-arch instance. Single point where the Perl version
+# string drives every generated label; see `perl_toolchain.bzl::PERL_VERSION`.
+perl_toolchains()
+
+# Active perl toolchain resolver. Goes in `toolchains = [...]` of
+# `rules_foreign_cc.meson()` (and similar); provides `TemplateVariableInfo`
+# carrying `PERL` -> binary path. Mirrors `@rules_m4//m4:current_m4_toolchain`.
+current_perl_toolchain(name = "current_perl_toolchain")
+
+# @perl_sysroot subtree for the active Debian release.
+_PERL_SYSROOT = "@perl_sysroot//debian/{}".format(RELEASE.version)
+
+# Sysroot aliases for consumers that need the raw filegroup or tar directly
+# (e.g. Bazel-side path derivation when a `current_perl_toolchain` rule dep is
+# impractical). Kept as a parallel to `//toolchains/cc_sysroot:sysroot` /
+# `:sysroot_tar` for symmetry across hubs.
+alias(
+    name = "sysroot",
+    actual = arch_select({
+        arch: "{}/{}:sysroot".format(_PERL_SYSROOT, arch)
+        for arch in ARCH_CPU
+    }),
+)
+
+alias(
+    name = "sysroot_tar",
+    actual = arch_select({
+        arch: "{}/{}:sysroot.tar".format(_PERL_SYSROOT, arch)
+        for arch in ARCH_CPU
+    }),
+)
