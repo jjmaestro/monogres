@@ -1,0 +1,24 @@
+"""Private e2e tests for @pg_pkgs hub structure."""
+
+load("@monogres//platforms:targets.bzl", "ARCHS")
+load(":test.bzl", "e2e_tests")
+
+# sample packages picked to cover different Debian version string formats: each
+# resolves to exactly one version per arch from the pinned snapshot
+_PACKAGES = {
+    # epoch-less, plain deb
+    "libcurl4-openssl-dev": {
+        "archs": ARCHS,
+        "version": "7.88.1-10+deb12u8",
+    },
+    # version contains `~` (deb backport marker)
+    "libssl-dev": {
+        "archs": ARCHS,
+        "version": "3.0.15-1~deb12u1",
+    },
+}
+
+e2e_tests(
+    name = "pkgs",
+    packages = _PACKAGES,
+)

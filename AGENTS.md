@@ -29,12 +29,17 @@ Fast checks first. Remind user to run the full build (last step).
 1. Pre-commit (seconds, in host):
    `nix develop --command bash -c 'prek run --all-files'`
      - Single hook: `prek run <hook> --all-files`.
-2. Integration tests (minutes, Docker):
+2. Unit tests (seconds, in Docker):
+   `docker exec -u postgres bzlsndbx-monogres_x86_64 bazel test //tests/...`
+     - Scope to what you changed: `//tests/monoext/private/base/...`
+     - `starlark_utils` is a separate module:
+       `docker exec -u postgres -w /src/workspace/starlark_utils bzlsndbx-monogres_x86_64 bazel test //...`
+3. Integration tests (minutes, Docker):
    `docker exec -u postgres -w /src/workspace/examples bzlsndbx-monogres_x86_64 bazel test //...`
      - Invariants only (faster): append `--test_size_filters=small,medium`
-3. Full bazel tests (minutes, Docker):
+4. Full bazel tests (minutes, Docker):
    `nix develop --command bash -c 'prek run bazel-test-all'`
-4. Full build (1h+, ask the user): Never build all targets. Remind user to run.
+5. Full build (1h+, ask the user): Never build all targets. Remind user to run.
 <!-- markdownlint-restore -->
 
 ## Starlark codegen

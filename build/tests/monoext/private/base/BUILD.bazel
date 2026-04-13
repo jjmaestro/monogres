@@ -1,0 +1,15 @@
+load(":compat.bzl", compat_suite = "test_suite")
+load(":hub.bzl", hub_suite = "test_suite")
+load(":introspect.bzl", introspect_suite = "test_suite")
+load(":schema.bzl", schema_suite = "test_suite")
+load(":versions.bzl", versions_suite = "test_suite")
+
+compat_suite()
+
+hub_suite()
+
+introspect_suite()
+
+schema_suite()
+
+versions_suite()

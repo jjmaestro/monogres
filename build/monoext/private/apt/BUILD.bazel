@@ -1,0 +1,26 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = ["//monoext:__subpackages__"])
+
+exports_files([
+    "apt_lock.bzl",
+    "apt_pkgs.bzl",
+    "schema.bzl",
+    "snapshot.bzl",
+])
+
+bzl_library(
+    name = "snapshot",
+    srcs = ["snapshot.bzl"],
+)
+
+bzl_library(
+    name = "apt_lock",
+    srcs = ["apt_lock.bzl"],
+    deps = [":snapshot"],
+)
+
+bzl_library(
+    name = "schema",
+    srcs = ["schema.bzl"],
+)

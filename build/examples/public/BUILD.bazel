@@ -1,0 +1,30 @@
+"""Public consumer example: monoext in ~30 lines.
+
+Demonstrates how a downstream Bazel module consumes the three monoext hub repos
+(`@pg`, `@pg_ext`, `@pg_pkgs`) that the `monoext.monogres(...)` tag in
+MODULE.bazel creates.
+
+See README.md next to this file for the full walkthrough.
+"""
+
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("@pg//:all.bzl", "CFG")
+
+package(default_visibility = ["//public:__subpackages__"])
+
+# `bazel test //public/...` resolves and builds one target from each of the
+# three hubs, exercising the full hub-generation pipeline end-to-end. size
+# reflects the weight of the underlying build, not the test action.
+build_test(
+    name = "consumer",
+    size = "enormous",
+    timeout = "short",
+    targets = [
+        # @pg: the default-version × default-option-set PG tarball.
+        CFG.default.artifact,
+        # @pg_ext: the citus extension's default aliased target.
+        "@pg_ext//citus",
+        # @pg_pkgs: a single resolved Debian package.
+        "@pg_pkgs//deb/libssl-dev",
+    ],
+)

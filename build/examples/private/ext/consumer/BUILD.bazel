@@ -1,0 +1,14 @@
+"""Private e2e: downstream pgext consumer contract."""
+
+# loading CFGS invokes cfg.bzl's load-time coherence checks (if the repo
+# metadata says deps_buildtime are required, the target must have them, and
+# vice-versa). CFGS is a passthrough of `@pg_ext//:all.bzl::CFGS` now that
+# artifact + source labels are baked at the hub; the old per-target/per-source
+# rewrap in cfg.bzl is gone.
+load(":cfg.bzl", "CFGS")
+load(":test.bzl", "e2e_tests")
+
+e2e_tests(
+    name = "consumer",
+    cfg = CFGS["citus"][0],
+)

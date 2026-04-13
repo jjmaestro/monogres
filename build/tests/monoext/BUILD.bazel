@@ -1,0 +1,1 @@
+package(default_visibility = ["//tests/monoext:__subpackages__"])

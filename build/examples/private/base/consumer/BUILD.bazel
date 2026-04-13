@@ -1,0 +1,11 @@
+"""Private e2e: downstream pg consumer contract."""
+
+# loading CONSUMER_CFG invokes cfg.bzl's load-time coherence checks on each PG
+# target's deps struct
+load(":cfg.bzl", "CONSUMER_CFG")
+load(":test.bzl", "e2e_tests")
+
+e2e_tests(
+    name = "consumer",
+    cfg = CONSUMER_CFG,
+)

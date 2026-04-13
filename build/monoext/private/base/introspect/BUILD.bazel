@@ -1,0 +1,28 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = [
+    "//monoext/private:__subpackages__",
+    "//tests/monoext:__subpackages__",
+])
+
+exports_files([
+    "meson.bzl",
+    "metadata.bzl",
+])
+
+bzl_library(
+    name = "metadata",
+    srcs = ["metadata.bzl"],
+)
+
+bzl_library(
+    name = "meson",
+    srcs = ["meson.bzl"],
+    deps = [
+        ":metadata",
+        "//platforms:targets",
+        "@starlark_utils//starlark",
+        "@sysroots//apt:layout",
+        "@version_utils//spec",
+    ],
+)

@@ -1,0 +1,27 @@
+From 995ac249042c3e21c6eaba509a10f1981f1058a8 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Fri, 10 Apr 2026 19:40:05 +0000
+Subject: [PATCH] patch: suppress line directives in generated flex scanners
+
+Add by default a --noline argument in pgflex so that flex suppresses
+line directives ('#line [0-9] /path/to/file') in the generated files
+
+The line directives end up adding the paths to the binaries, potentially
+making the build non-reproducible.
+---
+ src/tools/pgflex | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/tools/pgflex b/src/tools/pgflex
+index b3d2632c1b..65cc92c26d 100755
+--- a/src/tools/pgflex
++++ b/src/tools/pgflex
+@@ -57,6 +57,8 @@ os.environ['FLEX_TMP_DIR'] = args.privatedir
+ command = [args.flex, '-o', args.output_file]
+ if args.no_backup:
+     command += ['-b']
++# suppress line directives to make the build reproducible
++command += ['--noline']
+ command += args.flex_flags
+ command += [args.input_file]
+ 

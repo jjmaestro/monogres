@@ -1,0 +1,27 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+# pgxs_build.bzl is loaded from generated `@pg_ext//...` BUILD files, so its
+# file must be publicly visible. The other .bzl files here are internal to
+# monoext.
+package(default_visibility = [
+    "//monoext/private:__pkg__",
+    "//tests/monoext:__subpackages__",
+])
+
+exports_files(
+    ["pgxs_build.bzl"],
+    visibility = ["//visibility:public"],
+)
+
+exports_files([
+    "compat.bzl",
+    "contrib.bzl",
+    "external.bzl",
+    "hub.bzl",
+    "schema.bzl",
+])
+
+bzl_library(
+    name = "pgxs_build",
+    srcs = ["pgxs_build.bzl"],
+)

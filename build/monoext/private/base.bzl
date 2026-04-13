@@ -1,0 +1,199 @@
+"""
+Public API for the base hub repo layer.
+
+The base layer is the foundation flavor (currently PostgreSQL); future flavors
+(e.g. PG-derived databases) plug in by providing their own `repo.json` and
+sharing the same hub generation pipeline.
+
+This module runs in module extension context. It calls `Label()` and
+`download_archives()` to create `@{name}_src`, registers per-version introspect
+repos (lazy, only fetched when their data is loaded), computes build options for
+each `version x option_set` combo, and delegates hub file generation to the
+`base_repo` repo rule.
+"""
+
+load(
+    "@download_archives//download/archives:extensions.bzl",
+    download_archives = "archives",
+)
+load("@download_archives//lib:index.bzl", Index = "index")
+load("@version_utils//version:version.bzl", Version = "version")
+load("//monoext/private:pkgs.bzl", "pkgs_group")
+load("//monoext/private:repo_names.bzl", "bind", "repo_names")
+load("//monoext/private/base:hub.bzl", "base_repo")
+load(
+    "//monoext/private/base:introspect.bzl",
+    "pg_introspect_paths_repo",
+    "pg_introspect_version_repo",
+)
+load("//monoext/private/base:schema.bzl", _BaseSchema = "schema")
+load("//monoext/private/base/build_options:pg.bzl", "OPTION_SETS", "build_options")
+load("//monoext/private/pkgs:schema.bzl", _PkgsSchema = "schema")
+
+def create_base_src(ctx, hub_name, base_label):
+    """Create base source repos, introspect repos, and return base_data.
+
+    Parses the repo.json index, creates `@{hub_name}_src` (lazy per-version
+    downloads via `download_archives`), and registers per-version introspect
+    repos (lazy; only fetched when their data is loaded).
+
+    Must be called from a module extension context.
+
+    Args:
+        ctx: Module extension context.
+        hub_name: Apparent name of the base hub repo (the `tag.name` value).
+        base_label: Label of the base flavor's `repo.json` index.
+
+    Returns:
+        A `BaseData` struct (see `//monoext/private/base:schema.bzl`).
+    """
+    src_repo = repo_names.base_src(hub_name)
+    index = Index.new(src_repo, ctx.read(base_label))
+    metadata = index.metadata
+    versions = sorted(index.repos.keys())
+
+    download_archives(
+        ctx = ctx,
+        name = src_repo,
+        index = base_label,
+        patches = {
+            Label(patch["label"]): patch["spec"]
+            for patch in metadata.get("patches", [])
+        },
+        version_scheme = "pgver",
+    )
+
+    # register per-version introspect repos (lazy, no downloads at this point)
+    introspect_meta = metadata.get("introspect", {})
+    introspect_repos = {}
+    introspect_paths_repos = {}
+
+    for v, repos in index.repos.items():
+        if not repos:
+            continue
+
+        introspect_jsons = introspect_meta.get(v, {})
+        if not introspect_jsons:
+            continue
+
+        jsons_by_label = {
+            label: option_set
+            for option_set, label in introspect_jsons.items()
+            if label
+        }
+
+        introspect_repo_name = repo_names.pg_introspect(hub_name, v)
+        base_src_ver = repo_names.base_src_version(hub_name, v)
+        f = bind(src = base_src_ver, v = v, source = repos[0].source)
+        pg_introspect_version_repo(
+            name = introspect_repo_name,
+            version = v,
+            pg_src_version_dir = f("@{src}//{v}/{source}:BUILD.bazel"),
+            introspect_jsons = jsons_by_label,
+        )
+        introspect_repos[v] = introspect_repo_name
+
+        paths_repo_name = repo_names.pg_introspect_paths(hub_name, v)
+        pg_introspect_paths_repo(
+            name = paths_repo_name,
+            version = v,
+            introspect_jsons = jsons_by_label,
+        )
+        introspect_paths_repos[v] = paths_repo_name
+
+    return _BaseSchema.BaseData.new(
+        default_version = versions[-1],
+        introspect_repos = introspect_repos,
+        introspect_paths_repos = introspect_paths_repos,
+        metadata = metadata,
+        pkgs_group = pkgs_group(
+            "postgres",
+            versions,
+            metadata,
+            version_scheme = Version.SCHEME.PGVER,
+        ),
+        source_repo = src_repo,
+        versions = versions,
+    )
+
+def _build_entries(base_data, versions_deps, hub_name):
+    """Build JSON-encoded `BaseEntry` values for base_repo, one per base version.
+
+    Args:
+        base_data: `BaseData` struct from `create_base_src`.
+        versions_deps: `{version: VersionDeps}` from `create_pkgs()`.
+        hub_name: Apparent name of the base hub (the `tag.name` value), used to
+            pre-qualify all `@{hub_name}//...` alias labels baked onto each
+            `BaseTarget` (`artifact`, `source.{dir,files}`, `deps.*`) and each
+            `BaseEntry.source` before the JSON boundary.
+
+    Returns:
+        Dict of `{version: json_encoded_entry}`.
+    """
+    metadata = base_data.metadata
+    source_repo = base_data.source_repo
+    build_options_metadata = metadata.get("build_options", {})
+    entries = {}
+
+    for version in sorted(base_data.versions):
+        vd = versions_deps.get(version) or _PkgsSchema.VersionDeps.new()
+
+        targets = []
+        for option_set in OPTION_SETS:
+            options, auto_features = build_options(
+                version,
+                option_set,
+                build_options_metadata,
+            )
+
+            targets.append(_BaseSchema.BaseTarget.new(
+                hub_name = hub_name,
+                version = version,
+                option_set = option_set,
+                auto_features = auto_features,
+                build_options = options,
+                version_deps = vd,
+            ))
+
+        entry = _BaseSchema.BaseEntry.new(
+            hub_name = hub_name,
+            version = version,
+            source_repo = source_repo,
+            targets = targets,
+            versions_deps = vd,
+        )
+        entries[version] = json.encode(entry)
+
+    return entries
+
+def create_base(hub_name, base_data, pkgs_result, archs, build_repo = "monogres"):
+    """Create the base hub repo with build targets and introspect data.
+
+    Must be called from a module extension context.
+
+    Args:
+        hub_name: Apparent name of the base hub repo (the `tag.name` value).
+        base_data: `BaseData` struct from `create_base_src`.
+        pkgs_result: `PkgsResult` struct from `create_pkgs()`.
+        archs: List of architecture names for per-arch targets.
+        build_repo: Build repo name (default "monogres").
+    """
+    versions_deps = pkgs_result.versions_deps.get("postgres", {})
+
+    entries = _build_entries(base_data, versions_deps, hub_name)
+
+    base_repo(
+        name = hub_name,
+        archs = list(archs),
+        entries = entries,
+        option_sets = json.encode(list(OPTION_SETS)),
+        default_version = base_data.default_version,
+        introspect_repos = base_data.introspect_repos,
+        introspect_paths_repos = base_data.introspect_paths_repos,
+        pg_src = "@%s" % base_data.source_repo,
+        build_repo = build_repo,
+    )
+
+testing = struct(
+    _build_entries = _build_entries,
+)

@@ -1,0 +1,5 @@
+load(":extract_deps.bzl", extract_deps_test_suite = "test_suite")
+
+package(default_visibility = ["//tests/catalog:__subpackages__"])
+
+extract_deps_test_suite()

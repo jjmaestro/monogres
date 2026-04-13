@@ -1,0 +1,9 @@
+{
+  "contrib": [],
+  "extensions": [
+    "citus",
+    "noset",
+    "sslutils"
+  ],
+  "version": 1
+}

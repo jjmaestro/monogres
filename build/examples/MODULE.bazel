@@ -3,8 +3,18 @@ module(
     bazel_compatibility = [">=8.4.2"],
 )
 
+bazel_dep(name = "bazel_skylib", version = "1.9.0", dev_dependency = True)
 bazel_dep(name = "monogres", version = "", dev_dependency = True)
 bazel_dep(name = "toolchains_llvm", version = "1.7.0", dev_dependency = True)
+
+monoext = use_extension("@monogres//monoext:monoext.bzl", "monoext")
+monoext.monogres(
+    name = "pg",
+    base = "@monogres//catalog/postgres:repo.json",
+    deb_lock = "@monogres//catalog/locks:pg_pkgs.lock",
+    extensions = "@monogres//catalog/extensions:index.json",
+)
+use_repo(monoext, "pg", "pg_ext", "pg_pkgs")
 
 local_path_override(
     module_name = "monogres",

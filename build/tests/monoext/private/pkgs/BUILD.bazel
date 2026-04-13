@@ -1,0 +1,12 @@
+load(":collect.bzl", collect_suite = "test_suite")
+load(":hub.bzl", hub_suite = "test_suite")
+load(":schema.bzl", schema_suite = "test_suite")
+load(":version_deps.bzl", version_deps_suite = "test_suite")
+
+collect_suite()
+
+hub_suite()
+
+schema_suite()
+
+version_deps_suite()

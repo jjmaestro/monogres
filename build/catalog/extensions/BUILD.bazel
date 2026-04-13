@@ -1,0 +1,38 @@
+# NOTE:
+# load introspect data from @pg; the hub repo is always resolved during module
+# extension evaluation, so this load has zero fetch cost.
+load("@pg//:introspect.bzl", "INTROSPECTIONS")
+load("//tools:gen_contrib.bzl", "gen_contrib", "update_contrib")
+load("//tools:gen_index.bzl", "gen_index", "update_index")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["index.json"] + glob(["**/repo.json"]))
+
+_EXT_REPO_JSONS = glob(["*/repo.json"])
+
+_CONTRIB_REPO_JSONS = []
+
+gen_contrib(
+    name = "gen_contrib",
+    introspections = INTROSPECTIONS,
+)
+
+update_contrib(
+    name = "update_contrib",
+    srcs = [":gen_contrib"],
+    dest = "catalog/extensions/contrib",
+)
+
+gen_index(
+    name = "gen_index",
+    out = "gen_index.json",
+    contrib = _CONTRIB_REPO_JSONS,
+    extensions = _EXT_REPO_JSONS,
+)
+
+update_index(
+    name = "update_index",
+    src = ":gen_index",
+    dest = "catalog/extensions/index.json",
+)

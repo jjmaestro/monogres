@@ -5,6 +5,7 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files([
     "debian_releases.bzl",
+    "platform_build.bzl",
     "targets.bzl",
 ])
 
@@ -17,6 +18,11 @@ bzl_library(
     name = "debian_releases",
     srcs = ["debian_releases.bzl"],
     deps = ["@starlark_utils//starlark"],
+)
+
+bzl_library(
+    name = "platform_build",
+    srcs = ["platform_build.bzl"],
 )
 
 # ---------------------------------------------------------------------------

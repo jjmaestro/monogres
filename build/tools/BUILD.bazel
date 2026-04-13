@@ -1,0 +1,21 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load(":gen_pg_introspect_jsons.bzl", "gen_pg_introspect_jsons")
+
+package(default_visibility = ["//visibility:public"])
+
+bzl_library(
+    name = "gen_index",
+    srcs = ["gen_index.bzl"],
+)
+
+bzl_library(
+    name = "gen_contrib",
+    srcs = ["gen_contrib.bzl"],
+)
+
+bzl_library(
+    name = "gen_pg_introspect_jsons_bzl",
+    srcs = ["gen_pg_introspect_jsons.bzl"],
+)
+
+gen_pg_introspect_jsons(name = "gen_pg_introspect_jsons")

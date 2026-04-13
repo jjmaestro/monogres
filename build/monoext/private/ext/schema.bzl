@@ -1,0 +1,414 @@
+"""
+Schema for `ext`-layer data.
+
+Defines:
+
+- `ExtData`: in-extension descriptor of the extensions hub state, built by
+  `//monoext/private:ext.bzl::create_ext_src()`. Does not cross a JSON boundary.
+- `ExtensionEntry`: one extension's in-extension metadata (before entries are
+  encoded for the hub repo rule). Does not cross JSON.
+- `ExtSource`: per-ext-version source labels (`dir`, `files`, `version`).
+  Baked on external entries before the JSON boundary.
+- `ExtExternalTarget`: one (ext_version × base_version) external target with
+  pre-qualified `artifact`, `deps`, `base_version`, `source`, `version`.
+- `ExtContribTarget`: one (contrib × base_version) target with pre-qualified
+  `artifact` + `base_version`. Contribs have no own `deps` or `source`.
+- `ExtExternalEntry`: per-external-extension entry encoded into
+  `ext_repo.entries`. Carries pre-expanded `targets` + `sources`. Crosses JSON.
+- `ExtContribEntry`: per-contrib entry encoded into `ext_repo.entries`.
+  Carries pre-expanded `targets`. Crosses JSON.
+
+`ExtExternalEntry` has no `.decode()` sugar because its `lock` field is merged
+into the decoded dict (from `rctx.read(locks[name])`) before the struct is
+constructed; see `ext/hub.bzl::_impl()`.
+"""
+
+load("//monoext/private:repo_names.bzl", "bind")
+load("//monoext/private/pkgs:schema.bzl", _PkgsSchema = "schema")
+
+def _ext_data_new(pkgs_groups = [], extensions = {}):
+    """Constructs an `ExtData`.
+
+    Args:
+        pkgs_groups: List of `pkgs_group` structs (non-contribs only; contribs
+            have no external deb deps).
+        extensions: `{ext_name: ExtensionEntry}` dict.
+
+    Returns:
+        A `struct(pkgs_groups, extensions)`.
+    """
+    return struct(
+        pkgs_groups = pkgs_groups,
+        extensions = extensions,
+    )
+
+def _extension_entry_new(
+        ext_versions,
+        is_contrib,
+        metadata,
+        source_repo = None,
+        lock = None):
+    """Constructs an `ExtensionEntry`.
+
+    Args:
+        ext_versions: Sorted list of extension version strings.
+        is_contrib: `True` for contrib extensions, `False` for external.
+        metadata: Raw `metadata` block from the extension's `repo.json`.
+        source_repo: Source repo name for external extensions
+            (`{name}_src__{ext}`), or `None` for contrib.
+        lock: Label of the external extension's lockfile (a string like
+            `"@pg_ext_src--citus//:lock.json"`), or `None` for contrib.
+
+    Returns:
+        An `ExtensionEntry` struct.
+    """
+    return struct(
+        ext_versions = ext_versions,
+        is_contrib = is_contrib,
+        metadata = metadata,
+        source_repo = source_repo,
+        lock = lock,
+    )
+
+def _ext_source_init(dir, files, version):
+    return struct(
+        dir = dir,
+        files = files,
+        version = version,
+    )
+
+def _ext_source_new(ext_hub_name, ext_name, ext_version):
+    """Constructs an `ExtSource`.
+
+    Derives hub-rooted source labels from the primitive inputs.
+
+    Args:
+        ext_hub_name: Apparent name of the extensions hub repo.
+        ext_name: Extension name.
+        ext_version: Extension version string.
+
+    Returns:
+        A `struct(dir, files, version)`.
+    """
+    f = bind(hub = ext_hub_name, ext = ext_name, ext_v = ext_version)
+    return _ext_source_init(
+        dir = f("@{hub}//{ext}/{ext_v}:dir"),
+        files = f("@{hub}//{ext}/{ext_v}:files"),
+        version = ext_version,
+    )
+
+def _ext_source_from_dict(d):
+    """Builds an `ExtSource` from a decoded JSON dict."""
+    return _ext_source_init(
+        dir = d["dir"],
+        files = d["files"],
+        version = d["version"],
+    )
+
+def _base_version_struct(base_v):
+    """Synthesizes the `base_version = struct(name, version)` baked on targets."""
+    return struct(name = "postgres~%s" % base_v, version = base_v)
+
+def _base_version_from_dict(d):
+    return struct(name = d["name"], version = d["version"])
+
+def _ext_external_target_init(artifact, deps, base_version, source, version):
+    return struct(
+        artifact = artifact,
+        deps = deps,
+        base_version = base_version,
+        source = source,
+        version = version,
+    )
+
+def _ext_external_target_new(ext_hub_name, ext_name, ext_version, base_v, version_deps):
+    """Constructs an `ExtExternalTarget`.
+
+    Derives artifact, base_version, deps, and source from primitive inputs.
+
+    Args:
+        ext_hub_name: Apparent name of the extensions hub repo.
+        ext_name: Extension name.
+        ext_version: Extension version string.
+        base_v: Base version string.
+        version_deps: `VersionDeps` for this ext_version, or `None`.
+
+    Returns:
+        An `ExtExternalTarget` struct.
+    """
+    vd = version_deps if version_deps else _PkgsSchema.VersionDeps.new()
+    f = bind(
+        hub = ext_hub_name,
+        ext = ext_name,
+        ext_v = ext_version,
+        base_v = base_v,
+    )
+    return _ext_external_target_init(
+        artifact = f("@{hub}//{ext}/{ext_v}/{base_v}:{base_v}"),
+        deps = _PkgsSchema.TargetDeps.qualify(f("@{hub}//{ext}/{ext_v}"), vd),
+        base_version = _base_version_struct(base_v),
+        source = _ext_source_init(
+            dir = f("@{hub}//{ext}/{ext_v}:dir"),
+            files = f("@{hub}//{ext}/{ext_v}:files"),
+            version = ext_version,
+        ),
+        version = ext_version,
+    )
+
+def _ext_external_target_from_dict(d):
+    return _ext_external_target_init(
+        artifact = d["artifact"],
+        deps = _PkgsSchema.TargetDeps.from_dict(d["deps"]),
+        base_version = _base_version_from_dict(d["base_version"]),
+        source = _ext_source_from_dict(d["source"]),
+        version = d["version"],
+    )
+
+def _ext_contrib_target_init(artifact, base_version):
+    return struct(
+        artifact = artifact,
+        base_version = base_version,
+    )
+
+def _ext_contrib_target_new(ext_hub_name, ext_name, base_v):
+    """Constructs an `ExtContribTarget`.
+
+    Derives artifact and base_version from primitive inputs. Contribs have no
+    own `deps` or `source` (they inherit from PG).
+
+    Args:
+        ext_hub_name: Apparent name of the extensions hub repo.
+        ext_name: Contrib extension name.
+        base_v: Base version string.
+
+    Returns:
+        A `struct(artifact, base_version)`.
+    """
+    f = bind(hub = ext_hub_name, name = ext_name, base_v = base_v)
+    return _ext_contrib_target_init(
+        artifact = f("@{hub}//contrib/{name}/{base_v}:tar"),
+        base_version = _base_version_struct(base_v),
+    )
+
+def _ext_contrib_target_from_dict(d):
+    return _ext_contrib_target_init(
+        artifact = d["artifact"],
+        base_version = _base_version_from_dict(d["base_version"]),
+    )
+
+def _ext_external_entry_init(
+        name,
+        deps,
+        versions_deps,
+        compatible_base_versions,
+        source_repo,
+        sources = [],
+        targets = [],
+        lock = None):
+    """Raw initializer for external entries; sets `is_contrib = False`."""
+    return struct(
+        name = name,
+        deps = deps,
+        versions_deps = versions_deps,
+        compatible_base_versions = compatible_base_versions,
+        source_repo = source_repo,
+        sources = sources,
+        targets = targets,
+        lock = lock,
+        is_contrib = False,
+    )
+
+def _ext_external_entry_new(
+        ext_hub_name,
+        ext_name,
+        ext_versions,
+        compatible_base_versions,
+        source_repo,
+        ext_versions_deps,
+        lock = None):
+    """Constructs an `ExtExternalEntry`.
+
+    Derives deps, sources, and targets from primitive inputs. The
+    `compatible_base_versions` map is computed by the caller (domain logic).
+
+    Args:
+        ext_hub_name: Apparent name of the extensions hub repo.
+        ext_name: Extension name.
+        ext_versions: Sorted list of extension version strings.
+        compatible_base_versions: `{ext_version: [base_version, ...]}` with the
+            base versions each extension version is compatible with.
+        source_repo: Source repo name (`{name}_src__{ext}`).
+        ext_versions_deps: `{ext_version: VersionDeps}` from the shared deps
+            pool.
+        lock: Decoded lockfile contents, or `None` (default at encode time).
+
+    Returns:
+        An `ExtExternalEntry` struct.
+    """
+    deps = {}
+    for ext_v in ext_versions:
+        f = bind(hub = ext_hub_name, ext = ext_name, ext_v = ext_v)
+        deps[ext_v] = _PkgsSchema.TargetDeps.qualify(
+            f("@{hub}//{ext}/{ext_v}"),
+            ext_versions_deps.get(ext_v),
+        )
+
+    sources_by_version = {}
+    for ext_v in ext_versions:
+        f = bind(hub = ext_hub_name, ext = ext_name, ext_v = ext_v)
+        sources_by_version[ext_v] = _ext_source_init(
+            dir = f("@{hub}//{ext}/{ext_v}:dir"),
+            files = f("@{hub}//{ext}/{ext_v}:files"),
+            version = ext_v,
+        )
+
+    targets = []
+    for ext_v in sorted(ext_versions):
+        for base_v in sorted(compatible_base_versions.get(ext_v, [])):
+            f = bind(
+                hub = ext_hub_name,
+                ext = ext_name,
+                ext_v = ext_v,
+                base_v = base_v,
+            )
+            targets.append(_ext_external_target_init(
+                artifact = f("@{hub}//{ext}/{ext_v}/{base_v}:{base_v}"),
+                deps = deps[ext_v],
+                base_version = _base_version_struct(base_v),
+                source = sources_by_version[ext_v],
+                version = ext_v,
+            ))
+    return _ext_external_entry_init(
+        name = ext_name,
+        deps = deps,
+        versions_deps = ext_versions_deps,
+        compatible_base_versions = compatible_base_versions,
+        source_repo = source_repo,
+        sources = [sources_by_version[v] for v in sorted(ext_versions)],
+        targets = targets,
+        lock = lock,
+    )
+
+def _ext_external_entry_from_dict(d):
+    """Builds an `ExtExternalEntry` from a decoded JSON dict.
+
+    The `lock` field must be merged into `d` by the caller before this is
+    invoked; see `ext/hub.bzl::_impl()`.
+    """
+    return _ext_external_entry_init(
+        name = d["name"],
+        deps = {
+            ext_v: _PkgsSchema.TargetDeps.from_dict(raw)
+            for ext_v, raw in d["deps"].items()
+        },
+        versions_deps = {
+            version: _PkgsSchema.VersionDeps.from_dict(vd)
+            for version, vd in d["versions_deps"].items()
+        },
+        compatible_base_versions = d["compatible_base_versions"],
+        source_repo = d["source_repo"],
+        sources = [_ext_source_from_dict(s) for s in d.get("sources", [])],
+        targets = [
+            _ext_external_target_from_dict(t)
+            for t in d.get("targets", [])
+        ],
+        lock = d.get("lock"),
+    )
+
+def _ext_contrib_entry_init(ext_versions, metadata, name, targets = []):
+    """Raw initializer for contrib entries; sets `is_contrib = True`."""
+    return struct(
+        ext_versions = ext_versions,
+        is_contrib = True,
+        metadata = metadata,
+        name = name,
+        targets = targets,
+    )
+
+def _ext_contrib_entry_new(ext_hub_name, ext_name, ext_versions, metadata):
+    """Constructs an `ExtContribEntry`.
+
+    Derives targets from primitive inputs.
+
+    Args:
+        ext_hub_name: Apparent name of the extensions hub repo.
+        ext_name: Contrib extension name.
+        ext_versions: Sorted list of base version strings the contrib ships for.
+        metadata: Raw contrib `metadata` block.
+
+    Returns:
+        An `ExtContribEntry` struct.
+    """
+    targets = []
+    for base_v in sorted(ext_versions):
+        f = bind(hub = ext_hub_name, name = ext_name, base_v = base_v)
+        targets.append(_ext_contrib_target_init(
+            artifact = f("@{hub}//contrib/{name}/{base_v}:tar"),
+            base_version = _base_version_struct(base_v),
+        ))
+    return _ext_contrib_entry_init(
+        ext_versions = ext_versions,
+        metadata = metadata,
+        name = ext_name,
+        targets = targets,
+    )
+
+def _ext_contrib_entry_from_dict(d):
+    """Builds an `ExtContribEntry` from a decoded JSON dict."""
+    return _ext_contrib_entry_init(
+        ext_versions = d["ext_versions"],
+        metadata = d["metadata"],
+        name = d["name"],
+        targets = [
+            _ext_contrib_target_from_dict(t)
+            for t in d.get("targets", [])
+        ],
+    )
+
+def _ext_contrib_entry_decode(json_str):
+    """Decodes a JSON-encoded `ExtContribEntry` string into a struct."""
+    return _ext_contrib_entry_from_dict(json.decode(json_str))
+
+ext_data = struct(
+    new = _ext_data_new,
+)
+
+extension_entry = struct(
+    new = _extension_entry_new,
+)
+
+ext_source = struct(
+    new = _ext_source_new,
+    from_dict = _ext_source_from_dict,
+)
+
+ext_external_target = struct(
+    new = _ext_external_target_new,
+    from_dict = _ext_external_target_from_dict,
+)
+
+ext_contrib_target = struct(
+    new = _ext_contrib_target_new,
+    from_dict = _ext_contrib_target_from_dict,
+)
+
+ext_external_entry = struct(
+    new = _ext_external_entry_new,
+    from_dict = _ext_external_entry_from_dict,
+)
+
+ext_contrib_entry = struct(
+    new = _ext_contrib_entry_new,
+    from_dict = _ext_contrib_entry_from_dict,
+    decode = _ext_contrib_entry_decode,
+)
+
+schema = struct(
+    ExtData = ext_data,
+    ExtensionEntry = extension_entry,
+    ExtSource = ext_source,
+    ExtExternalTarget = ext_external_target,
+    ExtContribTarget = ext_contrib_target,
+    ExtExternalEntry = ext_external_entry,
+    ExtContribEntry = ext_contrib_entry,
+)

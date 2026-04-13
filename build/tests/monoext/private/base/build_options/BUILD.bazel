@@ -1,0 +1,3 @@
+load(":pg.bzl", pg_suite = "test_suite")
+
+pg_suite()

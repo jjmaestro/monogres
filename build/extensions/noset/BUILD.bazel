@@ -1,7 +1,0 @@
-load("//extensions:pgxs_build.bzl", "pgxs_build_all")
-load(":cfg.bzl", "CFG")
-
-pgxs_build_all(
-    name = CFG.name,
-    cfg = CFG,
-)

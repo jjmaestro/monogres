@@ -1,0 +1,12 @@
+load(":base.bzl", base_suite = "test_suite")
+load(":ext.bzl", ext_suite = "test_suite")
+load(":names.bzl", names_suite = "test_suite")
+load(":pkgs.bzl", pkgs_suite = "test_suite")
+
+base_suite()
+
+ext_suite()
+
+names_suite()
+
+pkgs_suite()

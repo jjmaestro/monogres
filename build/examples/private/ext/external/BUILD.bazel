@@ -1,0 +1,11 @@
+"""Private e2e tests for @pg_ext external extensions."""
+
+load("@pg_ext//:all.bzl", "CFGS", "EXTENSIONS", "REPOS")
+load(":test.bzl", "e2e_tests")
+
+e2e_tests(
+    name = "external",
+    cfgs = CFGS,
+    extensions = EXTENSIONS,
+    repos = REPOS,
+)

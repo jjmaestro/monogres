@@ -1,0 +1,16 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = [
+    "//monoext/private:__pkg__",
+    "//tests/monoext:__subpackages__",
+])
+
+exports_files(["pg.bzl"])
+
+bzl_library(
+    name = "pg",
+    srcs = ["pg.bzl"],
+    deps = [
+        "//monoext/private/base:compat",
+    ],
+)

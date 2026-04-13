@@ -1,0 +1,118 @@
+From fb16400df8ad157ccd589eda5109d1d8e8dfe305 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sat, 11 Apr 2026 05:16:05 +0000
+Subject: [PATCH] patch: add a prefix_distro build option
+
+Add prefix_distro option to select a "distro prefix", a path different
+from prefix where Postgres will be installed.
+
+Useful if the distro install path will be different from the install
+path at build time, and for reproducible builds since Postgres embeds
+all of the pg_config.h paths in all the binaries.
+
+When prefix_distro is set, force `dir_prefix_contains_pg` to true so the
+on-disk install layout is flat (no `postgresql/` subdir on libdir /
+datadir / sysconfdir / includedir) regardless of how the build sandbox
+or the distro prefix happen to be spelled.
+
+Without this, the layout depends on whether the prefix string literally
+contains "pgsql" or "postgres", a brittle accidental match. In
+practice it was tripping on the bazel cache segment `_bazel_<USER>`
+whenever `<USER>` was "postgres" (which the project's Docker image
+deliberately uses because rules_python rejects building as root):
+default linux-sandbox keeps that path visible and accidentally
+satisfies the check; `--experimental_use_hermetic_linux_sandbox` pivots
+to a clean `/execroot/_main/` and the check flips, so `dir_lib_pkg`
+becomes `lib/postgresql` and downstream consumers (which expect a flat
+`lib/<ext>.so` layout) can no longer locate the installed files.
+
+Tying the flat layout to `prefix_distro` being set means the install
+layout is deterministic for any value of `prefix_distro` (e.g.
+`/postgres/16.0`, `/foobar/16.0`, `/opt/db/v16`) without depending on
+sandbox-path coincidences.
+---
+ meson.build             | 21 +++++++++++++++++++--
+ meson_options.txt       |  2 ++
+ src/include/meson.build | 24 ++++++++++++------------
+ 3 files changed, 33 insertions(+), 14 deletions(-)
+
+diff --git a/meson.build b/meson.build
+index 35307144c6..09c31916de 100644
+--- a/meson.build
++++ b/meson.build
+@@ -471,8 +471,25 @@ endif
+ pkg = 'postgresql'
+ 
+ dir_prefix = get_option('prefix')
+-
+-dir_prefix_contains_pg = (dir_prefix.contains('pgsql') or dir_prefix.contains('postgres'))
++dir_prefix_distro = get_option('prefix_distro')
++
++if dir_prefix_distro == ''
++  # No explicit distro prefix selected: fall back to mirroring the
++  # install prefix, and let `dir_prefix_contains_pg` decide the install
++  # layout from the prefix name alone (PG upstream behavior — flat when
++  # the prefix names pg, namespaced under `postgresql/` otherwise).
++  dir_prefix_distro = dir_prefix
++  dir_prefix_contains_pg = (
++    dir_prefix.contains('pgsql') or dir_prefix.contains('postgres')
++  )
++else
++  # User explicitly selected a distro prefix: force the install layout
++  # flat (skip the `postgresql/` subdir on libdir / datadir / sysconfdir
++  # / includedir) regardless of how the prefix or distro-prefix strings
++  # happen to be spelled. The install layout under `$prefix_distro` then
++  # matches the layout `pg_config` reports for the embedded paths.
++  dir_prefix_contains_pg = true
++endif
+ 
+ dir_bin = get_option('bindir')
+ 
+diff --git a/meson_options.txt b/meson_options.txt
+index d2f95cfec3..1ca1e16496 100644
+--- a/meson_options.txt
++++ b/meson_options.txt
+@@ -70,6 +70,8 @@ option('darwin_sysroot', type: 'string', value: '',
+ option('rpath', type: 'boolean', value: true,
+   description: 'Embed shared library search path in executables')
+ 
++option('prefix_distro', type: 'string', value: '',
++  description: 'Select a "distro prefix" (a path different from prefix where Postgres will be installed). Useful if the distro install path will be different from the install path at build time.')
+ 
+ # External dependencies
+ 
+diff --git a/src/include/meson.build b/src/include/meson.build
+index d7e1ecd4c9..f01440f97c 100644
+--- a/src/include/meson.build
++++ b/src/include/meson.build
+@@ -28,18 +28,18 @@ configure_files += pg_config
+ 
+ 
+ config_paths_data = configuration_data()
+-config_paths_data.set_quoted('PGBINDIR', dir_prefix / dir_bin)
+-config_paths_data.set_quoted('PGSHAREDIR', dir_prefix / dir_data)
+-config_paths_data.set_quoted('SYSCONFDIR', dir_prefix / dir_sysconf)
+-config_paths_data.set_quoted('INCLUDEDIR', dir_prefix / dir_include)
+-config_paths_data.set_quoted('PKGINCLUDEDIR', dir_prefix / dir_include_pkg)
+-config_paths_data.set_quoted('INCLUDEDIRSERVER', dir_prefix / dir_include_server)
+-config_paths_data.set_quoted('LIBDIR', dir_prefix / dir_lib)
+-config_paths_data.set_quoted('PKGLIBDIR', dir_prefix / dir_lib_pkg)
+-config_paths_data.set_quoted('LOCALEDIR', dir_prefix / dir_locale)
+-config_paths_data.set_quoted('DOCDIR', dir_prefix / dir_doc)
+-config_paths_data.set_quoted('HTMLDIR', dir_prefix / dir_doc_html)
+-config_paths_data.set_quoted('MANDIR', dir_prefix / dir_man)
++config_paths_data.set_quoted('PGBINDIR', dir_prefix_distro / dir_bin)
++config_paths_data.set_quoted('PGSHAREDIR', dir_prefix_distro / dir_data)
++config_paths_data.set_quoted('SYSCONFDIR', dir_prefix_distro / dir_sysconf)
++config_paths_data.set_quoted('INCLUDEDIR', dir_prefix_distro / dir_include)
++config_paths_data.set_quoted('PKGINCLUDEDIR', dir_prefix_distro / dir_include_pkg)
++config_paths_data.set_quoted('INCLUDEDIRSERVER', dir_prefix_distro / dir_include_server)
++config_paths_data.set_quoted('LIBDIR', dir_prefix_distro / dir_lib)
++config_paths_data.set_quoted('PKGLIBDIR', dir_prefix_distro / dir_lib_pkg)
++config_paths_data.set_quoted('LOCALEDIR', dir_prefix_distro / dir_locale)
++config_paths_data.set_quoted('DOCDIR', dir_prefix_distro / dir_doc)
++config_paths_data.set_quoted('HTMLDIR', dir_prefix_distro / dir_doc_html)
++config_paths_data.set_quoted('MANDIR', dir_prefix_distro / dir_man)
+ 
+ 
+ var_cc = ' '.join(cc.cmd_array())

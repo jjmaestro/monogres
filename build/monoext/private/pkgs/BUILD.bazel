@@ -1,0 +1,11 @@
+package(default_visibility = [
+    "//monoext/private:__pkg__",
+    "//tests/monoext:__subpackages__",
+])
+
+exports_files([
+    "collect.bzl",
+    "hub.bzl",
+    "schema.bzl",
+    "version_deps.bzl",
+])

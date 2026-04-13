@@ -1,0 +1,14 @@
+"""Private e2e tests for @pg."""
+
+load("@pg//:all.bzl", "CFG", "DEFAULT_VERSION", "OPTION_SETS", "VERSIONS")
+load("@pg//:introspect.bzl", "INTROSPECTIONS")
+load(":test.bzl", "e2e_tests")
+
+e2e_tests(
+    name = "pg",
+    cfg = CFG,
+    default_version = DEFAULT_VERSION,
+    introspections = INTROSPECTIONS,
+    option_sets = OPTION_SETS,
+    versions = VERSIONS,
+)

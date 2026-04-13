@@ -9,6 +9,7 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 # the assertion tracks the bump automatically.
 
 _APT_LOCKS = [
+    "//catalog/locks:pg_pkgs.lock",
     "//toolchains/perl/locks:perl_sysroot.lock",
     "//toolchains/python/locks:python_sysroot.lock",
 ]
