@@ -319,10 +319,16 @@ def _get_contrib_installed_paths(installed_paths, contrib_name, pg_version):
         # deduping the installed_paths because some of them have different build
         # paths (e.g. share/tsearch_data has src/backend/tsearch/dicts and
         # src/backend/snowball/stopwords as build dirs)
+        #
+        # The trailing slash matters: matching `contrib/hstore` without it would
+        # also gobble `contrib/hstore_plperl/...`,
+        # `contrib/hstore_plpython/...`, and similar overlapping-prefix
+        # contribs.
+        contrib_prefix = "contrib/%s/" % contrib_name
         contrib_paths = {
             path_installed: path_build
             for path_build, path_installed in installed_paths.items()
-            if path_build.startswith("contrib/%s" % contrib_name)
+            if path_build.startswith(contrib_prefix)
         }.keys()
 
     return sorted(contrib_paths)

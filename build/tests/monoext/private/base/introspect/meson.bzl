@@ -462,6 +462,49 @@ get_contrib_installed_paths_nonexistent_test = unittest.make(
     _get_contrib_installed_paths_nonexistent_test_impl,
 )
 
+def _get_contrib_installed_paths_prefix_boundary_test_impl(ctx):
+    """Contrib names that share a prefix must not bleed into each other.
+
+    `hstore` and `hstore_plperl` are sibling contribs; without a trailing-slash
+    boundary on the prefix match, `hstore`'s list would erroneously include
+    `hstore_plperl`'s files.
+    """
+    env = unittest.begin(ctx)
+
+    installed = {
+        "contrib/hstore/hstore.control": "share/extension/hstore.control",
+        "contrib/hstore/hstore.so": "lib/hstore.so",
+        "contrib/hstore_plperl/hstore_plperl.control": "share/extension/hstore_plperl.control",
+        "contrib/hstore_plperl/hstore_plperl.so": "lib/hstore_plperl.so",
+        "contrib/hstore_plpython/hstore_plpython3.so": "lib/hstore_plpython3.so",
+    }
+
+    hstore = MesonIntrospect.get_contrib_installed_paths(
+        installed,
+        "hstore",
+        "18.1",
+    )
+    asserts.equals(env, [
+        "lib/hstore.so",
+        "share/extension/hstore.control",
+    ], hstore)
+
+    hstore_plperl = MesonIntrospect.get_contrib_installed_paths(
+        installed,
+        "hstore_plperl",
+        "18.1",
+    )
+    asserts.equals(env, [
+        "lib/hstore_plperl.so",
+        "share/extension/hstore_plperl.control",
+    ], hstore_plperl)
+
+    return unittest.end(env)
+
+get_contrib_installed_paths_prefix_boundary_test = unittest.make(
+    _get_contrib_installed_paths_prefix_boundary_test_impl,
+)
+
 def _get_contrib_installed_paths_override_test_impl(ctx):
     """CONTRIB_INSTALLED_PATHS_OVERRIDE: sepgsql has version-specific paths."""
     env = unittest.begin(ctx)
@@ -679,6 +722,7 @@ TEST_SUITE_TESTS = dict(
     get_contrib_installed_paths = get_contrib_installed_paths_test,
     get_contrib_installed_paths_nonexistent = get_contrib_installed_paths_nonexistent_test,
     get_contrib_installed_paths_override = get_contrib_installed_paths_override_test,
+    get_contrib_installed_paths_prefix_boundary = get_contrib_installed_paths_prefix_boundary_test,
     # get_postgres_installed_paths
     get_postgres_installed_paths = get_postgres_installed_paths_test,
     paths_no_overlap = paths_no_overlap_test,
