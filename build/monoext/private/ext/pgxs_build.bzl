@@ -267,20 +267,41 @@ def pgxs_build(
                 echo
 
                 env
-            }} >> "$$LOG_FILE"
+            }} >> "$$LOG_FILE" 2>&1 || true
 
+            # Dump the log to the saved-original stderr so bazel's
+            # failed-action capture has the actual error. Bazel
+            # unconditionally captures stderr even on action failure
+            # and that capture survives sandbox teardown — unlike any
+            # in-sandbox path, which is unreachable once the action
+            # exits.
+            #
+            # CRITICAL: use fd 3 (saved stderr before the outer block's
+            # `2>&1` redirect), NOT `>&2`. Inside the outer block, fd 2
+            # points at LOG_FILE; `cat $$LOG_FILE >&2` would read LOG_FILE
+            # and write back to LOG_FILE — infinite loop that grows the log
+            # without bound (observed: 647 GB in ~18 min before disk filled
+            # under hermetic sandbox).
             {{
                 echo
+                echo "========================================================"
+                echo "  >> monoext action log ($$LOG_FILE) — action FAILED"
+                echo "========================================================"
+                echo
+                cat "$$LOG_FILE" 2>/dev/null || echo "(LOG_FILE unreadable)"
                 echo
                 echo "========================================================"
-                echo "  >> LOG: $${{LOG_FILE#"$$EXT_BUILD_ROOT/"}}"
+                echo "  >> end of log (above)"
                 echo "========================================================"
                 echo
-                echo
-            }} | tee /dev/stderr >> "$$LOG_FILE"
+            }} >&3
 
             exit 1
         }}
+
+        # Save the original stderr to fd 3 so the ERR trap can dump LOG_FILE
+        # without recursing on the `2>&1` redirect inside the outer block.
+        exec 3>&2
 
         trap errors ERR
 
