@@ -178,26 +178,50 @@ def pgxs_build(
             fi
 
             echo
+            # PG install-tree path overrides for `make` / `make install`.
+            # Postgres's `Makefile.global` resolves install dirs from
+            # `$$($$PG_CONFIG --<query>)`, which reports PG's configure-time
+            # `--prefix=` (the distro prefix) rather than the action-time
+            # install location. Command-line overrides outrank the
+            # `Makefile.global` `:=` assignments (GNU make precedence), so the
+            # extension installs under `$$abs_pg_install_dir`, where the
+            # relocate step below expects it.
+            local abs_pg_install_dir="$$EXT_BUILD_ROOT/$(PG_INSTALL_DIR)"
+            local pg_path_overrides=(
+                "bindir=$$abs_pg_install_dir/bin"
+                "datadir=$$abs_pg_install_dir/share"
+                "sysconfdir=$$abs_pg_install_dir/etc"
+                "libdir=$$abs_pg_install_dir/lib"
+                "pkglibdir=$$abs_pg_install_dir/lib"
+                "includedir=$$abs_pg_install_dir/include"
+                "pkgincludedir=$$abs_pg_install_dir/include"
+                "mandir=$$abs_pg_install_dir/share/man"
+                "docdir=$$abs_pg_install_dir/share/doc"
+                "localedir=$$abs_pg_install_dir/share/locale"
+                "PGXS=$$abs_pg_install_dir/lib/pgxs/src/makefiles/pgxs.mk"
+            )
+
             echo "make"
             echo
+            local make_overrides=(
+                CC="$$cc"
+                CXX="$$cc"
+                CPP="$$cc -E"
+                PG_CONFIG="$$EXT_BUILD_ROOT/$(PG_CONFIG)"
+                "$${{pg_path_overrides[@]}}"
+                USE_PGXS=1
+            )
+
             "$$EXT_BUILD_ROOT/$(MAKE)" \
                 -C "$$pgxs_src_copy" \
-                CC="$$cc" \
-                CXX="$$cc" \
-                CPP="$$cc -E" \
-                PG_CONFIG="$$EXT_BUILD_ROOT/$(PG_CONFIG)" \
-                USE_PGXS=1 || return $$?
+                "$${{make_overrides[@]}}" || return $$?
 
             echo
             echo "make install"
             echo
             "$$EXT_BUILD_ROOT/$(MAKE)" \
                 -C "$$pgxs_src_copy" \
-                CC="$$cc" \
-                CXX="$$cc" \
-                CPP="$$cc -E" \
-                PG_CONFIG="$$EXT_BUILD_ROOT/$(PG_CONFIG)" \
-                USE_PGXS=1 \
+                "$${{make_overrides[@]}}" \
                 DESTDIR="$$installdir" \
                 install || return $$?
 
@@ -208,39 +232,20 @@ def pgxs_build(
         make_pgxs_installdir() {{
             local installdir="$$1"; shift
 
-            # HACK:
-            # The `install` target in the [`PGXS`] Makefile ([`pgxs.mk`])
-            # installs the extension at `DESTDIR/datadir/extension/`.
+            # The PGXS Makefile's `install` target writes to
+            # `DESTDIR/<absolute install prefix>/{{lib,share,...}}` (the prefix
+            # is baked into pg_config's `--bindir` / `--pkglibdir` / etc.
+            # outputs by PG's configure-time `--prefix=`). To place the
+            # extension tree under our action-writable `INSTALLDIR`, we
+            # compute `<DESTDIR><absolute install prefix>` and pass it as
+            # the per-action mirror of PG's install tree.
             #
-            # `datadir` appears to be set to the absolute path from where
-            # [`pg_config`] runs. This is problematic because of two reasons.
-            #
-            # First, the `pg_config` binary comes from a Postgres toolchain.
-            # Like all external dependencies, it's read-only inside the
-            # sandbox. We can work around this by setting [`DESTDIR`] to point
-            # the install root to a writable directory inside the sandbox.
-            #
-            # Second, and where the hack is really needed: the rule that
-            # creates the Postgres toolchain (template_variable_info) can't run
-            # binaries. It only uses the paths of the Postgres binaries which
-            # are relative to the sandbox where Postgres was compiled. Thus,
-            # the `PG_INSTALL_DIR` template variable in the toolchain is not
-            # set to the absolute path that we need.
-            #
-            # The only workaround is to run `pg_config` here and extract the
-            # install path ourselves, just like the `PGXS` Makefile seems to be
-            # doing.
-            #
-            # [`PGXS`]: https://www.postgresql.org/docs/16/extend-pgxs.html
-            # [`pgxs.mk`]: https://github.com/postgres/postgres/blob/REL_16_0/src/makefiles/pgxs.mk#L237-L240
-            # [`pg_config`]: https://www.postgresql.org/docs/16/app-pgconfig.html
-            # [`DESTDIR`]: https://www.gnu.org/software/make/manual/html_node/DESTDIR.html
-
-            local abs_pg_config_bindir
-            abs_pg_config_bindir="$$($(PG_CONFIG) --bindir)"
-
-            local abs_pg_install_dir
-            abs_pg_install_dir="$$(dirname "$$abs_pg_config_bindir")"
+            # The absolute install prefix is the action's CWD-relative
+            # `$(PG_INSTALL_DIR)` make variable (set by the pg_template_
+            # variable_info rule from `PG_CONFIG.split("/bin/pg_config")[0]`,
+            # `monoext/private/base/toolchain.bzl::_pg_other_template_vars`)
+            # prefixed with `$$EXT_BUILD_ROOT`.
+            local abs_pg_install_dir="$$EXT_BUILD_ROOT/$(PG_INSTALL_DIR)"
 
             {{
                 echo
