@@ -171,6 +171,7 @@ def _pg_build_test_impl(ctx):
         base_v = "18.1",
         base_hub_name = "pg",
         bt_sysroot = "@pg_ext//citus/13.2.0/deps/buildtime:sysroot_tar",
+        base_sysroot = "//_base/18.1:sysroot_tar",
     )
 
     asserts.true(
@@ -199,6 +200,12 @@ def _pg_build_test_impl(ctx):
         '"@pg_ext//citus/13.2.0/deps/buildtime:sysroot_tar"' in out,
     )
 
+    # per-PG base buildtime sysroot tar threaded to pgxs_build
+    asserts.true(
+        env,
+        'base_sysroot_tar = "//_base/18.1:sysroot_tar"' in out,
+    )
+
     return unittest.end(env)
 
 pg_build_test = unittest.make(_pg_build_test_impl)
@@ -214,9 +221,14 @@ def _pg_build_no_sysroot_test_impl(ctx):
         base_v = "18.1",
         base_hub_name = "pg",
         bt_sysroot = None,
+        base_sysroot = "//_base/18.1:sysroot_tar",
     )
 
     asserts.true(env, "deps_buildtime = []" in out)
+    asserts.true(
+        env,
+        'base_sysroot_tar = "//_base/18.1:sysroot_tar"' in out,
+    )
 
     return unittest.end(env)
 

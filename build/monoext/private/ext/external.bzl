@@ -112,12 +112,24 @@ def _src_leaf_build(source_repo, source, version):
         header = _HEADER,
     )
 
-def _pg_build(build_repo, source_repo, version, base_v, base_hub_name, bt_sysroot):
+def _pg_build(
+        build_repo,
+        source_repo,
+        version,
+        base_v,
+        base_hub_name,
+        bt_sysroot,
+        base_sysroot):
     """Render {name}/{version}/{base_version}/BUILD.bazel for the extension build.
 
     The source tree is the download_archives `:dir`, a tree artifact keyed on
     the archive and the patches it was made from, so the build action is re-run
     when either changes.
+
+    `base_sysroot` is the per-PG buildtime sysroot tar alias
+    (`//_base/<base_v>:sysroot_tar` in the same hub), threaded into the build so
+    Postgres-interface deps reach the extension compile via `-idirafter` / `-L`
+    without each extension re-declaring them.
     """
     f = bind(build = build_repo, src = source_repo, v = version)
     return Star.file(
@@ -130,6 +142,7 @@ def _pg_build(build_repo, source_repo, version, base_v, base_hub_name, bt_sysroo
             name = base_v,
             src = f("@{src}//{v}:dir"),
             deps_buildtime = [bt_sysroot] if bt_sysroot else [],
+            base_sysroot_tar = base_sysroot,
             base_version = {"name": "postgres~%s" % base_v, "version": base_v},
             base_hub = "@%s" % base_hub_name,
         ),
@@ -272,6 +285,7 @@ def write_extension_package(rctx, entry, name, archs):
                     base_v = base_v,
                     base_hub_name = rctx.attr.base_hub_name,
                     bt_sysroot = bt_sysroot,
+                    base_sysroot = "//_base/%s:sysroot_tar" % base_v,
                 ),
             )
 

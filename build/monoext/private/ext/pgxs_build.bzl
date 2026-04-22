@@ -17,25 +17,41 @@ def pgxs_build(
         deps_buildtime,
         base_version,
         base_hub,
+        base_sysroot_tar,
         prefix_distro = DEFAULT_PREFIX_DISTRO,
         debug = False):
     """Builds a PGXS extension with the [PGXS build system].
 
     [PGXS build system]: https://www.postgresql.org/docs/current/extend-pgxs.html
 
+    Two buildtime sysroots are layered into the action: the per-extension
+    sysroot (its own declared deps) is the primary `--sysroot=`, and the per-PG
+    buildtime sysroot is layered via `-idirafter` / `-L` so headers and libs
+    that Postgres's installed headers transitively require are reachable. This
+    models the implicit assumption `pgxs.mk` makes on a Linux host (the host has
+    every system package Postgres was built against). Extensions therefore
+    declare only deps their own source code uses directly (the litmus test):
+    anything inherited transitively from Postgres's interface comes in through
+    the layered PG sysroot.
+
     Args:
         name (str): The name of the Bazel target to generate.
         src (str): The repo with the extension source code.
-        deps_buildtime (list[str]): At most one entry — the per-target
+        deps_buildtime (list[str]): At most one entry, the per-target
             `@pg_ext//<name>/<v>/deps/buildtime:sysroot_tar` alias rendered by
             `monoext/private/ext/external.bzl`, resolving to the per-extension
             `@pgbuildtime_<key>//<distro>/<v>/<arch>:sysroot.tar` single-file
             artifact emitted by `//sysroots/apt`. Empty when the extension
-            declares no buildtime deps (build runs without a sysroot).
+            declares no buildtime deps (build runs without an extension sysroot;
+            the layered PG sysroot still covers Postgres-interface deps).
         base_version (dict): `dict` with `name` and `version` keys to select the
             Postgres build that will be used when building the extension.
         base_hub (str): The base hub repo name (e.g. `"@pg"`). PG build targets
             and toolchains are resolved from this repo.
+        base_sysroot_tar (str): Label of the per-PG buildtime sysroot tar
+            (`@pg_ext//_base/<base_v>:sysroot_tar`), layered into the compile
+            via `-idirafter` / `-L` so Postgres's interface deps are reachable
+            without each extension re-declaring them.
         prefix_distro (str): The base prefix path for the distro install
             (defaults to `DEFAULT_PREFIX_DISTRO`).
         debug (bool): If `True`, prints a debug message for each command
@@ -56,6 +72,7 @@ def pgxs_build(
         # SDK, matching the `:toolchain` (PG_CONFIG / PG_INSTALL_DIR) below.
         "%s//%s:tar.dev" % (base_hub, base_version["version"]),
         src,
+        base_sysroot_tar,
         _SYSROOT_SETUP_SCRIPT,
     ]
     if sysroot_tar:
@@ -85,6 +102,7 @@ def pgxs_build(
             local cc="$$1"; shift
             local pgxs_src="$$1"; shift
             local sysroot_dir="$$1"; shift
+            local pg_sysroot_dir="$$1"; shift
             local installdir="$$1"; shift
 
             # NOTE:
@@ -105,34 +123,51 @@ def pgxs_build(
             arch="$$(uname -m)"
 
             # NOTE:
-            # We use -idirafter for include paths so they are searched AFTER
-            # system directories. This prevents sysroot headers from
-            # conflicting with system libc headers.
+            # Two sysroots layered: the extension's own (`sysroot_dir`,
+            # searched first) and the per-PG buildtime sysroot
+            # (`pg_sysroot_dir`, searched after). `-idirafter` keeps
+            # extension headers ahead of inherited Postgres-interface
+            # headers, and PG's sysroot provides everything Postgres's
+            # installed headers transitively `#include` (libicu, libssl,
+            # libxml2, etc., when Postgres was built with the
+            # corresponding `--with-*` option).
             local pg_cflags=(
                 "-idirafter $$sysroot_dir/usr/include"
                 "-idirafter $$sysroot_dir/usr/include/$${{arch}}-linux-gnu"
+                "-idirafter $$pg_sysroot_dir/usr/include"
+                "-idirafter $$pg_sysroot_dir/usr/include/$${{arch}}-linux-gnu"
             )
             local pg_ldflags=(
                 "-L$$sysroot_dir/usr/lib/$${{arch}}-linux-gnu"
+                "-L$$pg_sysroot_dir/usr/lib/$${{arch}}-linux-gnu"
             )
 
             local pkg_config_path=(
               "$$sysroot_dir/usr/lib/$${{arch}}-linux-gnu/pkgconfig"
               "$$sysroot_dir/usr/share/pkgconfig"
+              "$$pg_sysroot_dir/usr/lib/$${{arch}}-linux-gnu/pkgconfig"
+              "$$pg_sysroot_dir/usr/share/pkgconfig"
             )
 
             local library_path=(
               "$$sysroot_dir/usr/lib/$${{arch}}-linux-gnu"
+              "$$pg_sysroot_dir/usr/lib/$${{arch}}-linux-gnu"
             )
 
             local ld_library_path=(
               "$$sysroot_dir/usr/lib/$${{arch}}-linux-gnu"
               "$$sysroot_dir/usr/lib"
+              "$$pg_sysroot_dir/usr/lib/$${{arch}}-linux-gnu"
+              "$$pg_sysroot_dir/usr/lib"
             )
 
             # NOTE:
-            # Set up environment variables for pkg-config and runtime library loading.
-            # This mirrors the setup in postgres/pg_build.bzl for consistency.
+            # `PKG_CONFIG_SYSROOT_DIR` can only point at one sysroot;
+            # `.pc` files in extension deps (real per the litmus test)
+            # live in the extension sysroot, so that's the one we set.
+            # `PKG_CONFIG_PATH` lists both extension and PG `.pc`
+            # directories so `pkg-config --libs` finds either. Same
+            # layering for `LIBRARY_PATH` / `LD_LIBRARY_PATH`.
             export PKG_CONFIG_SYSROOT_DIR="$$sysroot_dir"
             export PKG_CONFIG_PATH
             PKG_CONFIG_PATH="$$(IFS=:; echo "$${{pkg_config_path[*]}}")"
@@ -330,10 +365,22 @@ def pgxs_build(
         SYSROOT_TAR_PATH="$$EXT_BUILD_ROOT/$(execpath {sysroot_tar})"
         SYSROOT_DIR=$$(sh "$$SETUP_SH" "$$SYSROOT_TAR_PATH" "{tar_cmd}")
 
+        # Per-PG buildtime sysroot extracted inline by the hermetic `bsdtar`
+        # from `@bsd_tar_toolchains` (same family that writes the tar in
+        # `sysroots/apt/private/repo.bzl::_make_sysroot_tar`, so the pax
+        # snapshot round-trips: symlinks, long paths, uid/gid/mtime, pax
+        # extended attributes). No setup script needed: this tree is
+        # consumed read-only for `-idirafter` / `-L` / pkg-config lookups
+        # (no perl patches, no in-tree mutations).
+        BASE_SYSROOT_TAR_PATH="$$EXT_BUILD_ROOT/$(execpath {base_sysroot_tar})"
+        PG_SYSROOT_DIR="$$EXT_BUILD_ROOT/pg_sysroot"
+        mkdir -p "$$PG_SYSROOT_DIR"
+        {tar_cmd} -xf "$$BASE_SYSROOT_TAR_PATH" -C "$$PG_SYSROOT_DIR"
+
         export LOG_FILE
 
         {{
-            compile_extension "$$CC" "$$PGXS_SRC" "$$SYSROOT_DIR" "$$INSTALLDIR"
+            compile_extension "$$CC" "$$PGXS_SRC" "$$SYSROOT_DIR" "$$PG_SYSROOT_DIR" "$$INSTALLDIR"
             mkdir -p "$$RELOCATED_PGXS_INSTALLDIR/{prefix_distro_rel}/{base_version}"
             mv -t "$$RELOCATED_PGXS_INSTALLDIR/{prefix_distro_rel}/{base_version}/." "$$PGXS_INSTALLDIR"/*
             tar_ "$$TAR_FILE" --directory "$$RELOCATED_PGXS_INSTALLDIR" .
@@ -357,6 +404,7 @@ def pgxs_build(
             pgxs_src = "$(locations %s)" % src,
             setup = _SYSROOT_SETUP_SCRIPT,
             sysroot_tar = sysroot_tar,
+            base_sysroot_tar = base_sysroot_tar,
             debug = "%s" % debug,
         ),
         target_compatible_with = select({

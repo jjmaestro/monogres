@@ -186,6 +186,11 @@ def create_ext(
 
     entries |= _build_contrib(contrib, hub_name)
 
+    # Per-PG-version buildtime VersionDeps for the layered `_base/<pg_v>`
+    # packages: every PGXS extension built against a given PG version sees that
+    # version's buildtime sysroot as `-idirafter` / `-L` overlay.
+    pg_versions_deps = pkgs_result.versions_deps.get("postgres", {})
+
     ext_repo(
         name = hub_name,
         archs = list(archs),
@@ -194,6 +199,7 @@ def create_ext(
         base_hub_name = base_hub_name,
         locks = locks,
         build_repo = build_repo,
+        pg_versions_deps = json.encode(pg_versions_deps),
     )
 
 testing = struct(
