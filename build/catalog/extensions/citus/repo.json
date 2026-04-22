@@ -31,7 +31,6 @@
           "12": {
             "*": [
               "libcurl4-openssl-dev",
-              "libkrb5-dev",
               "liblz4-dev",
               "libssl-dev",
               "libzstd-dev"
