@@ -301,6 +301,10 @@
       {
         "label": "//catalog/postgres/patches:0008-16.0-fix-guard-openssl-path-when-not-found.patch",
         "spec": ">=16.0,<16.2/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0019-16.0-backport-bitcode-cflags-c_args.patch",
+        "spec": ">=16.0,<17.0/*"
       }
     ],
     "deps": {

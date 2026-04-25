@@ -1,0 +1,39 @@
+From 68f542e9bbcf9551a847f5171a33e57ee12bd07c Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Thu, 23 Apr 2026 13:47:01 +0000
+Subject: [PATCH] patch: add the user-provided c_args to bitcode_cflags
+
+`src/backend/jit/llvm/meson.build` builds `llvmjit_types.bc` by
+invoking clang directly via a `custom_target`:
+
+  clang -c -o llvmjit_types.bc llvmjit_types.c -flto=thin -emit-llvm ...
+
+The compile flags assembled for this bitcode action don't include
+meson's `c_args` option. In hermetic build setups where the toolchain
+wraps clang to inject `--sysroot=` / `-isystem` (so the wrapped
+invocation knows where to find headers, ignoring the host's
+`/usr/include`), the bitcode action bypasses the wrapper and clang
+falls back to its configured default search paths, failing with:
+
+  c.h:59:10: fatal error: 'stdio.h' file not found
+
+PG 17 appends `get_option('c_args')` to `bitcode_cflags`, which fixes it. This
+one-liner applies the same change to PG 16, letting the build's `CFLAGS` env
+(which meson folds into `c_args`) flow to the bitcode action. The fix is
+required on hermetic sandboxes that do not bind-mount host system include
+paths; native non-hermetic builds happen to work without it because clang's
+default search picks up the host's `/usr/include`.
+
+References: https://postgr.es/c/1039352e10
+---
+ src/backend/jit/llvm/meson.build | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/backend/jit/llvm/meson.build b/src/backend/jit/llvm/meson.build
+index a94daf4081..752eaccbc6 100644
+--- a/src/backend/jit/llvm/meson.build
++++ b/src/backend/jit/llvm/meson.build
+@@ -66,2 +66,3 @@ if llvm.version().version_compare('=15.0')
+ endif
++bitcode_cflags += get_option('c_args')
+ bitcode_cflags += cppflags
