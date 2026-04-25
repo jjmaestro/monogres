@@ -11,7 +11,7 @@ exports_files(["index.json"] + glob(["**/repo.json"]))
 
 _EXT_REPO_JSONS = glob(["*/repo.json"])
 
-_CONTRIB_REPO_JSONS = []
+_CONTRIB_REPO_JSONS = glob(["contrib/*/repo.json"])
 
 gen_contrib(
     name = "gen_contrib",
