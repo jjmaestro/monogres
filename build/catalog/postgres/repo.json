@@ -297,6 +297,10 @@
       {
         "label": "//catalog/postgres/patches:0007-18.0-feat-add-build-option-to-disable-contrib-builds.patch",
         "spec": ">=18.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0008-16.0-fix-guard-openssl-path-when-not-found.patch",
+        "spec": ">=16.0,<16.2/*"
       }
     ],
     "deps": {

@@ -1,0 +1,48 @@
+From 2e0c59e31ea8cb0a7d03271dd882a86c539065b2 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Thu, 23 Apr 2026 10:59:28 +0000
+Subject: [PATCH] patch: guard openssl.path() when the openssl CLI is absent
+
+When `find_program(get_option('OPENSSL'), native: true, required: false)`
+in PG's top-level `meson.build` does NOT find an `openssl` binary on
+the build host, the call returns a meson "not-found program" object
+whose `.path()` method raises:
+
+  src/test/ssl/meson.build:10:25: ERROR:
+    Unable to get the path of a not-found external program
+
+This kills any `meson setup` (and therefore `meson introspect`) in any
+sandbox/host that doesn't ship the `openssl` CLI, even though the SSL
+test suite, the only consumer of the `OPENSSL` env-var, is run only
+at TAP-test time, never at configure or build time.
+
+Upstream PG fixed this in 16.2 (and the fix is also present in 17.0+):
+
+    'OPENSSL': openssl.found() ? openssl.path() : '',
+
+This one-liner is the upstream fix, backported here to 16.0 and 16.1
+which are otherwise unbuildable in sandboxes that intentionally omit
+the `openssl` CLI (PG itself only needs `libssl`, not the openssl
+binary). When `openssl` is not found, the OPENSSL env-var is set to
+`''`, matching the upstream PG 16.2+ / 17.0+ behavior: the SSL TAP
+tests skip when `$OPENSSL` is empty.
+
+References: https://postgr.es/c/b64c8b01c2
+References: https://postgr.es/c/2a08dda291
+---
+ src/test/ssl/meson.build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/test/ssl/meson.build b/src/test/ssl/meson.build
+index 4cda81f3bc..abb30ab214 100644
+--- a/src/test/ssl/meson.build
++++ b/src/test/ssl/meson.build
+@@ -7,7 +7,7 @@ tests += {
+   'tap': {
+     'env': {
+       'with_ssl': ssl_library,
+-      'OPENSSL': openssl.path(),
++      'OPENSSL': openssl.found() ? openssl.path() : '',
+     },
+     'tests': [
+       't/001_ssltests.pl',
