@@ -1,0 +1,82 @@
+{
+  "kind": "contrib",
+  "metadata": {
+    "files": {
+      "16.0": [
+        "lib/old_snapshot.so",
+        "share/extension/old_snapshot--1.0.sql",
+        "share/extension/old_snapshot.control"
+      ],
+      "16.1": [
+        "lib/old_snapshot.so",
+        "share/extension/old_snapshot--1.0.sql",
+        "share/extension/old_snapshot.control"
+      ],
+      "16.10": [
+        "lib/old_snapshot.so",
+        "share/extension/old_snapshot--1.0.sql",
+        "share/extension/old_snapshot.control"
+      ],
+      "16.11": [
+        "lib/old_snapshot.so",
+        "share/extension/old_snapshot--1.0.sql",
+        "share/extension/old_snapshot.control"
+      ],
+      "16.2": [
+        "lib/old_snapshot.so",
+        "share/extension/old_snapshot--1.0.sql",
+        "share/extension/old_snapshot.control"
+      ],
+      "16.3": [
+        "lib/old_snapshot.so",
+        "share/extension/old_snapshot--1.0.sql",
+        "share/extension/old_snapshot.control"
+      ],
+      "16.4": [
+        "lib/old_snapshot.so",
+        "share/extension/old_snapshot--1.0.sql",
+        "share/extension/old_snapshot.control"
+      ],
+      "16.5": [
+        "lib/old_snapshot.so",
+        "share/extension/old_snapshot--1.0.sql",
+        "share/extension/old_snapshot.control"
+      ],
+      "16.6": [
+        "lib/old_snapshot.so",
+        "share/extension/old_snapshot--1.0.sql",
+        "share/extension/old_snapshot.control"
+      ],
+      "16.7": [
+        "lib/old_snapshot.so",
+        "share/extension/old_snapshot--1.0.sql",
+        "share/extension/old_snapshot.control"
+      ],
+      "16.8": [
+        "lib/old_snapshot.so",
+        "share/extension/old_snapshot--1.0.sql",
+        "share/extension/old_snapshot.control"
+      ],
+      "16.9": [
+        "lib/old_snapshot.so",
+        "share/extension/old_snapshot--1.0.sql",
+        "share/extension/old_snapshot.control"
+      ]
+    }
+  },
+  "version": 1,
+  "versions": [
+    "16.0",
+    "16.1",
+    "16.10",
+    "16.11",
+    "16.2",
+    "16.3",
+    "16.4",
+    "16.5",
+    "16.6",
+    "16.7",
+    "16.8",
+    "16.9"
+  ]
+}

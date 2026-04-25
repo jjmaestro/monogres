@@ -1,0 +1,22 @@
+{
+  "kind": "contrib",
+  "metadata": {
+    "files": {
+      "18.0": [
+        "lib/pg_logicalinspect.so",
+        "share/extension/pg_logicalinspect--1.0.sql",
+        "share/extension/pg_logicalinspect.control"
+      ],
+      "18.1": [
+        "lib/pg_logicalinspect.so",
+        "share/extension/pg_logicalinspect--1.0.sql",
+        "share/extension/pg_logicalinspect.control"
+      ]
+    }
+  },
+  "version": 1,
+  "versions": [
+    "18.0",
+    "18.1"
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "kind": "contrib",
+  "metadata": {
+    "files": {
+      "16.0": [
+        "bin/vacuumlo"
+      ],
+      "16.1": [
+        "bin/vacuumlo"
+      ],
+      "16.10": [
+        "bin/vacuumlo"
+      ],
+      "16.11": [
+        "bin/vacuumlo"
+      ],
+      "16.2": [
+        "bin/vacuumlo"
+      ],
+      "16.3": [
+        "bin/vacuumlo"
+      ],
+      "16.4": [
+        "bin/vacuumlo"
+      ],
+      "16.5": [
+        "bin/vacuumlo"
+      ],
+      "16.6": [
+        "bin/vacuumlo"
+      ],
+      "16.7": [
+        "bin/vacuumlo"
+      ],
+      "16.8": [
+        "bin/vacuumlo"
+      ],
+      "16.9": [
+        "bin/vacuumlo"
+      ],
+      "17.0": [
+        "bin/vacuumlo"
+      ],
+      "17.1": [
+        "bin/vacuumlo"
+      ],
+      "17.2": [
+        "bin/vacuumlo"
+      ],
+      "17.3": [
+        "bin/vacuumlo"
+      ],
+      "17.4": [
+        "bin/vacuumlo"
+      ],
+      "17.5": [
+        "bin/vacuumlo"
+      ],
+      "17.6": [
+        "bin/vacuumlo"
+      ],
+      "17.7": [
+        "bin/vacuumlo"
+      ],
+      "18.0": [
+        "bin/vacuumlo"
+      ],
+      "18.1": [
+        "bin/vacuumlo"
+      ]
+    }
+  },
+  "version": 1,
+  "versions": [
+    "16.0",
+    "16.1",
+    "16.10",
+    "16.11",
+    "16.2",
+    "16.3",
+    "16.4",
+    "16.5",
+    "16.6",
+    "16.7",
+    "16.8",
+    "16.9",
+    "17.0",
+    "17.1",
+    "17.2",
+    "17.3",
+    "17.4",
+    "17.5",
+    "17.6",
+    "17.7",
+    "18.0",
+    "18.1"
+  ]
+}
