@@ -1,5 +1,7 @@
 # /* vim: set filetype=sh : */
 
+common --check_direct_dependencies=error
+
 # Never Compile protoc Again
 # Poison pill: if anything ever tries to compile protobuf's C++ (i.e. build
 # protoc from source), fail loudly instead of silently pulling in a compiler.

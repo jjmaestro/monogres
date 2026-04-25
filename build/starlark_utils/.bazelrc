@@ -15,8 +15,7 @@ build --nolegacy_external_runfiles
 # Print relative paths where possible to reduce noise
 common --attempt_to_print_relative_paths
 
-# Disable warning transitive module versions
-common --check_direct_dependencies=off
+common --check_direct_dependencies=error
 
 # User-specific .bazelrc
 try-import %workspace%/.bazelrc.user

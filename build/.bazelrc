@@ -4,7 +4,7 @@ common --show_timestamps
 common --progress_in_terminal_title
 common --incompatible_disallow_empty_glob
 common --attempt_to_print_relative_paths
-common --check_direct_dependencies=off
+common --check_direct_dependencies=error
 common --keep_going
 
 common:debug --announce_rc
