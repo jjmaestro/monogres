@@ -1,0 +1,52 @@
+From 3297fd95c6a8e667e0c1ab537d2061210329a987 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sun, 26 Apr 2026 11:59:05 +0000
+Subject: [PATCH] patch: strip the Bazel _solib RUNPATH from links
+
+Bazel records a runtime library search path (DT_RUNPATH) for every dynamic
+dependency, baked in as `-Xlinker -rpath -Xlinker <$ORIGIN/..._solib_...>`. Those
+are build-tree paths that do not exist at deploy time; meson installed binaries
+carry no RUNPATH and resolve shared libraries via the standard loader paths.
+
+Drop those 4-token sequences from the link response file (the only place they
+appear), in pure bash so the minimal build sandbox needs no extra tools. Only
+entries pointing into `_solib` are removed, so any deliberate RUNPATH survives.
+The shipped tree is then free of build-tree paths.
+---
+ toolchain/cc_wrapper.sh.tpl | 23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/toolchain/cc_wrapper.sh.tpl b/toolchain/cc_wrapper.sh.tpl
+index b4cd481..3ba9825 100644
+--- a/toolchain/cc_wrapper.sh.tpl
++++ b/toolchain/cc_wrapper.sh.tpl
+@@ -155,6 +155,29 @@ for ((i = 0; i <= $#; i++)); do
+       parse_link_state "${opt}"
+       echo "${opt}" >>"${tmpfile}"
+     done <"${!i:1}"
++    # Strip Bazel _solib RUNPATH entries from the link: each is the 4-token
++    # sequence `-Xlinker -rpath -Xlinker <$ORIGIN/..._solib_...>` (one per dynamic
++    # dep), a build-tree search path absent at deploy. meson installed binaries
++    # carry no RUNPATH and resolve shared libraries via the standard loader
++    # paths, so dropping these keeps the shipped tree free of build-tree paths.
++    norp="$(mktemp)"
++    CLEANUP_FILES+=("${norp}")
++    while IFS= read -r l1 || [ -n "${l1}" ]; do
++      if [[ "${l1}" == "-Xlinker" ]]; then
++        IFS= read -r l2 || true
++        if [[ "${l2}" == "-rpath" ]]; then
++          IFS= read -r l3 || true
++          IFS= read -r l4 || true
++          [[ "${l4}" == *_solib* ]] && continue
++          printf "%s\n%s\n%s\n%s\n" "${l1}" "${l2}" "${l3}" "${l4}"
++        else
++          printf "%s\n%s\n" "${l1}" "${l2}"
++        fi
++      else
++        printf "%s\n" "${l1}"
++      fi
++    done <"${tmpfile}" >"${norp}"
++    mv "${norp}" "${tmpfile}"
+     cmd+=("@${tmpfile}")
+   else
+     opt="$(
