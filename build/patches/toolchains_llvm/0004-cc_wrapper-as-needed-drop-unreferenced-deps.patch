@@ -1,0 +1,41 @@
+From a9a62013a788df7b5c238d9ec459cad3c1a0d551 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sun, 26 Apr 2026 07:50:12 +0000
+Subject: [PATCH] patch: drop unreferenced DT_NEEDED entries with --as-needed
+
+Bazel cc link actions list every dynamic dependency of a target on the link
+line, and clang/lld record each as a DT_NEEDED entry whether or not the target
+references a symbol from it. A loadable Postgres module or a frontend then
+carries the full transitive shared-library closure (libssl, libcrypto, the icu
+trio, ldap, krb5, lz4, ...) even when it uses none of them, inflating .dynstr /
+.dynamic and the runtime dependency surface.
+
+Insert -Wl,--as-needed immediately after the compiler driver on link
+invocations (detected by the existing is_link state), before any library
+argument, so the linker records a DT_NEEDED entry only for a library that
+actually satisfies a referenced symbol. Compile / preprocess /
+dependency-generation calls are untouched. Matches meson's b_asneeded=true
+default, under which the same sources link minimally.
+---
+ toolchain/cc_wrapper.sh.tpl | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/toolchain/cc_wrapper.sh.tpl b/toolchain/cc_wrapper.sh.tpl
+index 905b475..b4cd481 100644
+--- a/toolchain/cc_wrapper.sh.tpl
++++ b/toolchain/cc_wrapper.sh.tpl
+@@ -172,6 +172,14 @@ if [[ ${is_link} -eq 1 && ${has_fuse_ld} -eq 0 ]]; then
+   cmd+=("-fuse-ld=lld")
+ fi
+ 
++# Drop unreferenced DT_NEEDED on link steps: insert -Wl,--as-needed right
++# after the compiler driver so a shared library that follows is recorded in
++# DT_NEEDED only when a symbol from it is actually referenced (matches meson's
++# b_asneeded=true and keeps dynamically-loaded modules minimally linked).
++if [[ ${is_link} -eq 1 ]]; then
++  cmd=("${cmd[0]}" "-Wl,--as-needed" "${cmd[@]:1}")
++fi
++
+ # Call the C++ compiler.
+ "${cmd[@]}"
+ 
