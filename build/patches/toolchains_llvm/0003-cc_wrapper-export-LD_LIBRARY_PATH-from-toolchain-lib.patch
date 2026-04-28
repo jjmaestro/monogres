@@ -1,0 +1,49 @@
+From 7ae15e5a62d01fb20580fdeea8761f33af771dcf Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sun, 26 Apr 2026 04:12:21 +0000
+Subject: [PATCH] patch: export LD_LIBRARY_PATH from the toolchain lib
+ directory
+
+Debian-sourced clang (and lld / clang-format / clang-tidy / clangd / llvm-*
+tools) ship with NO useful RPATH or RUNPATH; they rely on the system ld.so
+default search paths for `libclang-cpp.so.14`, `libLLVM-14.so.1`,
+`libstdc++.so.6`, etc. Inside Bazel's hermetic Linux sandbox those default
+paths are unavailable, and the loader fails with `cannot open shared object
+file: No such file or directory` before clang even reaches its argv parser.
+
+The `toolchain_path_prefix` computed above already points at the per-arch
+toolchain root inside Bazel's external/ tree. The Debian-laid-out tree
+ships `lib/libclang-cpp.so.14`, `lib/libLLVM-14.so.1`, and all clang's other
+NEEDED `.so` deps as siblings of `bin/clang`, so exporting
+`LD_LIBRARY_PATH=${toolchain_path_prefix}lib` before exec'ing clang routes
+ld.so through that lib dir.
+
+The export is harmless for the official LLVM Project tarball (its clang
+has `RPATH=$ORIGIN/../lib` and finds its own libs first); LD_LIBRARY_PATH
+only kicks in if RPATH lookup fails. So this patch works for both mode-1
+(downloaded LLVM) and mode-4 (Bazel-package toolchain) setups.
+
+Anchored against toolchains_llvm v1.7.0 cc_wrapper.sh.tpl line 86 (the
+end of the `toolchain_path_prefix` resolution block, before the existence
+guard at line 88).
+---
+ toolchain/cc_wrapper.sh.tpl | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/toolchain/cc_wrapper.sh.tpl b/toolchain/cc_wrapper.sh.tpl
+index d6a416f..905b475 100644
+--- a/toolchain/cc_wrapper.sh.tpl
++++ b/toolchain/cc_wrapper.sh.tpl
+@@ -85,6 +85,12 @@ if [[ ${toolchain_path_prefix} != /* ]]; then
+   toolchain_path_prefix="$(dirname_shim "$(dirname_shim "${script_dir}")")/${toolchain_path_prefix#external/}"
+ fi
+ 
++# Debian-sourced clang has no RPATH/RUNPATH and relies on the system ld.so
++# default search paths to find libclang-cpp.so.14 / libLLVM-14.so.1 / etc.
++# Inside Bazel's hermetic sandbox those paths are empty; route the loader
++# through this toolchain's own lib/ dir which carries the matching .so files.
++export LD_LIBRARY_PATH="${toolchain_path_prefix}lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
++
+ if [[ ! -f ${toolchain_path_prefix}bin/clang ]]; then
+   echo >&2 "ERROR: could not find clang; PWD=\"${PWD}\"; PATH=\"${PATH}\"; toolchain_path_prefix=${toolchain_path_prefix}."
+   exit 5

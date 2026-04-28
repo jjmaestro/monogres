@@ -83,6 +83,7 @@ archive_override(
     patches = [
         "//patches/toolchains_llvm:0001-cc_wrapper-handle-response-files-without-trailing-newline.patch",
         "//patches/toolchains_llvm:0002-cc_wrapper-default-lld-when-no-explicit-linker.patch",
+        "//patches/toolchains_llvm:0003-cc_wrapper-export-LD_LIBRARY_PATH-from-toolchain-lib.patch",
     ],
     sha256 = "85c341e957ba58482892a8088e4a34391d15bd98917f0993ecb62f008d6986d6",
     strip_prefix = "toolchains_llvm-v{}".format(TOOLCHAINS_LLVM_VERSION),
