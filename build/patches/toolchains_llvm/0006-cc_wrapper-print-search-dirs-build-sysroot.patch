@@ -1,0 +1,70 @@
+From 5a17120eacbec45f3bdadb46c4ca52d987e8346d Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sun, 26 Apr 2026 14:45:03 +0000
+Subject: [PATCH] patch: advertise the build sysroot to -print-search-dirs
+
+meson skips baking an rpath for a dependency whose library dir is a compiler
+"system" dir, where the system set comes from `clang -print-search-dirs`. The
+toolchain --sysroot is the libc sysroot, but PostgreSQL dependencies (krb5, icu,
+ssl, ...) live in the per-PG build sysroot ($SYSROOT_DIR) layered in via -L, so
+meson treats those dep dirs as non-system and bakes a build-tree rpath for each.
+That rpath is build-only: depfixer drops it on install but cannot shrink .dynstr,
+leaving dead bytes the native cc_* binaries never carry.
+
+On a -print-search-dirs invocation, append the per-PG build sysroot lib dirs
+(its multiarch dir and immediate subdirs such as mit-krb5, plus lib/) to the
+reported library search path, gated on $SYSROOT_DIR so non-meson callers are
+untouched. meson then recognizes those dep dirs as system and emits no rpath,
+so nothing is baked and nothing is left behind. Pure bash; sandbox-safe.
+---
+ toolchain/cc_wrapper.sh.tpl | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/toolchain/cc_wrapper.sh.tpl b/toolchain/cc_wrapper.sh.tpl
+index 3ba9825..c8cfa8c 100644
+--- a/toolchain/cc_wrapper.sh.tpl
++++ b/toolchain/cc_wrapper.sh.tpl
+@@ -108,11 +108,13 @@ OUTPUT=
+ # dependency-generation calls.
+ is_link=1
+ has_fuse_ld=0
++has_print_search=0
+ 
+ function parse_link_state() {
+   case "$1" in
+     -c|-E|-S|-M|-MM|-fsyntax-only) is_link=0 ;;
+     -fuse-ld=*) has_fuse_ld=1 ;;
++    -print-search-dirs|--print-search-dirs) has_print_search=1 ;;
+   esac
+ }
+ 
+@@ -203,6 +205,29 @@ if [[ ${is_link} -eq 1 ]]; then
+   cmd=("${cmd[0]}" "-Wl,--as-needed" "${cmd[@]:1}")
+ fi
+ 
++# When meson queries the library search dirs (-print-search-dirs), advertise the
++# layered per-PG build sysroot lib dirs too. meson builds its system-dir set from
++# this output and skips rpath for dependencies found in a system dir. The
++# toolchain --sysroot is the libc sysroot, but PG dependencies live in the per-PG
++# build sysroot ($SYSROOT_DIR, layered in via -L), so without this meson bakes a
++# build-tree rpath for every such dependency.
++if [[ ${has_print_search} -eq 1 && -n "${SYSROOT_DIR:-}" ]]; then
++  __pssd_out="$("${cmd[@]}")"
++  __pssd_rc=$?
++  __pssd_extra=""
++  for __d in "${SYSROOT_DIR}"/usr/lib/*-linux-gnu "${SYSROOT_DIR}"/usr/lib/*-linux-gnu/*/ "${SYSROOT_DIR}"/usr/lib "${SYSROOT_DIR}"/lib/*-linux-gnu "${SYSROOT_DIR}"/lib; do
++    __d="${__d%/}"
++    [[ -d "${__d}" ]] && __pssd_extra="${__pssd_extra}${__d}:"
++  done
++  while IFS= read -r __line; do
++    case "${__line}" in
++      "libraries: ="*) printf "libraries: =%s%s\n" "${__pssd_extra}" "${__line#libraries: =}" ;;
++      *) printf "%s\n" "${__line}" ;;
++    esac
++  done <<< "${__pssd_out}"
++  exit ${__pssd_rc}
++fi
++
+ # Call the C++ compiler.
+ "${cmd[@]}"
+ 
