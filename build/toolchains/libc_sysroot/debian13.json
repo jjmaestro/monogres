@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "distro": "debian",
+  "distro_version": "13",
+  "archs": ["amd64", "arm64"],
+  "packages": [
+    "libc6",
+    "libc6-dev",
+    "linux-libc-dev",
+    "libgcc-14-dev",
+    "libgcc-s1",
+    "libstdc++-14-dev",
+    "libstdc++6",
+    "libz3-4"
+  ]
+}

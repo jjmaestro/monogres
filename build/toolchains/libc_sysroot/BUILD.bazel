@@ -1,0 +1,30 @@
+load("@platform_debian//:versions.bzl", "RELEASE", "VERSIONS")
+load("//platforms:targets.bzl", "ARCH_CPU", "arch_select")
+load("//toolchains/llvm_sysroot:llvm_version.bzl", "LLVM_MAJOR")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(
+    ["clang_wrapper.sh"] + ["debian{}.json".format(v) for v in VERSIONS],
+)
+
+# Per-target-arch alias for the @libc_sysroot clang wrapper. The wrapper is
+# exposed as a single-file label by `//sysroots/common:codegen.bzl::
+# sysroot_build`'s `extra_files_paths` `exports_files` block. Consumers (today:
+# `pg_build.bzl`) take a label dep on this alias and resolve the path via
+# `$(execpath ...)`, so the per-arch path mangling stays out of build files.
+#
+# Arch-selecting `:sysroot` / `:sysroot_tar` aliases live at
+# `@libc_sysroot//debian/12:sysroot[._tar]` (emitted by
+# `//sysroots/common:codegen.bzl::version_root_build`).
+alias(
+    name = "active_clang_wrapper",
+    actual = arch_select({
+        arch: "@libc_sysroot//debian/{}/{}:usr/lib/llvm-{}/bin/clang".format(
+            RELEASE.version,
+            arch,
+            LLVM_MAJOR,
+        )
+        for arch in ARCH_CPU
+    }),
+)

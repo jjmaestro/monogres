@@ -274,6 +274,65 @@ sysroots.apt(
 )
 use_repo(sysroots, "python_sysroot")
 
+# `@libc_sysroot`: hermetic Debian sysroot consumed by `llvm.sysroot` above,
+# materialized via `//sysroots` from the package list in
+# `//toolchains/libc_sysroot:debian12.json`. The `clang_wrapper.sh` shim is
+# Tier-2-injected into the materialized hub at the canonical Debian
+# `usr/lib/llvm-14/bin/clang` path so meson's `find_program('clang')` resolves
+# to it (the wrapper bakes `--sysroot=` into every clang invocation, which is
+# what Postgres's JIT path needs at runtime).
+sysroots.apt(
+    name = "libc_sysroot",
+    extra_files = {
+        "//toolchains/libc_sysroot:clang_wrapper.sh": "usr/lib/llvm-{}/bin/clang".format(
+            RELEASE["llvm_major"],
+        ),
+    },
+    lock = "//toolchains/libc_sysroot/locks:libc_sysroot.lock",
+    manifest = "//toolchains/libc_sysroot:debian{}.json".format(RELEASE["version"]),
+    snapshot = RELEASE["apt_snapshot"],
+)
+use_repo(sysroots, "libc_sysroot")
+
+# `@llvm_sysroot`: Debian-sourced LLVM-14 toolchain hub (clang-14, lld-14,
+# llvm-14-dev, libllvm14, libclang-cpp14, libclang-common-14-dev, plus the
+# clang-format-14 / clang-tidy-14 / clangd-14 tools that toolchains_llvm
+# unconditionally symlinks). The layout adapter in
+# `//toolchains/llvm_sysroot:cc_toolchain_layout.bzl` produces the canonical
+# `bin/<tool>` + `lib/clang/<ver>/...` shape that `llvm.toolchain_root(label =
+# ...)` consumes; this raw apt hub lives behind the adapter.
+sysroots.apt(
+    name = "llvm_sysroot",
+    lock = "//toolchains/llvm_sysroot/locks:llvm_sysroot.lock",
+    manifest = "//toolchains/llvm_sysroot:debian{}.json".format(RELEASE["version"]),
+    snapshot = RELEASE["apt_snapshot"],
+)
+use_repo(sysroots, "llvm_sysroot")
+
+# `cc_toolchain_layout` adapts `@llvm_sysroot`'s Debian-layout LLVM tree
+# (`usr/lib/llvm-14/bin/<tool>`) into the canonical clang+llvm tarball shape
+# (`bin/<tool>`) that `toolchains_llvm` v1.7.0 consumes via
+# `llvm.toolchain_root(label = ...)`. One repo per arch so symlinks resolve to
+# the matching `@llvm_sysroot//debian/12/<arch>` tree.
+cc_toolchain_layout = use_repo_rule(
+    "//toolchains/llvm_sysroot:cc_toolchain_layout.bzl",
+    "cc_toolchain_layout",
+)
+
+cc_toolchain_layout(
+    name = "llvm_toolchain_amd64",
+    arch = "amd64",
+    llvm_version = RELEASE["llvm_version"],
+    sysroot = "@llvm_sysroot//debian/{}/amd64:BUILD.bazel".format(RELEASE["version"]),
+)
+
+cc_toolchain_layout(
+    name = "llvm_toolchain_arm64",
+    arch = "arm64",
+    llvm_version = RELEASE["llvm_version"],
+    sysroot = "@llvm_sysroot//debian/{}/arm64:BUILD.bazel".format(RELEASE["version"]),
+)
+
 register_toolchains(
     "//toolchains/perl:perl_amd64",
     "//toolchains/perl:perl_arm64",

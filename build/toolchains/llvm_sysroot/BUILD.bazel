@@ -1,0 +1,18 @@
+package(default_visibility = ["//visibility:public"])
+
+# `@llvm_sysroot` is the Debian-snapshot-sourced LLVM-14 toolchain hub:
+# clang-14, lld-14, llvm-14-dev, libllvm14, libclang-cpp14,
+# libclang-common-14-dev plus the linter / completion tools (clang-format-14,
+# clang-tidy-14, clangd-14) that `toolchains_llvm` unconditionally symlinks (per
+# `BUILD.llvm_repo.tpl` + `_toolchain_tools` in
+# `@toolchains_llvm//toolchain/internal/common.bzl`). See `debian12.json`.
+#
+# Debian installs everything under `usr/lib/llvm-14/...` rather than the
+# canonical clang+llvm tarball shape (`bin/...`, `lib/clang/<ver>/...`); the
+# layout adapter in `//toolchains/llvm_sysroot:cc_toolchain_layout.bzl`
+# materializes the canonical shape via symlinks so this hub can be consumed by
+# `llvm.toolchain_root(label = ...)`.
+
+exports_files([
+    "debian12.json",
+])

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "distro": "debian",
+  "distro_version": "12",
+  "archs": ["amd64", "arm64"],
+  "packages": [
+    "clang-14",
+    "clang-format-14",
+    "clang-tidy-14",
+    "clangd-14",
+    "libclang-common-14-dev",
+    "libclang-cpp14",
+    "libllvm14",
+    "libomp-14-dev",
+    "libomp5-14",
+    "lld-14",
+    "llvm-14-dev"
+  ]
+}

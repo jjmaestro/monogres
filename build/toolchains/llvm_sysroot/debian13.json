@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "distro": "debian",
+  "distro_version": "13",
+  "archs": ["amd64", "arm64"],
+  "packages": [
+    "clang-19",
+    "clang-format-19",
+    "clang-tidy-19",
+    "clangd-19",
+    "libclang-common-19-dev",
+    "libclang-cpp19",
+    "libllvm19",
+    "libomp-19-dev",
+    "libomp5-19",
+    "lld-19",
+    "llvm-19-dev"
+  ]
+}
