@@ -4,12 +4,26 @@ Rules to build Postgres PGXS extensions from source.
 Internal to monoext; invoked from generated `@{name}_ext//...` BUILD files.
 """
 
+load("@platform_debian//:versions.bzl", "RELEASE")
 load("//monoext/private/base/build_options:pg.bzl", "DEFAULT_PREFIX_DISTRO")
+load("//toolchains/llvm_sysroot:llvm_version.bzl", "LLVM_MAJOR")
 
 # Action-time setup script (shared with `pg_build.bzl`): extracts the per-PG
-# sysroot tar into `$EXT_BUILD_ROOT/sysroot/` and prints the absolute sysroot
-# path on stdout.
+# sysroot tar into `$EXT_BUILD_ROOT/sysroot/`, sed-patches perl Config files in
+# place, symlinks the @libc_sysroot clang wrapper inside the extracted tree, and
+# prints the absolute sysroot path on stdout.
 _SYSROOT_SETUP_SCRIPT = "@monogres//monoext/private/base:sysroot_setup.sh"
+
+# Per-arch @libc_sysroot clang wrapper. Used for the action-time symlink dance
+# so meson canonicalizes the symlink into the wrapper's persistent absolute path
+# (under `/external/sysroots++sysroots+libc_sysroot/...`).
+_SYSROOT_CLANG_WRAPPER = "@monogres//toolchains/libc_sysroot:active_clang_wrapper"
+
+# Fallback buildtime sysroot tar (active Debian release) for extensions that
+# declare no buildtime deps of their own; see the consumer below.
+_LIBC_SYSROOT_TAR = "@libc_sysroot//debian/{}:sysroot_tar".format(
+    RELEASE.version,
+)
 
 def pgxs_build(
         name,
@@ -42,8 +56,9 @@ def pgxs_build(
             `monoext/private/ext/external.bzl`, resolving to the per-extension
             `@pgbuildtime_<key>//<distro>/<v>/<arch>:sysroot.tar` single-file
             artifact emitted by `//sysroots/apt`. Empty when the extension
-            declares no buildtime deps (build runs without an extension sysroot;
-            the layered PG sysroot still covers Postgres-interface deps).
+            declares no buildtime deps (falls back to the @libc_sysroot tar via
+            `@libc_sysroot//debian/12:sysroot_tar`; the layered PG sysroot still
+            covers Postgres-interface deps).
         base_version (dict): `dict` with `name` and `version` keys to select the
             Postgres build that will be used when building the extension.
         base_hub (str): The base hub repo name (e.g. `"@pg"`). PG build targets
@@ -63,7 +78,11 @@ def pgxs_build(
 
     tar_file, log_file = ["%s%s" % (name, file) for file in (".tar", ".log")]
 
-    sysroot_tar = deps_buildtime[0] if deps_buildtime else None
+    # Extensions without buildtime deps fall back to the @libc_sysroot tar
+    # (codegen-emitted arch-selecting alias at
+    # `@libc_sysroot//debian/12:sysroot_tar`). The setup script handles both
+    # cases uniformly.
+    sysroot_tar = deps_buildtime[0] if deps_buildtime else _LIBC_SYSROOT_TAR
 
     srcs = [
         # The SDK tree (`:tar.dev`): the full `meson install` carrying the
@@ -72,11 +91,11 @@ def pgxs_build(
         # SDK, matching the `:toolchain` (PG_CONFIG / PG_INSTALL_DIR) below.
         "%s//%s:tar.dev" % (base_hub, base_version["version"]),
         src,
+        sysroot_tar,
         base_sysroot_tar,
+        _SYSROOT_CLANG_WRAPPER,
         _SYSROOT_SETUP_SCRIPT,
     ]
-    if sysroot_tar:
-        srcs.append(sysroot_tar)
 
     native.genrule(
         name = name,
@@ -119,25 +138,67 @@ def pgxs_build(
             cp -raL "$$pgxs_src" "$$pgxs_src_copy"
             chmod -R u+w "$$pgxs_src_copy"
 
+            # NOTE:
+            # Some autoconf-based extensions (citus) ship `configure` and
+            # `configure.ac` in the source tarball with identical (or nearly
+            # identical) timestamps. After `cp -raL` the sub-microsecond
+            # mtime ordering can flip so configure.ac > configure, which
+            # triggers the standard make rule
+            #     configure: configure.ac
+            #             ./autogen.sh
+            # → `autoreconf -f`, which needs autoconf on the host. Touch
+            # `configure` (if present) so make sees it as up-to-date and
+            # skips regeneration. The shipped `configure` is what we want
+            # to run anyway.
+            if [[ -f "$$pgxs_src_copy/configure" ]]; then
+                touch "$$pgxs_src_copy/configure"
+            fi
+
             local arch
             arch="$$(uname -m)"
 
             # NOTE:
             # Two sysroots layered: the extension's own (`sysroot_dir`,
-            # searched first) and the per-PG buildtime sysroot
-            # (`pg_sysroot_dir`, searched after). `-idirafter` keeps
-            # extension headers ahead of inherited Postgres-interface
-            # headers, and PG's sysroot provides everything Postgres's
-            # installed headers transitively `#include` (libicu, libssl,
-            # libxml2, etc., when Postgres was built with the
-            # corresponding `--with-*` option).
+            # searched first via `--sysroot=` + `-idirafter`) and the per-PG
+            # buildtime sysroot (`pg_sysroot_dir`, layered via `-idirafter` /
+            # `-L`). The extension sysroot ships the LLVM-toolchain compile-
+            # time prerequisites (`LLVM_PREREQS` floor in
+            # `monoext/private/pkgs.bzl`) AND every extension-specific
+            # buildtime package; the PG sysroot covers everything
+            # Postgres's installed headers transitively `#include` (libicu,
+            # libssl, libxml2, etc., when Postgres was built with the
+            # corresponding `--with-*` option). Extensions therefore declare
+            # only deps their own source code uses directly.
+            #
+            # `--sysroot=<sysroot_dir>` is required for autoconf-style
+            # extensions because their `./configure` invokes `$$CC conftest.c`
+            # DIRECTLY (without going through bazel's cc_toolchain features
+            # that would inject --sysroot via the cc_wrapper). Without this,
+            # the conftest link dies looking for crt1.o / libgcc / libstdc++
+            # from a nonexistent default sysroot. (Meson-based builds like
+            # Postgres get --sysroot via cc_toolchain features and don't
+            # need this manually.)
             local pg_cflags=(
+                "--sysroot=$$sysroot_dir"
                 "-idirafter $$sysroot_dir/usr/include"
                 "-idirafter $$sysroot_dir/usr/include/$${{arch}}-linux-gnu"
                 "-idirafter $$pg_sysroot_dir/usr/include"
                 "-idirafter $$pg_sysroot_dir/usr/include/$${{arch}}-linux-gnu"
             )
+            # NOTE:
+            # `--sysroot` is duplicated here so configure's link-only checks
+            # (which use LDFLAGS but not CFLAGS) find crt1.o et al.
+            # `-Wl,--sysroot=` forwards sysroot to the linker so its
+            # linker-script processing honors `=` sysroot-relative path
+            # prefixes. The `@pgbuildtime_<key>` hub already rewrote Debian's
+            # `lib*.so` linker scripts at repo-rule time (via //sysroots'
+            # Tier-1 normalize) so absolute paths inside them are
+            # `=`-prefixed. `-fuse-ld=lld` is not stated here because the
+            # toolchain's cc_wrapper defaults link invocations to `lld` when
+            # no `-fuse-ld=...` is otherwise specified.
             local pg_ldflags=(
+                "--sysroot=$$sysroot_dir"
+                "-Wl,--sysroot=$$sysroot_dir"
                 "-L$$sysroot_dir/usr/lib/$${{arch}}-linux-gnu"
                 "-L$$pg_sysroot_dir/usr/lib/$${{arch}}-linux-gnu"
             )
@@ -359,19 +420,21 @@ def pgxs_build(
 
         # Per-extension sysroot delivered as a single `:sysroot_tar` artifact
         # and extracted at action time by the shared setup script (also used
-        # by `pg_build.bzl`). The script extracts to `$$EXT_BUILD_ROOT/sysroot/`
-        # and prints the absolute sysroot path on stdout.
+        # by `pg_build.bzl`). The script extracts to `$$EXT_BUILD_ROOT/sysroot/`,
+        # sed-patches perl Config files in place, symlinks the @libc_sysroot
+        # clang wrapper, and prints the absolute sysroot path on stdout. The
+        # tar is unpacked by the hermetic `bsdtar` from `@bsd_tar_toolchains`,
+        # the same family that wrote the archive at `sysroots/apt` repo-rule
+        # time, so the pax snapshot round-trips end-to-end.
         SETUP_SH="$$EXT_BUILD_ROOT/$(execpath {setup})"
         SYSROOT_TAR_PATH="$$EXT_BUILD_ROOT/$(execpath {sysroot_tar})"
-        SYSROOT_DIR=$$(sh "$$SETUP_SH" "$$SYSROOT_TAR_PATH" "{tar_cmd}")
+        WRAPPER_PATH="$$EXT_BUILD_ROOT/$(execpath {wrapper})"
+        SYSROOT_DIR=$$(sh "$$SETUP_SH" "$$SYSROOT_TAR_PATH" "$$WRAPPER_PATH" "{tar_cmd}" "{llvm_major}")
 
-        # Per-PG buildtime sysroot extracted inline by the hermetic `bsdtar`
-        # from `@bsd_tar_toolchains` (same family that writes the tar in
-        # `sysroots/apt/private/repo.bzl::_make_sysroot_tar`, so the pax
-        # snapshot round-trips: symlinks, long paths, uid/gid/mtime, pax
-        # extended attributes). No setup script needed: this tree is
-        # consumed read-only for `-idirafter` / `-L` / pkg-config lookups
-        # (no perl patches, no in-tree mutations).
+        # Per-PG buildtime sysroot extracted inline with the same hermetic
+        # `bsdtar`. No setup script needed: this tree is consumed read-only
+        # for `-idirafter` / `-L` / pkg-config lookups (no perl patches, no
+        # in-tree mutations).
         BASE_SYSROOT_TAR_PATH="$$EXT_BUILD_ROOT/$(execpath {base_sysroot_tar})"
         PG_SYSROOT_DIR="$$EXT_BUILD_ROOT/pg_sysroot"
         mkdir -p "$$PG_SYSROOT_DIR"
@@ -405,6 +468,8 @@ def pgxs_build(
             setup = _SYSROOT_SETUP_SCRIPT,
             sysroot_tar = sysroot_tar,
             base_sysroot_tar = base_sysroot_tar,
+            wrapper = _SYSROOT_CLANG_WRAPPER,
+            llvm_major = LLVM_MAJOR,
             debug = "%s" % debug,
         ),
         target_compatible_with = select({

@@ -16,8 +16,10 @@ per-group hub exposes:
     the same tree (including files Bazel can't represent as target labels).
 
 Buildtime consumers (`pg_build`, `pgxs_build`) take `:sysroot.tar` and extract
-at action time via the shared setup script
-(`monoext/private/base/sysroot_setup.sh`).
+at action time; the clang wrapper is symlinked in by the action setup script
+(`monoext/private/base/sysroot_setup.sh`), not Tier-2-injected into the hub
+itself, so meson canonicalizes the symlink into the @libc_sysroot wrapper's
+persistent absolute path when baking `CLANG` into `Makefile.global`.
 """
 
 load("@platform_debian//:versions.bzl", "RELEASE")
@@ -35,6 +37,33 @@ load("//platforms:targets.bzl", "ARCHS")
 # distro is fixed; the release version comes from the profile.
 _BUILDTIME_DISTRO = "debian"
 _BUILDTIME_DISTRO_VERSION = RELEASE.version
+
+# Compile-time prerequisites unconditionally added to every buildtime
+# `@pgbuildtime_<key>` hub's closure. Mirrors `@libc_sysroot`'s package list
+# (`//toolchains/libc_sysroot/debian.json`) — these provide
+# `crt{begin,end,1}.o`, `libgcc.a`, `libgcc_s.so.1`, `libstdc++.so.6`, and the
+# system libc headers that any non-trivial C/C++ link needs. Without them in the
+# per-PG / per- extension hub, `pgxs_build`'s `--sysroot=<hub>` link check fails
+# with `ld.lld:
+# error: cannot open crtbegin.o` (citus 13.2.0 surfaced this:
+# `libssl-dev` + `libxml2-dev` don't transitively pull the versioned libgcc
+# `-dev`). Adding these to the closure seed (not to `pkgs_groups`, which would
+# change the content-addressed group keys) keeps the public group identity
+# stable while augmenting only what each hub actually ships.
+LLVM_PREREQS = [
+    "libc6",
+    "libc6-dev",
+    "linux-libc-dev",
+    "libgcc-{}-dev".format(RELEASE.gcc_major),
+    "libgcc-s1",
+    "libstdc++-{}-dev".format(RELEASE.gcc_major),
+    "libstdc++6",
+]
+
+# Internal group key used to make `apt_pkgs` resolve `LLVM_PREREQS` so they land
+# in `apt_result.packages` and become reachable for the closure walker. Skipped
+# when iterating groups to create per-extension hubs.
+LLVM_PREREQS_GROUP_KEY = "__monoext_llvm_compile_prereqs__"
 
 def _group_labels(hub_name, group):
     """Builds @pkgs//deb/ labels for a resolved `AptGroup`."""
@@ -121,16 +150,35 @@ def create_pkgs(ctx, hub_name, groups, lock = None):
         RELEASE.version,
     )
 
+    # Add the LLVM compile prereqs as a synthetic group so `apt_pkgs` resolves
+    # them and they show up in `apt_result.packages`. The per-extension closure
+    # seeds below pull them into each buildtime hub. The synthetic group itself
+    # is skipped when creating per-extension hubs (no consumer references it).
+    pkgs_groups = dict(pkgs_groups)
+    pkgs_groups[LLVM_PREREQS_GROUP_KEY] = LLVM_PREREQS
+
     deb_repo = repo_names.deb_repo(hub_name)
     apt_result, lock_json = apt_pkgs(ctx, deb_repo, pkgs_groups, lock)
 
-    # Build `group_dep_info` and, in parallel, instantiate one
-    # `@sysroots//apt:hub_repo` per resolved package group. Each per-group hub
-    # produces `@pgbuildtime_<key>//debian/12/<arch>:sysroot` filegroups that
-    # `pg_build` consumes via the per-target alias rendered in `versions.bzl`.
+    buildtime_keys = {
+        gk: True
+        for gk in ext_dep_groups.get("buildtime", {}).values()
+    }
+
+    # Build `group_dep_info` and, in parallel, call `apt_group(...)` per
+    # resolved package group to materialize one `@pgbuildtime_<key>` sub-hub.
+    # Each hub produces `@pgbuildtime_<key>//debian/12/<arch>:sysroot`
+    # filegroups that `pg_build` consumes via the per-target alias rendered in
+    # `versions.bzl`.
     group_dep_info = {}
 
     for group_key, group in apt_result.groups.items():
+        # The synthetic LLVM-prereqs group exists only so `apt_pkgs` resolves
+        # those packages into `apt_result.packages` for the closure walker; no
+        # consumer references it, so don't materialize a hub for it.
+        if group_key == LLVM_PREREQS_GROUP_KEY:
+            continue
+
         labels = _group_labels(hub_name, group)
 
         # `stable_key` over the per-package labels yields a content-keyed,
@@ -164,12 +212,22 @@ def create_pkgs(ctx, hub_name, groups, lock = None):
             sysroot_tar_labels_by_arch = sysroot_tar_labels_by_arch,
         )
 
+        # Buildtime hubs seed the closure with the LLVM compile prereqs so the
+        # resulting tree always contains `crt{begin,end,1}.o`, `libgcc.a`,
+        # `libstdc++.so.6`, and friends — required by `pgxs_build`'s autoconf
+        # `--sysroot=<hub>` link check (which doesn't go through the
+        # cc_toolchain). Runtime hubs skip the augmentation; they're not compile
+        # sysroots.
+        closure_seeds = group.resolved_names
+        if group_key in buildtime_keys:
+            closure_seeds = list(group.resolved_names) + LLVM_PREREQS
+
         apt_group(
             name = hub_repo_name,
             distro = _BUILDTIME_DISTRO,
             version = _BUILDTIME_DISTRO_VERSION,
             packages = apt_result.packages,
-            requested_names = group.resolved_names,
+            requested_names = closure_seeds,
         )
 
     pkgs_repo(

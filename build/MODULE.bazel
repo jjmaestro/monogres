@@ -16,6 +16,7 @@ bazel_dep(name = "platforms", version = "1.1.0")
 # see https://bazelbuild.slack.com/archives/CA31HN1T3/p1753021278448849
 bazel_dep(name = "protobuf", version = "34.1")
 bazel_dep(name = "rules_bison", version = "0.4.bcr.1")
+bazel_dep(name = "rules_cc", version = "0.2.18")
 bazel_dep(name = "rules_distroless", version = "0.8.0")
 bazel_dep(name = "rules_flex", version = "0.4.1")
 bazel_dep(name = "rules_foreign_cc", version = "0.15.1")
@@ -141,48 +142,54 @@ debian_releases(
 )
 
 # toolchains/
+#
+# `toolchains_llvm` in mode 4 (Bazel-package `toolchain_root`): the compiler
+# binaries come from `@llvm_toolchain_amd64` (the `cc_toolchain_layout` adapter
+# wrapping the Debian-sourced `@llvm_sysroot`), NOT from a downloaded LLVM
+# tarball. `rules.bzl:48` short-circuits when `toolchain_roots` is non-empty so
+# `@llvm_toolchain_llvm` is never created.
+#
+# `targets` on `llvm.toolchain_root` keys by EXEC arch (where clang RUNS).
+# Single entry for linux-x86_64: the build host is always amd64; clang
+# cross-targets aarch64 binaries via `--target=aarch64-linux-gnu`. The two
+# `llvm.sysroot(targets = [...])` tags below key by TARGET arch (what clang
+# COMPILES FOR) and feed `--sysroot=` per cross-compile target.
+#
+# stdlib = stdc++ matches what the @libc_sysroot Debian sysroot ships
+# (libstdc++-12-dev + libstdc++6); the same libstdc++ is used at link / runtime.
+
 llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm", dev_dependency = True)
-
-# NOTE:
-# We use a system LLVM toolchain, so it will use the LLVM installed in the
-# Docker image, versioned by the active release. For debian 12 that is llvm-14,
-# clang-14, lld-14, and libc6-dev. Also, absolute_paths=True is needed because
-# the system toolchain uses absolute paths for builtin headers (e.g.
-# /usr/lib/llvm-14/lib/clang/14.0.6/include/). Plus using libstdc++ instead of
-# libc++ to match Debian's LLVM libraries ABI.
 llvm.toolchain(
-    name = "llvm_toolchain_system_linux_amd64",
-    absolute_paths = True,
-    exec_arch = "amd64",
-    exec_os = "linux",
+    name = "llvm_toolchain",
+    # `extra_compiler_files`: Debian clang at exec time needs its dynamic libs
+    # (libLLVM-14.so.1, libclang-cpp.so.14, libedit.so.2, libxml2.so.2, etc.)
+    # available in every compile/link action sandbox. The `cc_toolchain_layout`
+    # adapter's `:lib` filegroup carries them (hardlinked from Debian's
+    # multiarch dir); `extra_compiler_files` threads them into every action's
+    # input tree. The cc_wrapper.sh patch sets `LD_LIBRARY_PATH` so ld.so finds
+    # them when invoking clang.
+    extra_compiler_files = "@llvm_toolchain_amd64//:lib",
     llvm_version = RELEASE["llvm_version"],
     stdlib = {"": "stdc++"},
 )
 llvm.toolchain_root(
-    name = "llvm_toolchain_system_linux_amd64",
-    path = "/usr/lib/llvm-{}".format(RELEASE["llvm_major"]),
+    name = "llvm_toolchain",
+    label = "@llvm_toolchain_amd64//:BUILD",
 )
-llvm.toolchain(
-    name = "llvm_toolchain_system_linux_arm64",
-    absolute_paths = True,
-    exec_arch = "arm64",
-    exec_os = "linux",
-    llvm_version = RELEASE["llvm_version"],
-    stdlib = {"": "stdc++"},
+llvm.sysroot(
+    name = "llvm_toolchain",
+    label = "@libc_sysroot//debian/{}/amd64:sysroot".format(RELEASE["version"]),
+    targets = ["linux-x86_64"],
 )
-llvm.toolchain_root(
-    name = "llvm_toolchain_system_linux_arm64",
-    path = "/usr/lib/llvm-{}".format(RELEASE["llvm_major"]),
+llvm.sysroot(
+    name = "llvm_toolchain",
+    label = "@libc_sysroot//debian/{}/arm64:sysroot".format(RELEASE["version"]),
+    targets = ["linux-aarch64"],
 )
-use_repo(llvm, "llvm_toolchain_system_linux_amd64", "llvm_toolchain_system_linux_arm64")
+use_repo(llvm, "llvm_toolchain")
 
 register_toolchains(
-    "@llvm_toolchain_system_linux_arm64//:all",
-    dev_dependency = True,
-)
-
-register_toolchains(
-    "@llvm_toolchain_system_linux_amd64//:all",
+    "@llvm_toolchain//:all",
     dev_dependency = True,
 )
 

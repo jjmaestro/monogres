@@ -9,13 +9,27 @@ variables, toolchain references, and Meson options needed for the build.
 """
 
 load("@rules_foreign_cc//foreign_cc:meson.bzl", "meson")
+load("//toolchains/llvm_sysroot:llvm_version.bzl", "LLVM_MAJOR")
 load("//toolchains/perl:perl_toolchain.bzl", _PERL_VERSION = "PERL_VERSION")
 load(":toolchain.bzl", "pg_template_variable_info")
 
 # Action-time setup script: extracts the per-PG sysroot tar into
-# `$EXT_BUILD_ROOT/sysroot/` and prints the sysroot absolute path on stdout for
-# `SYSROOT_DIR`.
+# `$EXT_BUILD_ROOT/sysroot/`, sed-patches perl's `Config.pm` / `Config_heavy.pl`
+# in place for the hermetic chroot, symlinks the @libc_sysroot clang wrapper
+# into the extracted tree (so meson canonicalizes the symlink into the wrapper's
+# persistent absolute path when baking `CLANG` into `Makefile.global`), and
+# prints the sysroot absolute path on stdout for `SYSROOT_DIR`.
 _SYSROOT_SETUP_SCRIPT = "@monogres//monoext/private/base:sysroot_setup.sh"
+
+# Per-arch @libc_sysroot clang wrapper. Cross-PG-version label — the wrapper
+# content is the same for every buildtime sysroot (it's the same
+# self-discovering shim from `//toolchains/libc_sysroot/clang_wrapper.sh`), so
+# we anchor on the canonical @libc_sysroot copy rather than each per-PG
+# `@pgbuildtime_<key>`'s sibling extra_files-injected copy. Meson canonicalizes
+# the action-time symlink into this label's resolved file path, which lives
+# under `/external/sysroots++sysroots+libc_sysroot/...` (persistent under
+# Bazel's install-base bind-mount).
+_SYSROOT_CLANG_WRAPPER = "@monogres//toolchains/libc_sysroot:active_clang_wrapper"
 
 # `//toolchains/perl:perl` is the per-arch alias for the Perl interpreter binary
 # (the per-arch `perl_toolchain` instance's `DefaultInfo` is the perl binary
@@ -75,8 +89,12 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
     if sysroot_tar:
         # The tar is the only `:sysroot_tar` artifact consumers see; the full
         # normalized tree lives inside. At action time the setup script extracts
-        # it to `$EXT_BUILD_ROOT/sysroot/` and prints that path for SYSROOT_DIR.
+        # it, sed-patches perl Config, and symlinks the clang wrapper. The
+        # wrapper label is added separately because meson's canonicalize-symlink
+        # step needs to resolve it to a persistent absolute path (not the
+        # sandbox-extracted copy).
         build_data.append(sysroot_tar)
+        build_data.append(_SYSROOT_CLANG_WRAPPER)
         build_data.append(_SYSROOT_SETUP_SCRIPT)
 
     toolchains = [
@@ -149,12 +167,18 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
 
     if sysroot_tar:
         env_sysroot = dict(
-            # The setup script extracts the tar and prints
+            # The setup script extracts the tar, symlinks the @libc_sysroot
+            # clang wrapper inside the extracted tree, and prints
             # `$EXT_BUILD_ROOT/sysroot` (absolute). `$(...)` captures it as
             # SYSROOT_DIR; all downstream env vars expand through it.
-            SYSROOT_DIR = "$$(sh $(execpath {setup}) $(execpath {tar}) $(BSDTAR_BIN))".format(
+            SYSROOT_DIR = (
+                "$$(sh $(execpath {setup}) $(execpath {tar}) " +
+                "$(execpath {wrapper}) $(BSDTAR_BIN) {llvm_major})"
+            ).format(
                 setup = _SYSROOT_SETUP_SCRIPT,
                 tar = sysroot_tar,
+                wrapper = _SYSROOT_CLANG_WRAPPER,
+                llvm_major = LLVM_MAJOR,
             ),
             PKG_CONFIG_SYSROOT_DIR = "$$SYSROOT_DIR",
             PKG_CONFIG_PATH = ":".join([
@@ -193,18 +217,21 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
     # `find_program('perl')` resolves to the Debian perl-base 5.36 interpreter
     # from `@perl_sysroot` (ABI-locked with the per-PG sysroot's libperl-dev /
     # libperl5.36) rather than any other perl on PATH. Then python3 dir, then
-    # (when sysroot) system LLVM bin + sysroot bin dirs. The system LLVM bin
-    # (/usr/lib/llvm-14/bin) must come before the sysroot path so that meson
-    # finds the system clang rather than looking under the sysroot.
+    # (when sysroot) sysroot bin dirs. `usr/lib/llvm-14/bin` carries
+    # `llvm-config-14` plus our action-time symlinked `clang` wrapper;
+    # `find_program('clang')` resolves to the symlink, then meson canonicalizes
+    # to the @libc_sysroot wrapper's persistent path when baking `CLANG` into
+    # Makefile.global.
     path_components = [
         "$$PERL_SYSROOT_DIR/usr/bin",
         "$$(dirname $(execpath {}))".format(_PYTHON_BIN),
     ]
 
     if sysroot_tar:
-        path_components.append("/usr/lib/llvm-14/bin")
         path_components.append("$$SYSROOT_DIR/usr/bin")
-        path_components.append("$$SYSROOT_DIR/usr/lib/llvm-14/bin")
+        path_components.append(
+            "$$SYSROOT_DIR/usr/lib/llvm-" + LLVM_MAJOR + "/bin",
+        )
 
     path_components.append("$$PATH")
 
@@ -241,10 +268,11 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
     )
 
 # After `make install`, Postgres's `lib/pgxs/src/Makefile.global` captures
-# CFLAGS/LDFLAGS verbatim from the configure environment, which includes various
-# $EXT_BUILD_ROOT-relative tool paths (AR, BISON, ...) and the
-# action-time-extracted `$EXT_BUILD_ROOT/sysroot/...` paths. Once the
-# postgres-install sandbox is torn down, all those paths point to a dead
+# CFLAGS/LDFLAGS verbatim from the configure environment, which includes the
+# toolchain's `--sysroot=<EXT_BUILD_ROOT>/external/.../sysroot` baked in by
+# `llvm.sysroot(...)`, the action-time-extracted `$EXT_BUILD_ROOT/ sysroot/...`
+# paths, plus various $EXT_BUILD_ROOT-relative tool paths (AR, BISON, ...). Once
+# the postgres-install sandbox is torn down, all those paths point to a dead
 # `/sandbox/linux-sandbox/<N>/execroot/_main/` prefix and downstream PGXS
 # extension builds (e.g. citus 13.2.0/pg 16.0) fail to link.
 #
@@ -253,15 +281,38 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
 # `*-config`, `*.mk`, `*.cmake`. `Makefile.global` does not match any of those,
 # so the framework's own rewrite skips it.
 #
-# Strip the sandbox prefix so absolute paths under sandbox execroots collapse to
-# `/<install_base>/...` (persistent across sandbox teardowns via Bazel's
-# install-base bind-mount).
+# Step 1 strips the sandbox prefix so absolute paths under sandbox execroots
+# collapse to `/<install_base>/...` (persistent across sandbox teardowns via
+# Bazel's install-base bind-mount).
+#
+# Step 2 rewrites the action-time `/sysroot/usr/lib/llvm-14/bin` prefix (where
+# the tar-extracted Debian libllvm14 binaries lived during the action) to the
+# persistent `@llvm_sysroot` bin dir (`/external/sysroots++sysroots+llvm_sysroot
+# /debian/12/<arch>/usr/lib/llvm-14/bin`). Both paths point at the same Debian
+# llvm-14 binaries (same APT_SNAPSHOT); the rewrite swaps the per-action sandbox
+# location for the install-base-bind-mount-persistent one so PGXS extensions
+# invoking `$(LLVM_BINPATH)/llvm-lto` succeed after sandbox teardown.
+#
+# Step 3 redirects just `/clang` (word-anchored) from `@llvm_sysroot`'s raw
+# Debian clang to the @libc_sysroot `clang_wrapper.sh` shim. Postgres's runtime
+# JIT path invokes `$(CLANG)` DIRECTLY to emit-llvm-IR; no cc_toolchain features
+# inject `--sysroot=`, so the unwrapped clang would compile against host headers
+# (no host in the hermetic sandbox; in the production container we want the
+# deterministic Debian sysroot). The wrapper bakes `--sysroot=<libc_sysroot>`
+# into every invocation. The `\\b` boundary keeps `clang-14`, `clang++`, etc.
+# routed through `@llvm_sysroot` directly (they're only invoked by the build,
+# not by runtime JIT).
+
+# buildifier: disable=external-path
 _STRIP_SANDBOX_PATHS_POSTFIX = """\
+_arch=$$(uname -m | sed -e s/x86_64/amd64/ -e s/aarch64/arm64/)
 find "$$INSTALLDIR" -name 'Makefile.global' -print0 \\
     | xargs -0 --no-run-if-empty \\
         sed -i -E \\
-            -e 's|/sandbox/linux-sandbox/[0-9]+/execroot/[^/]+/|/|g'
-"""
+            -e 's|/sandbox/linux-sandbox/[0-9]+/execroot/[^/]+/|/|g' \\
+            -e "s|/sysroot/usr/lib/llvm-{major}/bin|/external/sysroots++sysroots+llvm_sysroot/debian/12/$${{_arch}}/usr/lib/llvm-{major}/bin|g" \\
+            -e "s|/external/sysroots[+][+]sysroots[+]llvm_sysroot/debian/12/$${{_arch}}/usr/lib/llvm-{major}/bin/clang\\b|/external/sysroots++sysroots+libc_sysroot/debian/12/$${{_arch}}/usr/lib/llvm-{major}/bin/clang|g"
+""".format(major = LLVM_MAJOR)
 
 def _pg_build_meson(name, pg_src, build_options, auto_features, sysroot_tar = None):
     pg_binaries = [

@@ -34,17 +34,6 @@ REPRODUCIBLE_CONTAINERS_VERSION ?= 0.1.4
 # https://github.com/bazelbuild/bazelisk
 BAZELISK_VERSION ?= 1.27.0
 
-DEPS_CC_TOOLCHAIN = \
-	clang-14 \
-	libc++-14-dev \
-	libc++abi-14-dev \
-	libc6-dev \
-	libclang-rt-14-dev \
-	libunwind-14-dev \
-	lld-14 \
-	llvm-14 \
-	llvm-14-dev
-
 # rules_distroless: xz-utils
 DEPS_NON_HERMETIC_BAZEL_RULES = \
 	xz-utils
@@ -56,7 +45,6 @@ DOCKER_BUILD_ARGS = \
 	--build-arg REPRODUCIBLE_CONTAINERS_VERSION="$(REPRODUCIBLE_CONTAINERS_VERSION)" \
 	--build-arg BAZELISK_VERSION="$(BAZELISK_VERSION)" \
 	--build-arg BAZEL_VERSION="$(BAZEL_VERSION)" \
-	--build-arg DEPS_CC_TOOLCHAIN="$(DEPS_CC_TOOLCHAIN)" \
 	--build-arg DEPS_NON_HERMETIC_BAZEL_RULES="$(DEPS_NON_HERMETIC_BAZEL_RULES)" \
 	--build-arg USERNAME="$(USERNAME)" \
 	--build-arg HOMEDIR="/$(USERNAME)" \

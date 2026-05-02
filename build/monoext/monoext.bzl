@@ -31,7 +31,7 @@ load("@platform_debian//:versions.bzl", "RELEASE")
 load("@sysroots//common:tag_key.bzl", "tag_key")
 load("//monoext/private:base.bzl", "create_base", "create_base_src")
 load("//monoext/private:ext.bzl", "create_ext", "create_ext_src")
-load("//monoext/private:pkgs.bzl", "create_pkgs")
+load("//monoext/private:pkgs.bzl", "LLVM_PREREQS", "create_pkgs")
 load("//monoext/private:repo_names.bzl", "repo_names")
 load("//monoext/private/apt:apt_lock.bzl", "SNAPSHOT", _AptLock = "apt_lock")
 load("//monoext/private/pkgs:schema.bzl", "KINDS")
@@ -80,11 +80,17 @@ def create_monogres(
     if deb_lock:
         lock = _AptLock.decode(ctx.read(deb_lock))
 
+        # LLVM_PREREQS is the compile-time floor `create_pkgs` adds to every
+        # buildtime hub's closure. The lockfile MUST already have them — without
+        # it, the buildtime hubs would silently come out missing `crt*.o` /
+        # `libgcc*` (citus 13.2.0 link check surfaces this).
         error = _AptLock.validate(
             lock,
             snapshot = SNAPSHOT,
             archs = list(ARCHS),
-            requested_packages = _collect_all_packages(package_groups),
+            requested_packages = (
+                _collect_all_packages(package_groups) + LLVM_PREREQS
+            ),
         )
         if error:
             # buildifier: disable=print

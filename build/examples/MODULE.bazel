@@ -6,6 +6,7 @@ module(
 bazel_dep(name = "bazel_skylib", version = "1.9.0", dev_dependency = True)
 bazel_dep(name = "monogres", version = "", dev_dependency = True)
 bazel_dep(name = "rules_python", version = "1.9.0", dev_dependency = True)
+bazel_dep(name = "sysroots", version = "0.0.1", dev_dependency = True)
 bazel_dep(name = "toolchains_llvm", version = "1.7.0", dev_dependency = True)
 
 monoext = use_extension("@monogres//monoext:monoext.bzl", "monoext")
@@ -90,35 +91,98 @@ archive_override(
     url = "https://github.com/bazel-contrib/toolchains_llvm/releases/download/v{v}/toolchains_llvm-v{v}.tar.gz".format(v = TOOLCHAINS_LLVM_VERSION),
 )
 
+# Mirror the monogres root mode-4 wiring: `toolchains_llvm` consumes the
+# Debian-sourced clang via `llvm.toolchain_root(label = ...)` against the
+# `cc_toolchain_layout` adapter wrapping `@llvm_sysroot`. The clang wrapper
+# injected into `@libc_sysroot` resolves through
+# `external/+_repo_rules+llvm_toolchain_<arch>/bin/clang`, so the adapter must
+# be materialized here too.
+
+# Mirror of the `RELEASES` table in the root `monogres` `MODULE.bazel`; kept in
+# sync by hand because MODULE files cannot `load()` shared data.
+RELEASES = {
+    "12": {
+        "apt_snapshot": "20250113T000000Z",
+        "llvm_major": "14",
+        "llvm_version": "14.0.6",
+        "version": "12",
+    },
+    "13": {
+        "apt_snapshot": "20260316T000000Z",
+        "llvm_major": "19",
+        "llvm_version": "19.1.7",
+        "version": "13",
+    },
+}
+
+RELEASE = RELEASES["12"]
+
 llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm", dev_dependency = True)
 llvm.toolchain(
-    name = "llvm_toolchain_system_linux_amd64",
-    exec_arch = "amd64",
-    exec_os = "linux",
-    llvm_version = "14.0.6",
+    name = "llvm_toolchain",
+    extra_compiler_files = "@llvm_toolchain_amd64//:lib",
+    llvm_version = RELEASE["llvm_version"],
+    stdlib = {"": "stdc++"},
 )
 llvm.toolchain_root(
-    name = "llvm_toolchain_system_linux_amd64",
-    path = "/usr/lib/llvm-14",
+    name = "llvm_toolchain",
+    label = "@llvm_toolchain_amd64//:BUILD",
 )
-llvm.toolchain(
-    name = "llvm_toolchain_system_linux_arm64",
-    exec_arch = "arm64",
-    exec_os = "linux",
-    llvm_version = "14.0.6",
+llvm.sysroot(
+    name = "llvm_toolchain",
+    label = "@libc_sysroot//debian/{}/amd64:sysroot".format(RELEASE["version"]),
+    targets = ["linux-x86_64"],
 )
-llvm.toolchain_root(
-    name = "llvm_toolchain_system_linux_arm64",
-    path = "/usr/lib/llvm-14",
+llvm.sysroot(
+    name = "llvm_toolchain",
+    label = "@libc_sysroot//debian/{}/arm64:sysroot".format(RELEASE["version"]),
+    targets = ["linux-aarch64"],
 )
-use_repo(llvm, "llvm_toolchain_system_linux_amd64", "llvm_toolchain_system_linux_arm64")
+use_repo(llvm, "llvm_toolchain")
 
 register_toolchains(
-    "@llvm_toolchain_system_linux_arm64//:all",
+    "@llvm_toolchain//:all",
     dev_dependency = True,
 )
 
-register_toolchains(
-    "@llvm_toolchain_system_linux_amd64//:all",
-    dev_dependency = True,
+# sysroots/
+#
+# Mirrors the monogres root tags; `_impl` dedups identical re-declarations.
+sysroots = use_extension("@sysroots//:extension.bzl", "sysroots")
+sysroots.apt(
+    name = "libc_sysroot",
+    extra_files = {
+        "@monogres//toolchains/libc_sysroot:clang_wrapper.sh": "usr/lib/llvm-{}/bin/clang".format(
+            RELEASE["llvm_major"],
+        ),
+    },
+    lock = "@monogres//toolchains/libc_sysroot/locks:libc_sysroot.lock",
+    manifest = "@monogres//toolchains/libc_sysroot:debian{}.json".format(RELEASE["version"]),
+    snapshot = RELEASE["apt_snapshot"],
+)
+sysroots.apt(
+    name = "llvm_sysroot",
+    lock = "@monogres//toolchains/llvm_sysroot/locks:llvm_sysroot.lock",
+    manifest = "@monogres//toolchains/llvm_sysroot:debian{}.json".format(RELEASE["version"]),
+    snapshot = RELEASE["apt_snapshot"],
+)
+use_repo(sysroots, "libc_sysroot", "llvm_sysroot")
+
+cc_toolchain_layout = use_repo_rule(
+    "@monogres//toolchains/llvm_sysroot:cc_toolchain_layout.bzl",
+    "cc_toolchain_layout",
+)
+
+cc_toolchain_layout(
+    name = "llvm_toolchain_amd64",
+    arch = "amd64",
+    llvm_version = RELEASE["llvm_version"],
+    sysroot = "@llvm_sysroot//debian/{}/amd64:BUILD.bazel".format(RELEASE["version"]),
+)
+
+cc_toolchain_layout(
+    name = "llvm_toolchain_arm64",
+    arch = "arm64",
+    llvm_version = RELEASE["llvm_version"],
+    sysroot = "@llvm_sysroot//debian/{}/arm64:BUILD.bazel".format(RELEASE["version"]),
 )
