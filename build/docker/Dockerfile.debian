@@ -92,16 +92,39 @@ FROM debian AS debian-rbe
 
 USER root
 
-ARG DEPS_NON_HERMETIC_BAZEL_RULES
-ENV DEPS_NON_HERMETIC_BAZEL_RULES="$DEPS_NON_HERMETIC_BAZEL_RULES"
+ARG DEPS_HERMETIC_SANDBOX
+ENV DEPS_HERMETIC_SANDBOX="$DEPS_HERMETIC_SANDBOX"
 
-# install dependencies for non-hermetic bazel rules
+# install dependencies for the --experimental_use_hermetic_linux_sandbox
+# bind-mount manifest (see build/.bazelrc.sandbox).
 RUN /bin/bash <<EOF
-if [[ ! -z "$DEPS_NON_HERMETIC_BAZEL_RULES" ]]; then
+if [[ ! -z "$DEPS_HERMETIC_SANDBOX" ]]; then
     $APT_INSTALL
-    apt_install $DEPS_NON_HERMETIC_BAZEL_RULES
+    apt_install $DEPS_HERMETIC_SANDBOX
 fi
 EOF
+
+# Busybox-substitution symlinks for the compression-tool + awk surface
+# rules_distroless's apt_deb_repository shells out to at load phase
+# (Debian snapshot Package index decompression for any of .xz/.gz/.bz2)
+# plus the autoconf AC_PROG_AWK probe in rules_foreign_cc's pkgconfig
+# bootstrap. Combined with our local rules_distroless short-flags patch
+# (see build/patches/rules_distroless), busybox-static fully replaces
+# the GNU xz-utils / gzip / bzip2 / mawk packages.
+#
+# These symlinks also satisfy Bazel's LinuxSandboxUtil.validateBindMounts
+# (Java), which refuses to start the hermetic sandbox if a mount-pair
+# target (e.g. /usr/bin/xz from build/.bazelrc.sandbox) doesn't already
+# exist on the host.
+#
+# Finally, `-f` because some images (e.g. debian:stable-slim) ship some
+# of these pre-installed, so if any of the paths happens to exist, we
+# replace it.
+RUN \
+  ln -sf /usr/bin/busybox /usr/bin/xz && \
+  ln -sf /usr/bin/busybox /usr/bin/awk && \
+  ln -sf /usr/bin/busybox /usr/bin/gzip && \
+  ln -sf /usr/bin/busybox /usr/bin/bzip2
 
 USER $USERNAME
 

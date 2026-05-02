@@ -34,9 +34,20 @@ REPRODUCIBLE_CONTAINERS_VERSION ?= 0.1.4
 # https://github.com/bazelbuild/bazelisk
 BAZELISK_VERSION ?= 1.27.0
 
-# rules_distroless: xz-utils
-DEPS_NON_HERMETIC_BAZEL_RULES = \
-	xz-utils
+# Hermetic Linux sandbox bind-mount manifest deps. These cover the
+# host-side files that `.bazelrc.sandbox` bind-mounts into the chroot
+# when `--config=hermetic` is active:
+#
+#   * bash-static — fully-static `/bin/bash` for `#!/bin/bash` shebangs
+#     (the hermetic sandbox starts with no /bin/bash visible).
+#   * busybox-static — static binary providing every POSIX utility as a
+#     busybox applet; bind-mounted at ~50 paths (cat, cp, find, sed, ...).
+#     Also serves the host PATH for xz/awk/gzip/bzip2 via symlinks set
+#     up in Dockerfile.debian — see comment there for the rules_distroless
+#     load-phase + sandbox-validateBindMounts dual rationale.
+DEPS_HERMETIC_SANDBOX = \
+	bash-static \
+	busybox-static
 
 DOCKER_BUILD_ARGS = \
 	--platform "$(BUILD_PLATFORMS)" \
@@ -45,7 +56,7 @@ DOCKER_BUILD_ARGS = \
 	--build-arg REPRODUCIBLE_CONTAINERS_VERSION="$(REPRODUCIBLE_CONTAINERS_VERSION)" \
 	--build-arg BAZELISK_VERSION="$(BAZELISK_VERSION)" \
 	--build-arg BAZEL_VERSION="$(BAZEL_VERSION)" \
-	--build-arg DEPS_NON_HERMETIC_BAZEL_RULES="$(DEPS_NON_HERMETIC_BAZEL_RULES)" \
+	--build-arg DEPS_HERMETIC_SANDBOX="$(DEPS_HERMETIC_SANDBOX)" \
 	--build-arg USERNAME="$(USERNAME)" \
 	--build-arg HOMEDIR="/$(USERNAME)" \
 	--label org.opencontainers.image.source="$(GH_REPO_URL)" \

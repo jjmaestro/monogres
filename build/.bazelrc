@@ -61,6 +61,29 @@ build:debug --explain=/tmp/verbose_explanations
 build:debug --sandbox_debug
 build:debug --subcommands
 
+# --- Hermetic Linux sandbox config (opt-in via --config=hermetic-linux) ---
+# Strict sandbox + network + tag isolation, intended as a discovery
+# layer for any implicit host dependencies that survive the cc_sysroot
+# work.
+build:hermetic-linux --announce_rc
+test:hermetic-linux --announce_rc
+build:hermetic-linux --spawn_strategy=sandboxed
+build:hermetic-linux --genrule_strategy=sandboxed
+build:hermetic-linux --worker_sandboxing
+build:hermetic-linux --experimental_use_hermetic_linux_sandbox
+# The chroot starts empty (no /bin, /lib, /lib64, /usr, /proc, /etc).
+# `sandbox_linux` carries the whole manifest: the arch-independent
+# entries (bash-static, busybox-static, /proc, /etc/passwd, ...) plus
+# the single arch-specific irreducible (the dynamic loader, one entry
+# per arch via `:hermetic-linux-amd64` / `:hermetic-linux-arm64`
+# config selectors that auto-include `:hermetic-linux`). Activate with
+# `--config=hermetic-linux-amd64` (or `-arm64`).
+import %workspace%/.bazelrc.sandbox_linux
+build:hermetic-linux --incompatible_sandbox_hermetic_tmp
+build:hermetic-linux --sandbox_default_allow_network=false
+test:hermetic-linux --sandbox_default_allow_network=false
+common:hermetic-linux --incompatible_allow_tags_propagation
+
 common:linux-amd64 --extra_toolchains=@llvm_toolchain//:cc-toolchain-x86_64-linux
 common:linux-arm64 --extra_toolchains=@llvm_toolchain//:cc-toolchain-aarch64-linux
 

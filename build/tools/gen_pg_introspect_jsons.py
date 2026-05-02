@@ -268,6 +268,10 @@ SUBSTITUTIONS: list[tuple[re.Pattern[str], str]] = [
         "<BAZEL_CACHE>/<SANDBOX>/<BAZEL-BUILD>",
     ),
     (re.compile(r"<BAZEL_CACHE>/execroot/_main"), "<BAZEL_CACHE>/<BAZEL-BUILD>"),
+    # Bare execroot: under the hermetic chroot the execroot is mounted at
+    # `/execroot/_main` with no cache prefix. Runs after the cache-prefixed
+    # rules so their match wins when the prefix is present.
+    (re.compile(r"/execroot/_main"), "<BAZEL-BUILD>"),
     # --- Bzlmod canonical repo names ---
     # Per-version PG source repos (`download_archives` convention) come in
     # two shapes:

@@ -1,0 +1,256 @@
+# vim: set filetype=sh :
+#
+# Hermetic Linux sandbox bind-mount manifest: arch-independent entries
+#
+# `--experimental_use_hermetic_linux_sandbox` starts the chroot **empty**
+# (the chroot is a per-action sandbox tree containing only the action's
+# hard-linked input artefacts; no `/bin`, `/lib`, `/lib64`, `/usr`,
+# `/proc`, `/etc`). Every system path an action might `execve` or `dlopen`
+# must be declared here as a bind-mount-pair.
+#
+# Strategy: keep host exposure minimal and explicit.
+#   * Static, zero-deps binaries from the host (`bash-static`,
+#     `busybox-static`) cover the shell + POSIX utility surface and remove
+#     the need to expose /lib/lib64 just so a shell can run.
+#   * Specific libraries are mounted *as individual files*, not via
+#     `/lib`/`/lib64` directory mounts, so the chroot only sees what we've
+#     enumerated here. Each entry below is paired with the binary that
+#     pulls it in.
+
+# ---------------------------------------------------------------------------
+# Process / user metadata
+# ---------------------------------------------------------------------------
+
+# linux-sandbox itself writes to /proc/self/uid_map during user-namespace
+# setup. /proc must be available before chroot pivots; without it the
+# sandbox aborts at first action.
+build:hermetic-linux --sandbox_add_mount_pair=/proc
+
+# whoami / id / getpwuid lookups (test-setup.sh line 71, rules_distroless,
+# msgfmt). Mount the host's /etc/passwd read-only.
+build:hermetic-linux --sandbox_add_mount_pair=/etc/passwd
+
+# ---------------------------------------------------------------------------
+# Shell + POSIX utilities: static, zero-runtime-dep binaries from the host
+# ---------------------------------------------------------------------------
+#
+# `bash-static` (Debian package: bash-static) is a fully-static build of
+# bash 5.x. Bound at /bin/bash because all `#!/bin/bash` shebangs land
+# there. The /usr/bin/env binding below covers `#!/usr/bin/env bash`
+# (which bazel_tools' test-setup.sh uses) via busybox's env applet.
+#
+# `busybox-static` (Debian package: busybox-static) provides every POSIX
+# utility as a single static binary, dispatched via argv[0] basename.
+# Each `:` mapping below pretends busybox is the utility named in the
+# destination path.
+#
+# The destination path must exist on the host (Bazel requires the
+# mount-pair target to be pre-existing; it doesn't create empty files for
+# us). On Debian 12 the destinations below are all backed by real files
+# (typically symlinks under usrmerged /bin, /usr/bin).
+
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/bash-static:/bin/bash
+
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/bin/sh
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/env
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/basename
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/cat
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/chmod
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/cp
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/cut
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/date
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/diff
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/dirname
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/echo
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/expr
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/false
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/find
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/getopt
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/grep
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/gzip
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/head
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/hostname
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/id
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/ln
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/ls
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/mkdir
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/mktemp
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/mv
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/od
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/printf
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/pwd
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/readlink
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/realpath
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/rm
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/rmdir
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/sed
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/sleep
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/sort
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/stat
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/tail
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/tee
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/test
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/touch
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/tr
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/true
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/uname
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/uniq
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/wc
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/whoami
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/xargs
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/xz
+
+# awk: served by host busybox via the `/usr/bin/awk -> /usr/bin/busybox`
+# symlink set up in build/docker/Dockerfile.debian. Required by
+# autoconf's `AC_PROG_AWK` probe in rules_foreign_cc's pkgconfig
+# bootstrap configure script; busybox awk is POSIX-conformant which is
+# all AC_PROG_AWK needs.
+build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/awk
+
+# ---------------------------------------------------------------------------
+# Host arch primitive (`host-<arch>`) + native hermetic-linux shortcuts
+# ---------------------------------------------------------------------------
+#
+# `host-<arch>` carries the only exec-host-arch-dependent piece of the
+# sandbox manifest: the dynamic loader bind-mount (see the PT_INTERP
+# note below). Splitting it out lets cross-compile configurations
+# compose `--config=host-<exec-arch>` independently of the target
+# arch.
+#
+# Native shortcuts (`hermetic-linux-<arch>` for host == target):
+# compose the arch-independent `:hermetic-linux` manifest with the
+# matching `:host-<arch>` loader. Activate with
+# `--config=hermetic-linux-amd64` (or `-arm64`); passing
+# `--config=hermetic-linux` alone is incomplete (no loader, every
+# dynamic ELF fails at exec time).
+common:hermetic-linux-amd64 --config=hermetic-linux --config=host-amd64
+common:hermetic-linux-arm64 --config=hermetic-linux --config=host-arm64
+
+# PT_INTERP of every dynamic ELF on Linux is the literal absolute path
+# of the dynamic loader baked into the binary by the linker at link
+# time (`/lib64/ld-linux-x86-64.so.2` on amd64,
+# `/lib/ld-linux-aarch64.so.1` on arm64). The KERNEL reads PT_INTERP
+# and `mmap`s that exact path BEFORE the binary starts;
+# `LD_LIBRARY_PATH` and any other userspace env mechanism does NOT
+# apply because resolution is pre-userspace. So whatever the literal
+# PT_INTERP string says, the file must exist at that exact path
+# inside the chroot.
+#
+# Empirical: the loader bind-mount is irreducible. Both the Debian-
+# sourced `@llvm_toolchain_<arch>` clang / lld / etc. AND every binary
+# clang+lld produces (PG, plperl, citus, RFCC bootstrap make, autoconf
+# `conftest`) have the canonical PT_INTERP hardcoded; removing this
+# bind-mount fails the toolchain itself with `cannot execute: required
+# file not found`.
+#
+# This is the manifest's ONLY arch-specific entry. Every other runtime
+# `.so` reaches its consumer through one of the project's own
+# resolution mechanisms, all of them hermetic (do NOT depend on host
+# files outside this manifest):
+#
+#   - `cc_wrapper.sh` (patched in
+#     `build/patches/toolchains_llvm/0003-cc_wrapper-export-LD_LIBRARY_PATH-
+#     from-toolchain-lib.patch`) exports `LD_LIBRARY_PATH=
+#     ${toolchain_path_prefix}lib` so Debian clang's NEEDED libs
+#     (libclang-cpp.so.14, libLLVM-14.so.1, libstdc++.so.6,
+#     libgcc_s.so.1, libc.so.6, ...) resolve via the layout adapter's
+#     `@llvm_toolchain_<arch>/lib/` for all compile and link actions
+#     routed through the wrapper.
+#
+#   - Per-tool shims installed by
+#     `//toolchains/llvm_sysroot:cc_toolchain_layout.bzl` cover the
+#     `ar` / `nm` / `ld` / `objcopy` / `strip` / `dwp` / `cov` /
+#     `profdata` / `objdump` `tool_paths` entries that bypass
+#     `cc_wrapper.sh`. Same LD_LIBRARY_PATH, derived from `$0` + the
+#     adapter's baked-in canonical repo name.
+#
+#   - `sysroot_setup.sh` populates `/lib/<cpu>-linux-gnu/` and
+#     `/usr/lib/<cpu>-linux-gnu/` from the per-PG sysroot's multiarch
+#     trees at action time for `pg_build` / `pgxs_build` actions.
+#     PG-runtime ELFs (perl, msgfmt, llvm-config, ...) find their
+#     NEEDED libs through ld.so's default search list.
+#
+# ---------------------------------------------------------------------------
+# KNOWN GAP and FUTURE PATH (loader-only manifest implications)
+# ---------------------------------------------------------------------------
+#
+# The loader-only manifest does not cover compiled output binaries
+# that the build itself then EXECUTES inside the sandbox. The shim's
+# `LD_LIBRARY_PATH` flows to the linker invocation but NOT to the
+# produced ELF's own runtime env. Autoconf-style probes
+# (`./conftest`, `./a.out`) and exec-config tool bootstraps
+# (rules_foreign_cc's `make` and `pkgconfig` bootstrapping from
+# source) WILL FAIL at runtime without libc.so.6 at the canonical
+# multiarch path `/lib/<cpu>-linux-gnu/`. Concretely,
+# `BootstrapGNUMake` exits with:
+#
+#   /external/+_repo_rules+llvm_toolchain_amd64/bin/clang.real:
+#     cannot execute: required file not found
+#
+# OR:
+#
+#   configure: error: cannot run C compiled programs.
+#
+# depending on whether the test program itself or clang.real triggers
+# the missing-libc failure first. `pg_build` / `pgxs_build` are not
+# affected because `sysroot_setup.sh`'s symlink loop populates the
+# multiarch paths from the per-PG sysroot at action time.
+#
+# Future-fix path: OPTION 1 - patchelf + cc_toolchain `--dynamic-linker`
+# ----------------------------------------------------------------------
+# Replace this irreducible bind-mount with a fully hermetic loader by:
+#
+#   1. Add a `patchelf` repository_rule step (or extend
+#      `//toolchains/llvm_sysroot:cc_toolchain_layout.bzl`) that
+#      rewrites `PT_INTERP` on every adapter ELF (`bin/clang.real`,
+#      `bin/lld.real`, `bin/ar.real`, ...) to an execroot-stable
+#      sandbox-internal path like
+#      `/execroot/_main/external/+_repo_rules+llvm_toolchain_<arch>/lib/ld-linux-<arch>.so.<N>`.
+#      Bazel-resolved at adapter-build time via `rctx.name` (same
+#      mechanism the per-tool shims use today for LD_LIBRARY_PATH).
+#
+#   2. Add `-Wl,--dynamic-linker=<same execroot-stable path>` to the
+#      cc_toolchain's default LDFLAGS via a new `cc_toolchain_config`
+#      feature. Every NEW binary the project links (PG, plperl,
+#      conftest, RFCC bootstrap `make`, ...) gets the same hermetic
+#      PT_INTERP baked in. The path is substituted from a label-
+#      resolved attr at rule-impl time so no canonical bzlmod name
+#      appears in human-authored source.
+#
+#   3. While at (2), inject `LD_LIBRARY_PATH=
+#      <execroot-stable adapter lib>` for the same actions via an
+#      `env_set` feature. This handles libc / libgcc_s / libstdc++ /
+#      ... at runtime for binaries the build itself executes
+#      (conftest, RFCC bootstrap). This is the plan's original
+#      Commit 4, deferred from the mode-4 arc.
+#
+#   4. Verify: a build with this manifest emptied (zero bind-mount-
+#      pairs for arch-specific paths) succeeds end-to-end through
+#      `BootstrapGNUMake` + `BootstrapPkgConfig` + `pg_build` +
+#      `pgxs_build` + `tar`.
+#
+# Tradeoffs to weigh during implementation:
+#
+#   - The final PG runtime binary (`bin/postgres`, `bin/initdb`,
+#     `lib/plperl.so`, ...) would have a non-standard PT_INTERP and
+#     cannot be `chroot`-less-run on a normal Linux host. The
+#     packaging step would need a second `patchelf --set-interpreter`
+#     pass to restore `PT_INTERP=/lib64/ld-linux-x86-64.so.2` (or the
+#     downstream container would carry the hermetic loader at the
+#     baked path). Mirror Phase A's distinction between build-time
+#     ABI lockstep and runtime-image portability.
+#
+#   - Action sandbox path stability matters: Bazel's `linux-sandbox`
+#     uses `/execroot/_main/...` as the action CWD, so PT_INTERP
+#     pointing at `/execroot/_main/external/.../lib/ld-linux-...` is
+#     valid inside every action. Outside the sandbox (e.g. `bazel
+#     run`, or extracted tar files), the binary will not run; that
+#     is acceptable for build-time artefacts but NOT for the final
+#     runtime image.
+#
+#   - `patchelf` is a build-time tool; install via `build.nix` or
+#     the project's docker base image. Pinned version matters
+#     because patchelf has historically had compatibility quirks
+#     with newer ELF features (DT_RELR, etc.); pin and document.
+build:host-amd64 --sandbox_add_mount_pair=/lib64/ld-linux-x86-64.so.2
+build:host-arm64 --sandbox_add_mount_pair=/lib/ld-linux-aarch64.so.1
