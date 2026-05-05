@@ -1,0 +1,58 @@
+From 8ee0dfbe0513bc5724216c094999279cb06829c5 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sun, 3 May 2026 08:51:51 +0000
+Subject: [PATCH] patch: export LD_LIBRARY_PATH from the toolchain sysroot for
+ built tools
+
+RFCC's bootstrap tools (BootstrapGNUMake, BootstrapPkgConfig, BootstrapNinja,
+BootstrapMeson) are autoconf-driven: `./configure` compiles a tiny `conftest`
+binary and then EXECUTES it ("checking whether we are cross compiling..."). The
+compiled `conftest` inherits its env from configure; under Bazel's hermetic
+Linux sandbox with a custom sysroot, that env has no `LD_LIBRARY_PATH`, the
+chroot has no `/lib/<multiarch>/`, and the binary's NEEDED `libm.so.6` /
+`libc.so.6` / etc. fail to resolve at exec time:
+
+  ./conftest: error while loading shared libraries: libm.so.6:
+  cannot open shared object file: No such file or directory
+
+cc_wrapper.sh's `LD_LIBRARY_PATH` export covers clang's own NEEDED libs
+(libLLVM-14.so.1, libclang-cpp.so.14) but only applies to clang's process
+tree, not to sibling subprocesses that `configure` later spawns. The fix
+must live at the action level so `configure` inherits the env and propagates
+it to `./conftest`, `./build.sh`, the just-built `make`, etc.
+
+Inject `export LD_LIBRARY_PATH=...` at the top of the script that
+`built_tool_rule_impl` generates for every bootstrap tool, derived from the
+cc_toolchain's `sysroot` attr and the target arch's multiarch lib dir. Uses
+the `$$EXT_BUILD_ROOT$$` placeholder that `convert_shell_script` already
+expands to `$EXT_BUILD_ROOT` (the action's CWD).
+
+The export is a no-op when the sysroot is empty or the target cpu isn't
+recognized, so non-Linux / non-sysroot consumers are unaffected.
+
+Anchored against rules_foreign_cc commit
+006ae82d9b4953a9b1c170827aef660f9f0f9ec0 (the project's pinned RFCC,
+post-0.15.1). The file lives at
+`foreign_cc/built_tools/private/built_tools_framework.bzl`.
+---
+ foreign_cc/built_tools/private/built_tools_framework.bzl | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/foreign_cc/built_tools/private/built_tools_framework.bzl b/foreign_cc/built_tools/private/built_tools_framework.bzl
+index d17e624..9e66839 100644
+--- a/foreign_cc/built_tools/private/built_tools_framework.bzl
++++ b/foreign_cc/built_tools/private/built_tools_framework.bzl
+@@ -108,8 +108,13 @@ def built_tool_rule_impl(ctx, script_lines, out_dir, mnemonic, additional_tools
+ 
+     cc_toolchain = find_cpp_toolchain(ctx)
+ 
++    _sr = cc_toolchain.sysroot
++    _multiarch = {"k8": "x86_64-linux-gnu", "aarch64": "aarch64-linux-gnu"}.get(cc_toolchain.cpu, "")
++    _ld_export = ("export LD_LIBRARY_PATH=\"$$EXT_BUILD_ROOT$$/{0}/lib/{1}:$$EXT_BUILD_ROOT$$/{0}/usr/lib/{1}\"").format(_sr, _multiarch) if _sr and _multiarch else ""
++
+     script = [
+         "##script_prelude##",
++        _ld_export,
+     ] + env_prelude + [
+         "##rm_rf## $$INSTALLDIR$$",
+         "##rm_rf## $$BUILD_TMPDIR$$",
