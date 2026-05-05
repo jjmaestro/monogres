@@ -167,10 +167,11 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
 
     if sysroot_tar:
         env_sysroot = dict(
-            # The setup script extracts the tar, symlinks the @libc_sysroot
-            # clang wrapper inside the extracted tree, and prints
-            # `$EXT_BUILD_ROOT/sysroot` (absolute). `$(...)` captures it as
-            # SYSROOT_DIR; all downstream env vars expand through it.
+            # The setup script extracts the tar, runs in-place sed on perl's
+            # Config files, symlinks the @libc_sysroot clang wrapper inside the
+            # extracted tree, and prints `$EXT_BUILD_ROOT/sysroot` (absolute).
+            # `$(...)` captures it as SYSROOT_DIR; all downstream env vars
+            # expand through it.
             SYSROOT_DIR = (
                 "$$(sh $(execpath {setup}) $(execpath {tar}) " +
                 "$(execpath {wrapper}) $(BSDTAR_BIN) {llvm_major})"
@@ -196,9 +197,16 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
                 "-idirafter $$SYSROOT_DIR/usr/lib/$$(uname -m)-linux-gnu/perl/" + _PERL_VERSION + "/CORE",
             ]),
             LIBRARY_PATH = "$$SYSROOT_DIR/usr/lib/$$(uname -m)-linux-gnu",
+            # Debian's multi-arch layout splits libs between `/lib/<arch>`
+            # (libcrypt, libtinfo, libz) and `/usr/lib/<arch>` (libz3) — both
+            # are needed in LD_LIBRARY_PATH because the hermetic Linux sandbox
+            # has no host `/lib` fallback for runtime tool invocations (perl +
+            # llvm-config + msgfmt).
             LD_LIBRARY_PATH = ":".join([
                 "$$SYSROOT_DIR/usr/lib/$$(uname -m)-linux-gnu",
                 "$$SYSROOT_DIR/usr/lib",
+                "$$SYSROOT_DIR/lib/$$(uname -m)-linux-gnu",
+                "$$SYSROOT_DIR/lib",
             ]),
             # `PERL5OPT` loads `Config_overrides.pm` (which `PERL5LIB` in `env`
             # makes available) so `ExtUtils::Embed::ldopts` emits `-L<per-PG

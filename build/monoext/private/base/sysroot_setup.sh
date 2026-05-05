@@ -25,6 +25,11 @@
 #   - Symlinks the multiarch libperl.so into the perl/<ver>/CORE/ dir so
 #     plperl's `cc.links(perl_alloc, ...)` probe resolves libperl (the
 #     version dir is discovered from the tree, not pinned).
+#   - Patches perl's `Config.pm` / `Config_heavy.pl` in place so the
+#     plperl probe sees sysroot-rooted paths instead of host
+#     `/usr/lib/...`. In tar mode the extracted tree is per-action and
+#     writable, so the sed runs directly (vs. the pre-tar overlay design
+#     that lived here for the filegroup-mode `@pgbuildtime` hub).
 #   - Symlinks the @libc_sysroot clang wrapper at
 #     `<sysroot>/usr/lib/llvm-14/bin/clang`. Meson canonicalizes the
 #     symlink before baking `CLANG` into the installed `Makefile.global`,
@@ -82,6 +87,41 @@ for perl_core in "$multiarch_lib"/perl/*/CORE; do
         ln -sf "$multiarch_lib/libperl.so" "$perl_core/libperl.so"
     fi
 done
+
+# Prefer perl-base's copy of each Config file (it's the one perl-base's
+# perl binary loads). Fall back to any matching file if the perl-base
+# layout isn't present (defensive — runtime-only sysroots without perl
+# skip the sed entirely).
+config_heavy=$(find "$SR" -name Config_heavy.pl -type f -path '*/perl-base/*' 2>/dev/null | head -1)
+[ -z "$config_heavy" ] && config_heavy=$(find "$SR" -name Config_heavy.pl -type f 2>/dev/null | head -1) || true
+
+config_pm=$(find "$SR" -name Config.pm -type f -path '*/perl-base/*' 2>/dev/null | head -1)
+[ -z "$config_pm" ] && config_pm=$(find "$SR" -name Config.pm -type f 2>/dev/null | head -1) || true
+
+if [ -n "$config_heavy" ]; then
+    sed -i \
+        -e "/^archlib=/s|'/|'${SR}/|" \
+        -e "/^installarchlib=/s|'/|'${SR}/|" \
+        -e "s| -L/| -L${SR}/|g" \
+        -e "/^libpth=/s|'/|'${SR}/|g" \
+        -e "/^libpth=/s| /| ${SR}/|g" \
+        -e "/^libspath=/s|'/|'${SR}/|g" \
+        -e "/^libspath=/s| /| ${SR}/|g" \
+        -e "/^libsdirs=/s| /| ${SR}/|g" \
+        "$config_heavy"
+fi
+
+if [ -n "$config_pm" ]; then
+    sed -i \
+        -e "/archlibexp =>/s|'/|'${SR}/|" \
+        -e "/privlibexp =>/s|'/|'${SR}/|" \
+        -e "/sitearchexp =>/s|'/|'${SR}/|" \
+        -e "/sitelibexp =>/s|'/|'${SR}/|" \
+        -e "/scriptdir =>/s|'/|'${SR}/|" \
+        -e "/libpth =>/s|'/|'${SR}/|" \
+        -e "/libpth =>/s| /| ${SR}/|g" \
+        "$config_pm"
+fi
 
 # Symlink the clang wrapper. Meson's `find_program(llvm_binpath /
 # 'clang')` resolves through `$SR/usr/lib/llvm-14/bin/clang` and
