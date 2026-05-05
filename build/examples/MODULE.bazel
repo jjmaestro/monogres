@@ -60,6 +60,18 @@ archive_override(
 )
 
 # Root-module overrides do not propagate through dependencies, so the examples
+# workspace must mirror the monogres rules_distroless override to exercise the
+# same load-phase short-flags behavior as a downstream consumer would see.
+# `examples/patches` is a symlink to `../patches`, so the patch file is shared.
+single_version_override(
+    module_name = "rules_distroless",
+    patch_strip = 1,
+    patches = [
+        "//patches/rules_distroless:0001-feat-use-POSIX-short-flags-decompressing-Package-ind.patch",
+    ],
+)
+
+# Root-module overrides do not propagate through dependencies, so the examples
 # workspace must mirror the monogres RFCC override to exercise the same tool
 # stack as a downstream consumer.
 RFCC_COMMIT = "006ae82d9b4953a9b1c170827aef660f9f0f9ec0"

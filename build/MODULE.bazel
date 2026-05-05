@@ -67,6 +67,14 @@ archive_override(
     url = "https://github.com/jjmaestro/bazel_download_archives/archive/refs/tags/v{}.tar.gz".format(BDA_VERSION),
 )
 
+single_version_override(
+    module_name = "rules_distroless",
+    patch_strip = 1,
+    patches = [
+        "//patches/rules_distroless:0001-feat-use-POSIX-short-flags-decompressing-Package-ind.patch",
+    ],
+)
+
 RFCC_COMMIT = "006ae82d9b4953a9b1c170827aef660f9f0f9ec0"
 
 archive_override(
