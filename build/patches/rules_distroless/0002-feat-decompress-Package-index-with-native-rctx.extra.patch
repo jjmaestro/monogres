@@ -1,0 +1,42 @@
+From 4c4fe68baafb3509b8de0671a17981edab12c83f Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sun, 3 May 2026 04:10:25 +0000
+Subject: [PATCH] patch: decompress the Package index with rctx.extract
+
+On Bazel >= 9.0.0, `rctx.extract` can natively decompress .xz, .gz and
+.bz2 files, see: https://github.com/bazelbuild/bazel/pull/27413
+
+The native path is gated on the Bazel major version (via
+`native.bazel_version`), not `hasattr(rctx, "extract")`: `extract` exists
+on every Bazel, but the `type` keyword that selects raw-stream
+decompression is Bazel >= 9.0.0 only. On older Bazel the loop falls
+through to the shell-out path below.
+
+References: https://github.com/bazelbuild/bazel/pull/27413
+---
+ apt/private/apt_deb_repository.bzl | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/apt/private/apt_deb_repository.bzl b/apt/private/apt_deb_repository.bzl
+index 8564cf2..cd80936 100644
+--- a/apt/private/apt_deb_repository.bzl
++++ b/apt/private/apt_deb_repository.bzl
+@@ -49,6 +49,18 @@ def _fetch_package_index(rctx, urls, dist, comp, arch, integrity):
+             )
+             decompress_r = None
+             if download.success:
++                # rctx.extract natively decompresses .xz/.gz/.bz2 on Bazel
++                # >= 9.0.0 (https://github.com/bazelbuild/bazel/pull/27413).
++                # Gate on the Bazel major, not hasattr(rctx, "extract"):
++                # extract exists on every Bazel, but its `type` keyword is
++                # 9.0.0-only. native.bazel_version is "" for a HEAD build.
++                _bzl = native.bazel_version
++                if _bzl and int(_bzl.split(".")[0]) >= 9 and ext:
++                    rctx.extract(archive = output, type = ext[1:])
++                    integrity = download.integrity
++                    break
++
++                # on older Bazel, shell out and use local tools:
+                 decompress_r = rctx.execute(cmd + [output])
+                 if decompress_r.return_code == 0:
+                     integrity = download.integrity

@@ -68,6 +68,7 @@ single_version_override(
     patch_strip = 1,
     patches = [
         "//patches/rules_distroless:0001-feat-use-POSIX-short-flags-decompressing-Package-ind.patch",
+        "//patches/rules_distroless:0002-feat-decompress-Package-index-with-native-rctx.extra.patch",
     ],
 )
 
