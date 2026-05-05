@@ -1,0 +1,364 @@
+From 83382d791ffd5d0f602375884642e4443778a67c Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sun, 3 May 2026 15:29:06 +0000
+Subject: [PATCH] patch: add cross_compile, cross_binaries and native_binaries
+ to meson
+
+Add three new attributes to the `meson` rule:
+
+- `cross_compile` (bool, default `False`): when set, emit a meson
+  cross-file under `$BUILD_TMPDIR/rules_foreign_cc_meson_cross_file.ini`
+  and pass it to `meson setup --cross-file=`. The cross-file is derived
+  from the resolved cc_toolchain at rule-impl time:
+    * `[host_machine]` (in meson terms, the target arch) is built from
+      the target platform constraints already carried by RFCC's
+      `target_arch_name` / `target_os_name` helpers, with `cpu_family`
+      mapped to meson's canonical names (`x86_64`, `aarch64`, `ppc64`,
+      ...).
+    * `[binaries]` carries `c`, `cpp`, `ar`, `strip` populated from
+      `get_tools_info(ctx)`. Each entry is rendered as a Python list
+      literal (`c = ['/abs/cc_wrapper.sh', '--sysroot=/abs/sr']`) so
+      multi-token tool paths from toolchains that bake fixed args into
+      `cc_common.get_tool_for_action` (e.g. `cc_wrapper.sh --sysroot=...`
+      from `toolchains_llvm`) survive intact. Single-string form
+      (`c = '...'`) fails because meson treats the whole value as one
+      filename.
+    * `[properties].needs_exe_wrapper = true` tells meson the build
+      binaries can't run on the host, so the `add_languages('c')`
+      sanity-check binary is not executed. This is the failure mode
+      described in
+      https://github.com/bazel-contrib/rules_foreign_cc/issues/1222
+      ("Executables created by c compiler ... are not runnable.").
+
+- `cross_binaries` (string_dict, default `{}`): user-supplied extra
+  `[binaries]` entries in the CROSS-file (host_machine / target-arch
+  binaries). Values are emitted inside an unquoted bash heredoc, so
+  shell variables that exist at action time (e.g. `$EXT_BUILD_ROOT`,
+  `$BUILD_TMPDIR`, `$SYSROOT_DIR`) expand before meson parses the
+  file. Each value is emitted as a single-quoted string; values
+  containing literal single quotes are rejected at analysis time.
+
+- `native_binaries` (string_dict, default `{}`): user-supplied
+  `[binaries]` entries for the NATIVE-file (build_machine binaries).
+  When non-empty, emits `$BUILD_TMPDIR/rules_foreign_cc_meson_native_file.ini`
+  and passes `--native-file=<path>` to meson setup. Use this for
+  config-tool dependencies (`llvm-config`, `pkg-config`, etc.) and
+  any other tool that runs on the BUILD machine during configure.
+  Under cross-compile (`cross_compile = True`) meson's cross-file
+  `[binaries]` are gated by `needs_exe_wrapper`; PATH-based search
+  is refused ("Default target is not allowed for cross use"). The
+  native-file is meson's intended mechanism for build-machine
+  binaries (https://mesonbuild.com/Machine-files.html). The native-
+  file shares the cross-file's heredoc + single-quote rules.
+
+The cross-file and native-file are both written next to `meson setup`'s
+working directory (BUILD_TMPDIR) so they survive meson's
+`--reconfigure` / multi-target invocations within the same action
+without being recreated. The setup args are empty when the respective
+attrs are unset, which is a no-op for native (build-only) builds.
+
+Closes https://github.com/bazel-contrib/rules_foreign_cc/issues/1222.
+---
+ foreign_cc/meson.bzl | 263 ++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 262 insertions(+), 1 deletion(-)
+
+diff --git a/foreign_cc/meson.bzl b/foreign_cc/meson.bzl
+index 7b27129..d4a4517 100644
+--- a/foreign_cc/meson.bzl
++++ b/foreign_cc/meson.bzl
+@@ -21,6 +21,7 @@ load(
+     "create_attrs",
+     "expand_locations_and_make_variables",
+ )
++load("//foreign_cc/private/framework:platform.bzl", "target_arch_name", "target_os_name")
+ load("//foreign_cc/private:make_script.bzl", "pkgconfig_script")
+ load("//foreign_cc/private:transitions.bzl", "foreign_cc_rule_variant")
+ load("//toolchains/native_tools:native_tools_toolchain.bzl", "native_tool_toolchain")
+@@ -109,6 +110,28 @@ def _create_meson_script(configureParameters):
+     script.append("##export_var## PKG_CONFIG {}".format(attrs.pkg_config_path))
+     script.append("##export_var## MAKE {}".format(attrs.make_path))
+ 
++    # When `cross_compile` is set, emit a meson cross-file and pass it to
++    # `meson setup` via `--cross-file`. This tells meson the build is targeting
++    # a different machine, so it skips run-checks (binaries built with the
++    # target compiler that cannot execute on the host) during configure.
++    cross_file_setup_arg = ""
++    if ctx.attr.cross_compile:
++        cross_file_path = "$$BUILD_TMPDIR$$/rules_foreign_cc_meson_cross_file.ini"
++        script.extend(_emit_meson_cross_file(ctx, tools, cross_file_path))
++        cross_file_setup_arg = "--cross-file={}".format(cross_file_path)
++
++    # When `native_binaries` is non-empty, emit a meson native-file with the
++    # build-machine binaries and pass it via `--native-file`. Meson uses this
++    # for build-machine tool resolution (e.g. `llvm-config`, `pkg-config`
++    # config-tool dependencies). Under `cross_compile = True`, cross-file
++    # `[binaries]` entries are gated by `needs_exe_wrapper`; the native-file
++    # is meson's intended mechanism for runnable build-machine binaries.
++    native_file_setup_arg = ""
++    if ctx.attr.native_binaries:
++        native_file_path = "$$BUILD_TMPDIR$$/rules_foreign_cc_meson_native_file.ini"
++        script.extend(_emit_meson_native_file(ctx, native_file_path))
++        native_file_setup_arg = "--native-file={}".format(native_file_path)
++
+     root = detect_root(ctx.attr.lib_source)
+     data = ctx.attr.data + ctx.attr.build_data
+ 
+@@ -154,8 +177,10 @@ def _create_meson_script(configureParameters):
+ 
+         target_args[target_name] = args
+ 
+-    script.append("{meson} setup --prefix={install_dir} {setup_args} {options} {source_dir}".format(
++    script.append("{meson} setup {cross_file} {native_file} --prefix={install_dir} {setup_args} {options} {source_dir}".format(
+         meson = meson_path,
++        cross_file = cross_file_setup_arg,
++        native_file = native_file_setup_arg,
+         install_dir = "$$INSTALLDIR$$",
+         setup_args = " ".join(target_args.get("setup", [])),
+         options = " ".join([
+@@ -221,6 +246,56 @@ def _attrs():
+             doc = "__deprecated__: please use `target_args` with `'build'` target key.",
+             mandatory = False,
+         ),
++        "cross_binaries": attr.string_dict(
++            doc = (
++                "Additional entries to add to the `[binaries]` section of the " +
++                "generated meson cross-file. Only used when `cross_compile = True`. " +
++                "Each key/value pair becomes a `key = '<value>'` line in the " +
++                "cross-file. Values are emitted inside an unquoted heredoc, so " +
++                "shell variables that exist at action time (e.g. `$EXT_BUILD_ROOT`, " +
++                "`$BUILD_TMPDIR`, `$SYSROOT_DIR`) are expanded by the shell before " +
++                "meson parses the cross-file. Useful for entries like " +
++                "`llvm-config`, `pkg-config`, or `exe_wrapper` whose absolute " +
++                "paths are only known at action time."
++            ),
++            mandatory = False,
++            default = {},
++        ),
++        "cross_compile": attr.bool(
++            doc = (
++                "If `True`, generate a meson cross-file under `$BUILD_TMPDIR` and " +
++                "pass it to `meson setup` via `--cross-file`. The cross-file is " +
++                "derived from the resolved cc_toolchain: `[host_machine]` from " +
++                "the target platform constraints, `[binaries]` from " +
++                "`tools.cc` / `tools.cxx` / `tools.cxx_linker_static` / `tools.strip`, " +
++                "and `[properties].needs_exe_wrapper = true` so meson skips " +
++                "executing target-arch binaries during configure (a common " +
++                "failure mode when cross-compiling, see " +
++                "https://github.com/bazel-contrib/rules_foreign_cc/issues/1222). " +
++                "Additional `[binaries]` entries can be supplied via `cross_binaries`."
++            ),
++            default = False,
++            mandatory = False,
++        ),
++        "native_binaries": attr.string_dict(
++            doc = (
++                "Entries to write to the `[binaries]` section of a meson " +
++                "native-file (build-machine binaries). When non-empty, the " +
++                "native-file is generated under " +
++                "`$BUILD_TMPDIR/rules_foreign_cc_meson_native_file.ini` and " +
++                "passed to `meson setup` via `--native-file`. Use this for " +
++                "build-machine tool resolution (e.g. `llvm-config`, " +
++                "`pkg-config` config-tool dependencies); under " +
++                "`cross_compile = True`, meson refuses PATH-based search and " +
++                "treats cross-file `[binaries]` as target-arch (un-runnable " +
++                "with `needs_exe_wrapper`), so the native-file is the only " +
++                "supported mechanism for runnable build-machine binaries. " +
++                "Values follow the same heredoc + single-quote conventions " +
++                "as `cross_binaries`."
++            ),
++            mandatory = False,
++            default = {},
++        ),
+         "install": attr.bool(
+             doc = "__deprecated__: please use `targets` if you want to skip install.",
+             default = True,
+@@ -318,3 +393,189 @@ def _absolutize(workspace_name, text, force = False):
+ 
+ def _join_flags_list(workspace_name, flags):
+     return " ".join([_absolutize(workspace_name, flag) for flag in flags])
++
++# Map RFCC's target_arch_name (which mirrors @platforms//cpu values) to the
++# canonical meson cpu_family names from
++# https://mesonbuild.com/Reference-tables.html#cpu-families.
++_MESON_CPU_FAMILY_BY_ARCH = {
++    "aarch64": "aarch64",
++    "ppc64le": "ppc64",
++    "s390x": "s390x",
++    "wasm32": "wasm32",
++    "wasm64": "wasm64",
++    "x86_64": "x86_64",
++}
++
++def _meson_binary_argv(workspace_name, tool_path):
++    """Split a CC/CXX/AR/STRIP tool path that may contain baked-in args into a
++    Python-list-of-single-quoted-strings rendering suitable for meson's
++    `[binaries]` section.
++
++    rules_foreign_cc resolves toolchain tools through
++    `cc_common.get_tool_for_action`, which on toolchains that use a wrapper
++    script (e.g. cc_wrapper.sh from `toolchains_llvm`) can return a value like
++    `path/to/cc_wrapper.sh --sysroot=/abs/path`. meson reads cross-file
++    `[binaries]` lines with python `configparser` + `ast.literal_eval`, so a
++    single-string value would be treated as one filename. The list form
++    (`c = ['cc_wrapper.sh', '--sysroot=...']`) makes meson treat the first
++    element as the executable and the rest as fixed arguments.
++
++    Args:
++        workspace_name: Bazel workspace name, used for `_absolutize`.
++        tool_path: Tool path as returned by `cc_common.get_tool_for_action`;
++            may contain space-separated args after the executable.
++
++    Returns:
++        str: A meson list literal, e.g. `['/abs/cc', '--sysroot=/abs/sr']`.
++    """
++    parts = tool_path.split(" ")
++    rendered = []
++    for part in parts:
++        if not part:
++            continue
++
++        # `_absolutize` is a no-op for tokens that don't look like an external
++        # / workspace-relative path, so it's safe to apply uniformly. Argument
++        # tokens like `--sysroot=external/...` survive correctly: the `--sysroot=`
++        # prefix remains and the relative `external/...` path is anchored at
++        # `$EXT_BUILD_ROOT/`.
++        rendered.append("'{}'".format(_absolutize(workspace_name, part)))
++    return "[" + ", ".join(rendered) + "]"
++
++def _emit_meson_cross_file(ctx, tools, cross_file_path):
++    """Build the bash lines that write a meson cross-file to `cross_file_path`.
++
++    The cross-file is materialised at action time via an unquoted bash heredoc
++    so any shell variables that the caller embedded in `cross_binaries` values
++    (e.g. `$EXT_BUILD_ROOT`, `$BUILD_TMPDIR`, `$SYSROOT_DIR`) expand before
++    meson reads the file.
++
++    Args:
++        ctx: The rule's context object.
++        tools: A `CxxToolsInfo` provider, as returned by `get_tools_info(ctx)`.
++        cross_file_path: Bash-quoted path where the cross-file will be written;
++            typically `$$BUILD_TMPDIR$$/rules_foreign_cc_meson_cross_file.ini`.
++
++    Returns:
++        list[str]: Script fragments (in RFCC's intermediate notation) that emit
++        the cross-file. Each fragment is a bash line; `$$VAR$$` references will
++        be lowered to `$VAR` by the framework before the action runs.
++    """
++    workspace_name = ctx.workspace_name
++
++    arch = target_arch_name(ctx)
++    cpu_family = _MESON_CPU_FAMILY_BY_ARCH.get(arch, arch)
++
++    # meson's `cpu` field is free-form and informational. Mirror cpu_family
++    # unless the caller overrides it via cross_binaries (which only writes
++    # under `[binaries]`, so cpu stays here).
++    cpu = cpu_family
++
++    system = target_os_name(ctx)
++
++    binaries = []
++    binaries.append("c = {}".format(_meson_binary_argv(workspace_name, tools.cc)))
++    if tools.cxx:
++        binaries.append("cpp = {}".format(_meson_binary_argv(workspace_name, tools.cxx)))
++    if tools.cxx_linker_static and tools.cxx_linker_static.endswith("ar"):
++        binaries.append("ar = {}".format(_meson_binary_argv(workspace_name, tools.cxx_linker_static)))
++    if tools.strip:
++        binaries.append("strip = {}".format(_meson_binary_argv(workspace_name, tools.strip)))
++
++    # `cross_binaries` values are emitted inside the unquoted heredoc, so
++    # shell vars (e.g. `$BUILD_TMPDIR`) expand at write time. The value is
++    # then single-quoted so meson sees a literal string. Callers should not
++    # include single quotes in values.
++    for key in sorted(ctx.attr.cross_binaries.keys()):
++        value = ctx.attr.cross_binaries[key]
++        if "'" in value:
++            fail((
++                "cross_binaries[{key}] contains a single quote, which is " +
++                "not supported because meson cross-file values are emitted " +
++                "as single-quoted strings."
++            ).format(key = repr(key)))
++        binaries.append("{key} = '{value}'".format(key = key, value = value))
++
++    # The heredoc body is written verbatim with two exceptions:
++    #   - `$$VAR$$` becomes `$VAR` (RFCC's standard escape).
++    #   - bare `$` in `[host_machine]` / `[properties]` is avoided so the
++    #     literal sections survive shell expansion.
++    lines = [
++        "##echo## \"rules_foreign_cc: writing meson cross-file to {}\"".format(cross_file_path),
++        # Unquoted heredoc: shell vars (e.g. cross_binaries embedding
++        # `$EXT_BUILD_ROOT`) expand before meson reads the file. The body has
++        # no other `$` references, so there's nothing to accidentally expand.
++        "cat > {path} <<EOF".format(path = cross_file_path),
++        "[host_machine]",
++        "system = '{}'".format(system),
++        "cpu_family = '{}'".format(cpu_family),
++        "cpu = '{}'".format(cpu),
++        "endian = 'little'",
++        "",
++        "[properties]",
++        # needs_exe_wrapper = true tells meson that target binaries cannot be
++        # executed on the host. With no exe_wrapper supplied, meson skips
++        # sanity-check runs during configure, which is the failure mode
++        # described in https://github.com/bazel-contrib/rules_foreign_cc/issues/1222.
++        "needs_exe_wrapper = true",
++        "",
++        "[binaries]",
++    ] + binaries + [
++        "EOF",
++    ]
++    return lines
++
++def _emit_meson_native_file(ctx, native_file_path):
++    """Build the bash lines that write a meson native-file to `native_file_path`.
++
++    Native-files describe the BUILD machine (where compilation runs). Meson
++    auto-detects build_machine properties; this file overrides only the
++    `[binaries]` section with caller-supplied entries (typically build-machine
++    tools that meson's `find_program` / config-tool dependency resolution
++    needs to invoke during configure).
++
++    Under cross-compile (`cross_compile = True`), meson's cross-file
++    `[binaries]` entries are gated by `needs_exe_wrapper` (treated as
++    un-runnable target binaries); PATH-based search is refused ("Default
++    target is not allowed for cross use"). The native-file is meson's
++    intended mechanism for runnable build-machine binaries
++    (https://mesonbuild.com/Machine-files.html).
++
++    Unlike the cross-file, no `[host_machine]` / `[properties]` sections are
++    written: meson auto-detects build_machine attributes and the file's
++    purpose here is solely build-machine `[binaries]` overrides.
++
++    Args:
++        ctx: The rule's context object.
++        native_file_path: Bash-quoted path where the native-file will be
++            written; typically
++            `$$BUILD_TMPDIR$$/rules_foreign_cc_meson_native_file.ini`.
++
++    Returns:
++        list[str]: Script fragments (in RFCC's intermediate notation) that
++        emit the native-file. Each fragment is a bash line; `$$VAR$$`
++        references will be lowered to `$VAR` by the framework before the
++        action runs.
++    """
++    binaries = []
++    for key in sorted(ctx.attr.native_binaries.keys()):
++        value = ctx.attr.native_binaries[key]
++        if "'" in value:
++            fail((
++                "native_binaries[{key}] contains a single quote, which is " +
++                "not supported because meson native-file values are emitted " +
++                "as single-quoted strings."
++            ).format(key = repr(key)))
++        binaries.append("{key} = '{value}'".format(key = key, value = value))
++
++    lines = [
++        "##echo## \"rules_foreign_cc: writing meson native-file to {}\"".format(native_file_path),
++        # Unquoted heredoc: shell vars (e.g. native_binaries embedding
++        # `$EXT_BUILD_ROOT`) expand before meson reads the file. The body has
++        # no other `$` references, so there's nothing to accidentally expand.
++        "cat > {path} <<EOF".format(path = native_file_path),
++        "[binaries]",
++    ] + binaries + [
++        "EOF",
++    ]
++    return lines
