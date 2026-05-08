@@ -1,5 +1,5 @@
 load("@platform_debian//:versions.bzl", "RELEASE", "VERSIONS")
-load("@sysroots//toolchains:sysroot_dir.bzl", "sysroot_dir")
+load("@sysroots//toolchains:sysroot_dir.bzl", "sysroot_dir", "sysroot_exec_dir")
 load("//platforms:targets.bzl", "ARCH_CPU", "arch_select")
 
 package(default_visibility = ["//visibility:public"])
@@ -46,7 +46,7 @@ exports_files(["debian{}.json".format(v) for v in VERSIONS])
         ),
         var = "LLVM_SYSROOT_DIR",
     )
-    for arch in ("amd64", "arm64")
+    for arch in ARCH_CPU
 ]
 
 alias(
@@ -55,4 +55,13 @@ alias(
         arch: ":llvm_sysroot_dir_%s" % arch
         for arch in ARCH_CPU
     }),
+)
+
+# `$(LLVM_SYSROOT_EXEC_DIR)`: EXEC host arch's LLVM sysroot. Same pattern as
+# `libc_sysroot_exec_dir`; consumers (today `pg_build` for meson's cross-file
+# `[binaries].llvm-config`) need the EXEC arch's `llvm-config-14` because the
+# TARGET arch's binary can't run on a host of a different arch.
+sysroot_exec_dir(
+    name = "llvm_sysroot_exec_dir",
+    target = ":llvm_sysroot_dir",
 )

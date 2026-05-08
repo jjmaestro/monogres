@@ -1,5 +1,5 @@
 """
-Rule for surfacing a sysroot package's directory as a make variable.
+Rules for surfacing a sysroot package's directory as a make variable.
 
 `sysroots.apt(...)`-materialized hubs live at canonical bzlmod paths like
 `external/sysroots++sysroots+<name>/<distro>/<version>/<arch>/`. Consumers (e.g.
@@ -36,9 +36,22 @@ def _sysroot_dir_impl(ctx):
     else:
         path = label.package
 
+    template_vars = {ctx.attr.var: path}
+
+    # Optional companion make-variables (e.g. the Debian multiarch tuple),
+    # merged verbatim so consumers reach arch-specific lib subdirs as
+    # `$($var)/lib/$(<name>)` / `$($var)/usr/lib/$(<name>)` without re-deriving
+    # them from the sysroot tree at action time.
+    template_vars.update(ctx.attr.vars)
+
+    # Forward the sysroot filegroup's `DefaultInfo` so the on-disk tree lands in
+    # the action's hermetic input set when a consumer takes a toolchains-attr
+    # dep on this instance (or its arch-selecting alias). Without forwarding,
+    # the action sees the make-variable path but the chroot has no files there.
+    files = ctx.attr.target[DefaultInfo].files
     return [
-        DefaultInfo(),
-        platform_common.TemplateVariableInfo({ctx.attr.var: path}),
+        DefaultInfo(files = files),
+        platform_common.TemplateVariableInfo(template_vars),
     ]
 
 sysroot_dir = rule(
@@ -48,7 +61,8 @@ sysroot_dir = rule(
         "make variable. The variable is provided via `TemplateVariableInfo` " +
         "so consumers reach it through their `toolchains` attr; the " +
         "canonical bzlmod repo name is computed at analysis time and never " +
-        "appears in human-authored source."
+        "appears in human-authored source. Optional `vars` add companion " +
+        "make variables (e.g. the Debian multiarch tuple) alongside it."
     ),
     attrs = {
         "target": attr.label(
@@ -61,6 +75,73 @@ sysroot_dir = rule(
         "var": attr.string(
             mandatory = True,
             doc = "Make-variable name (e.g. `LLVM_SYSROOT_DIR`).",
+        ),
+        "vars": attr.string_dict(
+            default = {},
+            doc = (
+                "Optional companion make-variables merged verbatim into the " +
+                "emitted `TemplateVariableInfo` (e.g. " +
+                "`{\"LIBC_SYSROOT_MULTIARCH\": \"x86_64-linux-gnu\"}`). Lets " +
+                "consumers reach arch-specific lib subdirs without " +
+                "re-deriving them from the tree at action time."
+            ),
+        ),
+    },
+)
+
+def _sysroot_exec_dir_impl(ctx):
+    # `target` is resolved in EXEC config (`cfg = "exec"`), so the
+    # `@platforms//cpu:*` select() inside the arch-selecting alias evaluates
+    # against the EXEC platform's cpu, picking the host arch's sysroot
+    # regardless of `--platforms` (which only affects TARGET resolution).
+    info = ctx.attr.target[platform_common.TemplateVariableInfo]
+
+    # Re-export every var the underlying `sysroot_dir` exposed under
+    # `_EXEC_<SUFFIX>`-form names so consumers can reference both sides
+    # (`$(LIBC_SYSROOT_DIR)` for target, `$(LIBC_SYSROOT_EXEC_DIR)` for exec,
+    # etc.) within the same action.
+    new_vars = {}
+    for key, value in info.variables.items():
+        prefix, _, suffix = key.rpartition("_")  # split LAST underscore
+        if prefix:
+            new_key = "%s_EXEC_%s" % (prefix, suffix)
+        else:
+            new_key = "EXEC_%s" % suffix
+        new_vars[new_key] = value
+
+    # Forward the underlying target's `DefaultInfo` files so the EXEC sysroot
+    # tree lands in the action's hermetic input set when a consumer takes a
+    # toolchains-attr dep on `:libc_sysroot_exec_dir`. Without this, the action
+    # sees the `$(LIBC_SYSROOT_EXEC_DIR)` path in `LD_LIBRARY_PATH` but the
+    # chroot has no files at that path; ld.so still fails.
+    files = ctx.attr.target[DefaultInfo].files
+    return [
+        DefaultInfo(files = files),
+        platform_common.TemplateVariableInfo(new_vars),
+    ]
+
+sysroot_exec_dir = rule(
+    implementation = _sysroot_exec_dir_impl,
+    doc = (
+        "Sibling to `sysroot_dir`: re-exports the EXEC-config resolution of " +
+        "an arch-selecting sysroot_dir alias, renaming each make variable to " +
+        "its `<NAME>_EXEC` form. The `target` attr's " +
+        "`cfg = 'exec'` forces the underlying select() to evaluate in EXEC " +
+        "config, so the exposed dir is always the exec-host arch's sysroot " +
+        "(regardless of `--platforms`). Lets actions reference both target " +
+        "and exec sysroot dirs in the same `cmd` (e.g. `LD_LIBRARY_PATH` " +
+        "for host tools + target -L paths)."
+    ),
+    attrs = {
+        "target": attr.label(
+            cfg = "exec",
+            mandatory = True,
+            providers = [platform_common.TemplateVariableInfo],
+            doc = (
+                "Arch-selecting `sysroot_dir` alias. Resolved in EXEC " +
+                "config; the alias's `select()` picks the host arch's " +
+                "sysroot_dir instance."
+            ),
         ),
     },
 )

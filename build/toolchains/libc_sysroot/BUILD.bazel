@@ -1,5 +1,6 @@
 load("@platform_debian//:versions.bzl", "RELEASE", "VERSIONS")
-load("@sysroots//toolchains:sysroot_dir.bzl", "sysroot_dir")
+load("@sysroots//apt:layout.bzl", "multiarch")
+load("@sysroots//toolchains:sysroot_dir.bzl", "sysroot_dir", "sysroot_exec_dir")
 load("//platforms:targets.bzl", "ARCH_CPU", "arch_select")
 load("//toolchains/llvm_sysroot:llvm_version.bzl", "LLVM_MAJOR")
 
@@ -45,8 +46,9 @@ alias(
             arch,
         ),
         var = "LIBC_SYSROOT_DIR",
+        vars = {"LIBC_SYSROOT_MULTIARCH": multiarch(arch)},
     )
-    for arch in ("amd64", "arm64")
+    for arch in ARCH_CPU
 ]
 
 alias(
@@ -55,4 +57,15 @@ alias(
         arch: ":libc_sysroot_dir_%s" % arch
         for arch in ARCH_CPU
     }),
+)
+
+# `$(LIBC_SYSROOT_EXEC_DIR)` / `$(LIBC_SYSROOT_EXEC_MULTIARCH)`: the EXEC host
+# arch's libc sysroot. `cfg = "exec"` on `target` forces the alias above to
+# resolve in exec config, so the select() picks the host arch regardless of
+# `--platforms`. Consumers need this for host tools (perl, python3, the meson
+# interpreter, autoconf probes, ...) whose NEEDED libs must match the host arch
+# when running during action setup.
+sysroot_exec_dir(
+    name = "libc_sysroot_exec_dir",
+    target = ":libc_sysroot_dir",
 )

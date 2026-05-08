@@ -111,7 +111,9 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
         "@rules_bison//bison:current_bison_toolchain",
         "@bsd_tar_toolchains//:resolved_toolchain",
         "@monogres//toolchains/libc_sysroot:libc_sysroot_dir",
+        "@monogres//toolchains/libc_sysroot:libc_sysroot_exec_dir",
         "@monogres//toolchains/llvm_sysroot:llvm_sysroot_dir",
+        "@monogres//toolchains/llvm_sysroot:llvm_sysroot_exec_dir",
         _PERL_TOOLCHAIN,
         _PYTHON_TOOLCHAIN,
     ]
@@ -177,6 +179,18 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
 
     if sysroot_tar:
         env_sysroot = dict(
+            # EXEC-arch sysroot paths exposed as shell env vars so downstream
+            # values (LD_LIBRARY_PATH below, cross_binaries' llvm-config path,
+            # etc.) reference shell variables that expand at action time. The
+            # right-hand side uses `$(LIBC_SYSROOT_EXEC_DIR)` /
+            # `$(LLVM_SYSROOT_EXEC_DIR)` make variables provided by the
+            # `sysroot_exec_dir` instances in `//toolchains/libc_sysroot/` and
+            # `//toolchains/llvm_sysroot/`, which resolve in EXEC config (`cfg =
+            # "exec"` on their `target` attr) so they always point at the host
+            # arch's sysroot regardless of `--platforms`.
+            LIBC_SYSROOT_EXEC_DIR = "$$EXT_BUILD_ROOT/$(LIBC_SYSROOT_EXEC_DIR)",
+            LIBC_SYSROOT_EXEC_MULTIARCH = "$(LIBC_SYSROOT_EXEC_MULTIARCH)",
+            LLVM_SYSROOT_EXEC_DIR = "$$EXT_BUILD_ROOT/$(LLVM_SYSROOT_EXEC_DIR)",
             # The setup script extracts the tar, runs in-place sed on perl's
             # Config files, symlinks the @libc_sysroot clang wrapper inside the
             # extracted tree, and prints `$EXT_BUILD_ROOT/sysroot` (absolute).
@@ -192,19 +206,17 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
                 llvm_major = LLVM_MAJOR,
             ),
             # `TARGET_MULTIARCH`: the Debian multiarch dirname for the TARGET
-            # arch (e.g. `x86_64-linux-gnu` or `aarch64-linux-gnu`). Derived by
-            # listing the per-PG sysroot's `usr/lib/` (which carries only one
-            # `<cpu>-linux-gnu/` dir, materialized by the apt resolver for the
-            # build's target arch). NOT `$$(uname -m)-linux-gnu` because that
-            # reports the HOST arch, which silently breaks cross-compile builds
-            # (host=amd64 picks `x86_64-linux-gnu` while linking against an
-            # `aarch64-linux-gnu` sysroot; ld.lld reports incompatible object
-            # files). Set right after SYSROOT_DIR so all downstream
-            # multiarch-aware env vars below expand through it.
-            TARGET_MULTIARCH = (
-                "$$(ls $$SYSROOT_DIR/usr/lib | " +
-                "grep -E '^(x86_64|aarch64)-linux-gnu$$' | head -1)"
-            ),
+            # arch (e.g. `x86_64-linux-gnu` or `aarch64-linux-gnu`). From
+            # `$(LIBC_SYSROOT_MULTIARCH)`, the target-config libc sysroot's
+            # tuple (`toolchains` make-variables resolve in the genrule's TARGET
+            # config, so this is the build's target arch, not the host). The
+            # tuple is a pure arch fact, identical across the target sysroots
+            # (the libc sysroot and the per-PG sysroot pin the same
+            # Debian-snapshot arch), so it names the per-PG sysroot's lib dir
+            # too. Mirrors the exec side's `$(LIBC_SYSROOT_EXEC_MULTIARCH)`. Set
+            # right after SYSROOT_DIR so all downstream multiarch-aware env vars
+            # below expand through it.
+            TARGET_MULTIARCH = "$(LIBC_SYSROOT_MULTIARCH)",
             PKG_CONFIG_SYSROOT_DIR = "$$SYSROOT_DIR",
             PKG_CONFIG_PATH = ":".join([
                 "$$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/pkgconfig",
@@ -226,7 +238,41 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
             # needed in LD_LIBRARY_PATH because the hermetic Linux sandbox has
             # no host `/lib` fallback for runtime tool invocations (perl +
             # llvm-config + msgfmt).
+            #
+            # EXEC vs TARGET split: under cross-compile, exec-config host tools
+            # (python3 from @python_sysroot, perl from @perl_sysroot, the meson
+            # interpreter, etc.) run during action setup and need their NEEDED
+            # libs at the HOST arch. The per-PG `$$SYSROOT_DIR` is the TARGET
+            # arch (where final binaries link); host tools loading TARGET libs
+            # via this LD_LIBRARY_PATH fail with `cannot open shared object
+            # file`.
+            #
+            # `$(LIBC_SYSROOT_EXEC_DIR)` / `$(LIBC_SYSROOT_EXEC_MULTIARCH)` come
+            # from `//toolchains/libc_sysroot:libc_sysroot_exec_dir`, a
+            # `sysroot_exec_dir` instance whose `target` attr is `cfg = "exec"`.
+            # That forces the underlying arch-selecting alias to resolve in EXEC
+            # config, so the make-variable always points at the host arch's
+            # sysroot regardless of `--platforms`. The plain
+            # `$(LIBC_SYSROOT_DIR)` / `$(LIBC_SYSROOT_MULTIARCH)` analogues
+            # resolve in TARGET config (where `select()` in `toolchains = ...`
+            # genrule attrs evaluates); `TARGET_MULTIARCH` above uses the latter
+            # for the per-PG sysroot's target lib dir.
+            #
+            # `$$LLVM_SYSROOT_EXEC_DIR/lib/$$LIBC_SYSROOT_EXEC_MULTIARCH` is
+            # required by llvm-config and other LLVM host tools whose NEEDED
+            # libs include `libtinfo.so.6` and `libz.so.1`, which Debian ships
+            # under `@llvm_sysroot`'s `lib/<multiarch>/` rather than
+            # `@libc_sysroot`'s. NOTE: the EXEC multiarch is shared between
+            # sysroots since both pin the same Debian-snapshot architecture.
+            #
+            # Prepended so host tools find their libs first; target paths follow
+            # for build-time-only TARGET tool invocations and link-time -L
+            # resolution. The `$$EXT_BUILD_ROOT` prefix is the action's CWD.
             LD_LIBRARY_PATH = ":".join([
+                "$$LIBC_SYSROOT_EXEC_DIR/lib/$$LIBC_SYSROOT_EXEC_MULTIARCH",
+                "$$LIBC_SYSROOT_EXEC_DIR/usr/lib/$$LIBC_SYSROOT_EXEC_MULTIARCH",
+                "$$LLVM_SYSROOT_EXEC_DIR/lib/$$LIBC_SYSROOT_EXEC_MULTIARCH",
+                "$$LLVM_SYSROOT_EXEC_DIR/usr/lib/$$LIBC_SYSROOT_EXEC_MULTIARCH",
                 "$$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH",
                 "$$SYSROOT_DIR/usr/lib",
                 "$$SYSROOT_DIR/lib/$$TARGET_MULTIARCH",
@@ -260,6 +306,17 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
     ]
 
     if sysroot_tar:
+        # `$$LLVM_SYSROOT_EXEC_DIR/usr/lib/llvm-14/bin` first so meson's
+        # `find_program('llvm-config')` (config-tool dependency lookup, e.g.
+        # PG's `dependency('llvm', method: 'config-tool')`) picks the EXEC
+        # arch's llvm-config. The TARGET arch's binary at
+        # `$$SYSROOT_DIR/usr/lib/llvm-14/bin/llvm-config` can't run on the build
+        # host under cross-compile; the EXEC binary returns the same version +
+        # flags (same APT snapshot) regardless of arch, so the query result is
+        # correct for the target build.
+        path_components.append(
+            "$$LLVM_SYSROOT_EXEC_DIR/usr/lib/llvm-" + LLVM_MAJOR + "/bin",
+        )
         path_components.append("$$SYSROOT_DIR/usr/bin")
         path_components.append(
             "$$SYSROOT_DIR/usr/lib/llvm-" + LLVM_MAJOR + "/bin",
@@ -282,19 +339,17 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
         TAR = "$TAR",  # NOTE: PG meson 16.x marks `tar` REQUIRED
     )
 
-    # `cross_binaries` is consumed by RFCC's patched `meson` rule to emit the
-    # `--cross-file` `[binaries]` entry during `meson setup`. Both
-    # `_pg_build_meson` and `_pg_build_introspect` thread it through so they
-    # resolve the same `llvm-config` for PG's `dependency('llvm', method =
-    # 'config-tool')`. Under `cross_compile = True`, PATH-based search is
-    # refused ("Default target is not allowed for cross use"), so this pin is
-    # what lets meson find llvm-config; an empty dict fails the LLVM query in
-    # any meson run (full build or introspect). The `llvm-config-14` shim in the
-    # per-PG sysroot is the same one PG's `find_program('llvm-config')` picks up
-    # on a native build. `$SYSROOT_DIR` (set in env_sysroot above) expands at
-    # heredoc-write time when the cross-file is generated.
+    # `cross_binaries` / `native_binaries` are consumed by RFCC's patched
+    # `meson` rule to emit `--cross-file` / `--native-file` `[binaries]` entries
+    # during `meson setup`. Both `_pg_build_meson` and `_pg_build_introspect`
+    # thread this dict through so they resolve the same build-machine tools
+    # (e.g. `llvm-config` for PG's `dependency('llvm', method =
+    # 'config-tool')`). Under `cross_compile = True`, PATH-based search is
+    # refused ("Default target is not allowed for cross use"), so the cross-file
+    # pin is what lets meson find llvm-config; an empty `cross_binaries` here
+    # would fail the LLVM query in any meson run (full build or introspect).
     cross_binaries = {
-        "llvm-config": "$SYSROOT_DIR/usr/bin/llvm-config-14",
+        "llvm-config": "$LLVM_SYSROOT_EXEC_DIR/usr/lib/llvm-" + LLVM_MAJOR + "/bin/llvm-config",
     } if sysroot_tar else {}
 
     # env_sysroot must be merged first so SYSROOT_DIR is set before other
@@ -305,6 +360,7 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
         data = data,
         env = env_sysroot | env | env_meson,
         lib_source = pg_src,
+        native_binaries = {},
         options = build_options | meson_tool_options,
         postfix_script = _STRIP_SANDBOX_PATHS_POSTFIX,
         target_args = {
