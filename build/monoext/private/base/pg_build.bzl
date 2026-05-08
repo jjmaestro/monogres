@@ -86,6 +86,14 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
         _PERL_CONFIG_OVERRIDES,
     ]
 
+    # `data` (target cfg) for sysroot_tar (and the wrapper it carries), so the
+    # select() on `@platforms//cpu:*` resolves to the TARGET arch. RFCC's
+    # `build_data` is `cfg = "exec"` which would resolve to the host arch and
+    # silently break cross-compile (host=amd64 picks the amd64 sysroot tar while
+    # linking against an arm64 target). The action's input set is the union of
+    # `data + build_data` (framework.bzl:612), so both are equally available at
+    # action time; only the configuration differs.
+    data = []
     if sysroot_tar:
         # The tar is the only `:sysroot_tar` artifact consumers see; the full
         # normalized tree lives inside. At action time the setup script extracts
@@ -93,8 +101,8 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
         # wrapper label is added separately because meson's canonicalize-symlink
         # step needs to resolve it to a persistent absolute path (not the
         # sandbox-extracted copy).
-        build_data.append(sysroot_tar)
-        build_data.append(_SYSROOT_CLANG_WRAPPER)
+        data.append(sysroot_tar)
+        data.append(_SYSROOT_CLANG_WRAPPER)
         build_data.append(_SYSROOT_SETUP_SCRIPT)
 
     toolchains = [
@@ -181,31 +189,45 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
                 wrapper = _SYSROOT_CLANG_WRAPPER,
                 llvm_major = LLVM_MAJOR,
             ),
+            # `TARGET_MULTIARCH`: the Debian multiarch dirname for the TARGET
+            # arch (e.g. `x86_64-linux-gnu` or `aarch64-linux-gnu`). Derived by
+            # listing the per-PG sysroot's `usr/lib/` (which carries only one
+            # `<cpu>-linux-gnu/` dir, materialized by the apt resolver for the
+            # build's target arch). NOT `$$(uname -m)-linux-gnu` because that
+            # reports the HOST arch, which silently breaks cross-compile builds
+            # (host=amd64 picks `x86_64-linux-gnu` while linking against an
+            # `aarch64-linux-gnu` sysroot; ld.lld reports incompatible object
+            # files). Set right after SYSROOT_DIR so all downstream
+            # multiarch-aware env vars below expand through it.
+            TARGET_MULTIARCH = (
+                "$$(ls $$SYSROOT_DIR/usr/lib | " +
+                "grep -E '^(x86_64|aarch64)-linux-gnu$$' | head -1)"
+            ),
             PKG_CONFIG_SYSROOT_DIR = "$$SYSROOT_DIR",
             PKG_CONFIG_PATH = ":".join([
-                "$$SYSROOT_DIR/usr/lib/$$(uname -m)-linux-gnu/pkgconfig",
+                "$$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/pkgconfig",
                 "$$SYSROOT_DIR/usr/share/pkgconfig",
             ]),
             CFLAGS = " ".join([
                 "-idirafter $$SYSROOT_DIR/usr/include",
-                "-idirafter $$SYSROOT_DIR/usr/include/$$(uname -m)-linux-gnu",
-                "-idirafter $$SYSROOT_DIR/usr/lib/$$(uname -m)-linux-gnu/perl/" + _PERL_VERSION + "/CORE",
+                "-idirafter $$SYSROOT_DIR/usr/include/$$TARGET_MULTIARCH",
+                "-idirafter $$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/perl/" + _PERL_VERSION + "/CORE",
             ]),
             CXXFLAGS = " ".join([
                 "-idirafter $$SYSROOT_DIR/usr/include",
-                "-idirafter $$SYSROOT_DIR/usr/include/$$(uname -m)-linux-gnu",
-                "-idirafter $$SYSROOT_DIR/usr/lib/$$(uname -m)-linux-gnu/perl/" + _PERL_VERSION + "/CORE",
+                "-idirafter $$SYSROOT_DIR/usr/include/$$TARGET_MULTIARCH",
+                "-idirafter $$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/perl/" + _PERL_VERSION + "/CORE",
             ]),
-            LIBRARY_PATH = "$$SYSROOT_DIR/usr/lib/$$(uname -m)-linux-gnu",
+            LIBRARY_PATH = "$$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH",
             # Debian's multi-arch layout splits libs between `/lib/<arch>`
-            # (libcrypt, libtinfo, libz) and `/usr/lib/<arch>` (libz3) — both
-            # are needed in LD_LIBRARY_PATH because the hermetic Linux sandbox
-            # has no host `/lib` fallback for runtime tool invocations (perl +
+            # (libcrypt, libtinfo, libz) and `/usr/lib/<arch>` (libz3); both are
+            # needed in LD_LIBRARY_PATH because the hermetic Linux sandbox has
+            # no host `/lib` fallback for runtime tool invocations (perl +
             # llvm-config + msgfmt).
             LD_LIBRARY_PATH = ":".join([
-                "$$SYSROOT_DIR/usr/lib/$$(uname -m)-linux-gnu",
+                "$$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH",
                 "$$SYSROOT_DIR/usr/lib",
-                "$$SYSROOT_DIR/lib/$$(uname -m)-linux-gnu",
+                "$$SYSROOT_DIR/lib/$$TARGET_MULTIARCH",
                 "$$SYSROOT_DIR/lib",
             ]),
             # `PERL5OPT` loads `Config_overrides.pm` (which `PERL5LIB` in `env`
@@ -218,7 +240,7 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
             # outside the per-PG sysroot scope there's no libperl-dev to link
             # against, so the shim has nothing to point at.
             PERL5OPT = "-MConfig_overrides",
-            PERL_DEBIAN_ARCHLIB = "$$SYSROOT_DIR/usr/lib/$$(uname -m)-linux-gnu/perl/" + _PERL_VERSION,
+            PERL_DEBIAN_ARCHLIB = "$$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/perl/" + _PERL_VERSION,
         )
 
     # Build PATH with @perl_sysroot's `usr/bin` FIRST, so meson's
@@ -258,10 +280,27 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
         TAR = "$TAR",  # NOTE: PG meson 16.x marks `tar` REQUIRED
     )
 
+    # `cross_binaries` is consumed by RFCC's patched `meson` rule to emit the
+    # `--cross-file` `[binaries]` entry during `meson setup`. Both
+    # `_pg_build_meson` and `_pg_build_introspect` thread it through so they
+    # resolve the same `llvm-config` for PG's `dependency('llvm', method =
+    # 'config-tool')`. Under `cross_compile = True`, PATH-based search is
+    # refused ("Default target is not allowed for cross use"), so this pin is
+    # what lets meson find llvm-config; an empty dict fails the LLVM query in
+    # any meson run (full build or introspect). The `llvm-config-14` shim in the
+    # per-PG sysroot is the same one PG's `find_program('llvm-config')` picks up
+    # on a native build. `$SYSROOT_DIR` (set in env_sysroot above) expands at
+    # heredoc-write time when the cross-file is generated.
+    cross_binaries = {
+        "llvm-config": "$SYSROOT_DIR/usr/bin/llvm-config-14",
+    } if sysroot_tar else {}
+
     # env_sysroot must be merged first so SYSROOT_DIR is set before other
     # variables that reference it (PKG_CONFIG_SYSROOT_DIR, etc.)
     return dict(
         build_data = build_data,
+        cross_binaries = cross_binaries,
+        data = data,
         env = env_sysroot | env | env_meson,
         lib_source = pg_src,
         options = build_options | meson_tool_options,
@@ -313,7 +352,11 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
 
 # buildifier: disable=external-path
 _STRIP_SANDBOX_PATHS_POSTFIX = """\
-_arch=$$(uname -m | sed -e s/x86_64/amd64/ -e s/aarch64/arm64/)
+case "$$TARGET_MULTIARCH" in
+    x86_64-*) _arch=amd64 ;;
+    aarch64-*) _arch=arm64 ;;
+    *) echo "unrecognized TARGET_MULTIARCH: $$TARGET_MULTIARCH" >&2; exit 1 ;;
+esac
 find "$$INSTALLDIR" -name 'Makefile.global' -print0 \\
     | xargs -0 --no-run-if-empty \\
         sed -i -E \\
@@ -353,6 +396,21 @@ def _pg_build_meson(name, pg_src, build_options, auto_features, sysroot_tar = No
 
     meson(**(meson_common_args | dict(
         name = name,
+        # The patched `rules_foreign_cc` `meson` rule (see
+        # `//patches/rules_foreign_cc:0003-meson-cross-compile-flag.patch`)
+        # emits a meson cross-file under `$BUILD_TMPDIR` and passes it to `meson
+        # setup --cross-file`. `needs_exe_wrapper = true` in the cross-file
+        # makes meson skip the `add_languages('c')` sanity check that runs a
+        # target-arch test binary on the host (the failure mode the
+        # cross-compile case hits, where the binary's PT_INTERP / NEEDED don't
+        # exist on the host). Passed unconditionally because the cross-file
+        # faithfully mirrors the resolved cc_toolchain, so native PG builds get
+        # the same `c` / `cpp` / `ar` / `strip` they would otherwise get via env
+        # vars. The visible difference for native builds is the skipped
+        # `__int128 alignment bug` `cc.run` check (gated on
+        # `meson.is_cross_build()` in Postgres `meson.build`), which is the
+        # accepted "hope for the best" path Postgres takes for cross-compiles.
+        cross_compile = True,
         out_binaries = pg_binaries,
         out_data_dirs = out_data_dirs,
     )))
@@ -377,6 +435,12 @@ def _pg_build_introspect(name, pg_src, build_options, auto_features, sysroot_tar
 
     meson(**(meson_common_args | dict(
         name = "introspect",
+        # Mirror `_pg_build_meson`'s `cross_compile` so introspect-only
+        # invocations get the same `meson setup` configuration (see notes
+        # there). Without this, an introspect run against an arm64 target
+        # platform would still try to execute the host-unrunnable
+        # `add_languages('c')` sanity binary.
+        cross_compile = True,
         out_include_dir = "",
         # Name the introspect JSON `tar.json` explicitly (the fixed name the
         # regen normalizer keys on, `_INTROSPECT_JSON_NAME`), not after the
