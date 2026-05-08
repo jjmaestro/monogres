@@ -108,23 +108,39 @@ build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/xz
 build:hermetic-linux --sandbox_add_mount_pair=/usr/bin/busybox:/usr/bin/awk
 
 # ---------------------------------------------------------------------------
-# Host arch primitive (`host-<arch>`) + native hermetic-linux shortcuts
+# host-<arch> + target-<arch> primitives, native + cross shortcuts
 # ---------------------------------------------------------------------------
 #
-# `host-<arch>` carries the only exec-host-arch-dependent piece of the
-# sandbox manifest: the dynamic loader bind-mount (see the PT_INTERP
-# note below). Splitting it out lets cross-compile configurations
-# compose `--config=host-<exec-arch>` independently of the target
-# arch.
+# `host-<arch>`: exec-host-arch-dependent piece of the sandbox manifest.
+# Today: just the dynamic loader bind-mount (see PT_INTERP note below).
 #
-# Native shortcuts (`hermetic-linux-<arch>` for host == target):
-# compose the arch-independent `:hermetic-linux` manifest with the
-# matching `:host-<arch>` loader. Activate with
-# `--config=hermetic-linux-amd64` (or `-arm64`); passing
-# `--config=hermetic-linux` alone is incomplete (no loader, every
-# dynamic ELF fails at exec time).
-common:hermetic-linux-amd64 --config=hermetic-linux --config=host-amd64
-common:hermetic-linux-arm64 --config=hermetic-linux --config=host-arm64
+# `target-<arch>`: target-arch-dependent build flags. Today: cc_toolchain
+# registration via `--extra_toolchains` (chained via the `linux-<arch>`
+# config in `build/.bazelrc`) and `--platforms=//platforms:linux_<arch>`
+# so Bazel'\''s toolchain resolver targets the right arch. Without
+# `--platforms`, target arch silently defaults to the host arch and
+# `bazel-bin` resolves to `k8-fastbuild/` for arm64 builds (no
+# cross-compile).
+#
+# Native shortcut (`hermetic-linux-<arch>` for host == target):
+# compose the manifest + matching host + matching target. Activate
+# with `--config=hermetic-linux-amd64` (or `-arm64`).
+common:hermetic-linux-amd64 --config=hermetic-linux --config=host-amd64 --config=target-amd64
+common:hermetic-linux-arm64 --config=hermetic-linux --config=host-arm64 --config=target-arm64
+
+# Cross-compile shortcut (`hermetic-linux-cross-<target>`): builds for
+# `<target>` from the other arch as exec host (the typical CI shape).
+# `cross-arm64` runs on an amd64 host; `cross-amd64` runs on an arm64
+# host. Power users who want a different host can compose
+# `--config=host-<exec> --config=target-<tgt>` directly.
+common:hermetic-linux-cross-arm64 --config=hermetic-linux --config=host-amd64 --config=target-arm64
+common:hermetic-linux-cross-amd64 --config=hermetic-linux --config=host-arm64 --config=target-amd64
+
+# target-<arch> primitive: cc_toolchain + platform for the target arch
+common:target-amd64 --config=linux-amd64
+common:target-amd64 --platforms=//platforms:linux_amd64
+common:target-arm64 --config=linux-arm64
+common:target-arm64 --platforms=//platforms:linux_arm64
 
 # PT_INTERP of every dynamic ELF on Linux is the literal absolute path
 # of the dynamic loader baked into the binary by the linker at link
@@ -252,5 +268,11 @@ common:hermetic-linux-arm64 --config=hermetic-linux --config=host-arm64
 #     the project's docker base image. Pinned version matters
 #     because patchelf has historically had compatibility quirks
 #     with newer ELF features (DT_RELR, etc.); pin and document.
+# `host-<arch>` is keyed by EXEC host arch (where actions execute), so
+# cross-compile shortcuts (`hermetic-linux-cross-<target>`) compose
+# `--config=host-<exec-arch>` and pick up the corresponding loader.
+# Cross-compiled TARGET binaries never execute during the build (PG
+# meson is cross-aware; exec-config tools run on the host), so the
+# target arch's loader is unneeded when cross-compiling.
 build:host-amd64 --sandbox_add_mount_pair=/lib64/ld-linux-x86-64.so.2
 build:host-arm64 --sandbox_add_mount_pair=/lib/ld-linux-aarch64.so.1
