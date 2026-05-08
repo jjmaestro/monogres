@@ -263,14 +263,20 @@ def pgxs_build(
                 echo
                 echo "configure"
                 echo
-                env -C "$$pgxs_src_copy" \
+                # Subshell with `cd` instead of GNU `env -C`: busybox env
+                # (what /usr/bin/env resolves to under the hermetic Linux
+                # sandbox) doesn't support `-C`. The subshell form is pure
+                # POSIX and works with both GNU env and busybox env.
+                (
+                    cd "$$pgxs_src_copy" && \
                     CC="$$cc" \
                     PG_CONFIG="$$EXT_BUILD_ROOT/$(PG_CONFIG)" \
                     CFLAGS="$${{pg_cflags[*]}}" \
                     CPPFLAGS="$${{pg_cflags[*]}}" \
                     LDFLAGS="$${{pg_ldflags[*]}}" \
                     PG_CONFIG="$$EXT_BUILD_ROOT/$(PG_CONFIG)" \
-                    "$$pgxs_src_copy/configure" || return $$?
+                    "$$pgxs_src_copy/configure"
+                ) || return $$?
             fi
 
             echo
