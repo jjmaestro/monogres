@@ -25,6 +25,16 @@ _LIBC_SYSROOT_TAR = "@libc_sysroot//debian/{}:sysroot_tar".format(
     RELEASE.version,
 )
 
+# Per-arch @llvm_sysroot tree. PGXS extensions that compile bitcode invoke
+# `$(LLVM_BINPATH)/llvm-lto` (and friends) for ThinLTO indexing; the path lives
+# under `external/<canonical_repo>/debian/12/<arch>/usr/lib/llvm-14/bin/` (baked
+# into Postgres's installed `Makefile.global` by `_STRIP_SANDBOX_PATHS_POSTFIX`
+# in `pg_build.bzl`). The label pulls the full LLVM tree into the action's
+# hermetic input set so `llvm-lto`, its NEEDED `libLLVM-14.so.1`, and the rest
+# of the LLVM-14 binaries resolve at install time. Arch-selecting alias is
+# emitted by `//sysroots/common:codegen.bzl::version_root_build`.
+_LLVM_SYSROOT = "@llvm_sysroot//debian/{}:sysroot".format(RELEASE.version)
+
 def pgxs_build(
         name,
         src,
@@ -94,6 +104,7 @@ def pgxs_build(
         sysroot_tar,
         base_sysroot_tar,
         _SYSROOT_CLANG_WRAPPER,
+        _LLVM_SYSROOT,
         _SYSROOT_SETUP_SCRIPT,
     ]
 
@@ -156,6 +167,22 @@ def pgxs_build(
 
             local arch
             arch="$$(uname -m)"
+
+            # `@llvm_sysroot` lib dirs that hold llvm-lto's NEEDED libs
+            # (libtinfo.so.6 in `lib/<multiarch>`, libLLVM-14.so.1 in
+            # `usr/lib/llvm-14/lib`). pgxs.mk's install step invokes
+            # `$$(LLVM_BINPATH)/llvm-lto` for ThinLTO bitcode indexing
+            # under the canonical `@llvm_sysroot` path baked into
+            # `Makefile.global` by `_STRIP_SANDBOX_PATHS_POSTFIX` in
+            # `pg_build.bzl`. The sandbox chroot has no `/lib/<multiarch>`,
+            # so the binary needs `LD_LIBRARY_PATH` pointing at its own
+            # sysroot to find its NEEDED libs at exec time. The path is
+            # surfaced via the `$(LLVM_SYSROOT_DIR)` make-variable bound by
+            # the `//toolchains/llvm_sysroot:llvm_sysroot_dir` `sysroot_dir`
+            # rule, so the canonical bzlmod repo name resolves at analysis
+            # time without appearing in source.
+            local llvm_sysroot
+            llvm_sysroot="$$EXT_BUILD_ROOT/$(LLVM_SYSROOT_DIR)"
 
             # NOTE:
             # Two sysroots layered: the extension's own (`sysroot_dir`,
@@ -220,6 +247,8 @@ def pgxs_build(
               "$$sysroot_dir/usr/lib"
               "$$pg_sysroot_dir/usr/lib/$${{arch}}-linux-gnu"
               "$$pg_sysroot_dir/usr/lib"
+              "$$llvm_sysroot/lib/$${{arch}}-linux-gnu"
+              "$$llvm_sysroot/usr/lib/llvm-14/lib"
             )
 
             # NOTE:
@@ -486,6 +515,7 @@ def pgxs_build(
         toolchains = [
             "@bazel_tools//tools/cpp:current_cc_toolchain",
             "@bsd_tar_toolchains//:resolved_toolchain",
+            "@monogres//toolchains/llvm_sysroot:llvm_sysroot_dir",
             "@rules_foreign_cc//toolchains:current_make_toolchain",
             "%s//%s:toolchain" % (base_hub, base_version["version"]),
         ],
