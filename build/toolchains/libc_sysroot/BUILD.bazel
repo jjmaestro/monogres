@@ -1,4 +1,5 @@
 load("@platform_debian//:versions.bzl", "RELEASE", "VERSIONS")
+load("@sysroots//toolchains:sysroot_dir.bzl", "sysroot_dir")
 load("//platforms:targets.bzl", "ARCH_CPU", "arch_select")
 load("//toolchains/llvm_sysroot:llvm_version.bzl", "LLVM_MAJOR")
 
@@ -25,6 +26,33 @@ alias(
             arch,
             LLVM_MAJOR,
         )
+        for arch in ARCH_CPU
+    }),
+)
+
+# `$(LIBC_SYSROOT_DIR)` make-variable bindings. Per-arch `sysroot_dir` instances
+# resolve the per-arch sysroot's execroot-relative package path from the label
+# at analysis time; `:libc_sysroot_dir` selects the right per-arch instance.
+# Consumers list it in their action's `toolchains` attr and reference
+# `$(LIBC_SYSROOT_DIR)` in `cmd` (e.g. `pg_build`'s
+# `_STRIP_SANDBOX_PATHS_POSTFIX` rewrites Postgres's installed `Makefile.global`
+# to point at the persistent libc-sysroot clang wrapper).
+[
+    sysroot_dir(
+        name = "libc_sysroot_dir_%s" % arch,
+        target = "@libc_sysroot//debian/%s/%s:sysroot" % (
+            RELEASE.version,
+            arch,
+        ),
+        var = "LIBC_SYSROOT_DIR",
+    )
+    for arch in ("amd64", "arm64")
+]
+
+alias(
+    name = "libc_sysroot_dir",
+    actual = arch_select({
+        arch: ":libc_sysroot_dir_%s" % arch
         for arch in ARCH_CPU
     }),
 )

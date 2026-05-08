@@ -110,6 +110,8 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
         "@rules_flex//flex:current_flex_toolchain",
         "@rules_bison//bison:current_bison_toolchain",
         "@bsd_tar_toolchains//:resolved_toolchain",
+        "@monogres//toolchains/libc_sysroot:libc_sysroot_dir",
+        "@monogres//toolchains/llvm_sysroot:llvm_sysroot_dir",
         _PERL_TOOLCHAIN,
         _PYTHON_TOOLCHAIN,
     ]
@@ -332,37 +334,37 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
 # collapse to `/<install_base>/...` (persistent across sandbox teardowns via
 # Bazel's install-base bind-mount).
 #
-# Step 2 rewrites the action-time `/sysroot/usr/lib/llvm-14/bin` prefix (where
-# the tar-extracted Debian libllvm14 binaries lived during the action) to the
-# persistent `@llvm_sysroot` bin dir (`/external/sysroots++sysroots+llvm_sysroot
-# /debian/12/<arch>/usr/lib/llvm-14/bin`). Both paths point at the same Debian
-# llvm-14 binaries (same APT_SNAPSHOT); the rewrite swaps the per-action sandbox
-# location for the install-base-bind-mount-persistent one so PGXS extensions
-# invoking `$(LLVM_BINPATH)/llvm-lto` succeed after sandbox teardown.
+# Step 2 redirects `/sysroot/usr/lib/llvm-14/bin/clang` (word-anchored) to the
+# @libc_sysroot `clang_wrapper.sh` shim via `$(LIBC_SYSROOT_DIR)`. Postgres's
+# runtime JIT path invokes `$(CLANG)` DIRECTLY to emit-llvm-IR; no cc_toolchain
+# features inject `--sysroot=`, so the unwrapped clang would compile against
+# host headers (no host in the hermetic sandbox; in the production container we
+# want the deterministic Debian sysroot). The wrapper bakes
+# `--sysroot=<libc_sysroot>` into every invocation. The `\\b` boundary keeps
+# `clang-14`, `clang++`, etc. routed through `@llvm_sysroot` directly (step 3;
+# they're only invoked by the build, not by runtime JIT).
 #
-# Step 3 redirects just `/clang` (word-anchored) from `@llvm_sysroot`'s raw
-# Debian clang to the @libc_sysroot `clang_wrapper.sh` shim. Postgres's runtime
-# JIT path invokes `$(CLANG)` DIRECTLY to emit-llvm-IR; no cc_toolchain features
-# inject `--sysroot=`, so the unwrapped clang would compile against host headers
-# (no host in the hermetic sandbox; in the production container we want the
-# deterministic Debian sysroot). The wrapper bakes `--sysroot=<libc_sysroot>`
-# into every invocation. The `\\b` boundary keeps `clang-14`, `clang++`, etc.
-# routed through `@llvm_sysroot` directly (they're only invoked by the build,
-# not by runtime JIT).
+# Step 3 rewrites the action-time `/sysroot/usr/lib/llvm-14/bin` prefix (where
+# the tar-extracted Debian libllvm14 binaries lived during the action) to the
+# persistent `@llvm_sysroot` bin dir via `$(LLVM_SYSROOT_DIR)`. Both paths point
+# at the same Debian llvm-14 binaries (same APT_SNAPSHOT); the rewrite swaps the
+# per-action sandbox location for the install-base-bind-mount- persistent one so
+# PGXS extensions invoking `$(LLVM_BINPATH)/llvm-lto` succeed after sandbox
+# teardown.
+#
+# `$(LLVM_SYSROOT_DIR)` and `$(LIBC_SYSROOT_DIR)` are make variables provided by
+# `//toolchains/llvm_sysroot:llvm_sysroot_dir` and
+# `//toolchains/libc_sysroot:libc_sysroot_dir` (`sysroot_dir` rule from
+# `//sysroots/toolchains/`); the canonical bzlmod repo name resolves at analysis
+# time, never appearing in source.
 
-# buildifier: disable=external-path
 _STRIP_SANDBOX_PATHS_POSTFIX = """\
-case "$$TARGET_MULTIARCH" in
-    x86_64-*) _arch=amd64 ;;
-    aarch64-*) _arch=arm64 ;;
-    *) echo "unrecognized TARGET_MULTIARCH: $$TARGET_MULTIARCH" >&2; exit 1 ;;
-esac
 find "$$INSTALLDIR" -name 'Makefile.global' -print0 \\
     | xargs -0 --no-run-if-empty \\
         sed -i -E \\
             -e 's|/sandbox/linux-sandbox/[0-9]+/execroot/[^/]+/|/|g' \\
-            -e "s|/sysroot/usr/lib/llvm-{major}/bin|/external/sysroots++sysroots+llvm_sysroot/debian/12/$${{_arch}}/usr/lib/llvm-{major}/bin|g" \\
-            -e "s|/external/sysroots[+][+]sysroots[+]llvm_sysroot/debian/12/$${{_arch}}/usr/lib/llvm-{major}/bin/clang\\b|/external/sysroots++sysroots+libc_sysroot/debian/12/$${{_arch}}/usr/lib/llvm-{major}/bin/clang|g"
+            -e "s|/sysroot/usr/lib/llvm-{major}/bin/clang\\b|/$(LIBC_SYSROOT_DIR)/usr/lib/llvm-{major}/bin/clang|g" \\
+            -e "s|/sysroot/usr/lib/llvm-{major}/bin|/$(LLVM_SYSROOT_DIR)/usr/lib/llvm-{major}/bin|g"
 """.format(major = LLVM_MAJOR)
 
 def _pg_build_meson(name, pg_src, build_options, auto_features, sysroot_tar = None):
