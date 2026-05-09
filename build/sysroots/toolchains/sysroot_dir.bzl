@@ -145,3 +145,38 @@ sysroot_exec_dir = rule(
         ),
     },
 )
+
+def _exec_files_impl(ctx):
+    # `target` is resolved in EXEC config (`cfg = "exec"`), so any
+    # `@platforms//cpu:*` `select()` inside the referenced label evaluates
+    # against the EXEC platform's cpu, picking the host arch's files regardless
+    # of `--platforms` (which only affects TARGET resolution).
+    return [DefaultInfo(files = ctx.attr.target[DefaultInfo].files)]
+
+exec_files = rule(
+    implementation = _exec_files_impl,
+    doc = (
+        "Forward a target's `DefaultInfo.files` resolved in EXEC config. " +
+        "Use to surface an EXEC-arch copy of an arch-selecting filegroup / " +
+        "alias (e.g. a per-PG `:sysroot_tar` whose `select()` is keyed by " +
+        "`@platforms//cpu:*`) alongside the action's TARGET-config srcs. " +
+        "The `cfg = 'exec'` attr forces the underlying `select()` to " +
+        "evaluate in EXEC config so the emitted files are always the host " +
+        "arch's. Action consumers `srcs`-dep both target and exec instances " +
+        "to materialize parallel sysroot trees for tools that must run on " +
+        "the build host (e.g. `msgfmt`, `bison`) while target libs / " +
+        "headers come from the TARGET-config sysroot."
+    ),
+    attrs = {
+        "target": attr.label(
+            cfg = "exec",
+            mandatory = True,
+            allow_files = True,
+            doc = (
+                "Arch-selecting filegroup / alias whose files become this " +
+                "rule's `DefaultInfo.files`. Resolved in EXEC config; the " +
+                "underlying `select()` picks the host arch's files."
+            ),
+        ),
+    },
+)
