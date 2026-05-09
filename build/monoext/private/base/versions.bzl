@@ -77,6 +77,7 @@ def _option_set_build(build_repo, target, source_repo, version, option_set):
             build_options = target.build_options,
             auto_features = target.auto_features,
             sysroot_tar = target.deps.buildtime.sysroot_tar,
+            exec_sysroot_tar = target.deps.buildtime.exec_sysroot_tar,
         ),
         _filegroup(
             name = "tar.dev.gen_dir",
@@ -134,13 +135,36 @@ def _sysroot_select(labels_by_arch):
         for arch, label in labels_by_arch.items()
     })
 
-def _deps_kind_build(**aliases):
-    """Render {version}/deps/{kind}/BUILD.bazel"""
-    return Star.file(
-        Star.package(default_visibility = ["//visibility:public"]),
-        header = _HEADER,
-        *[Star.alias(name, actual) for name, actual in aliases.items()]
-    )
+def _exec_files(*args, **kwargs):
+    return Star.igen(Star.fn("exec_files", *args, **kwargs))
+
+def _deps_kind_build(aliases, exec_files_targets = None):
+    """Render {version}/deps/{kind}/BUILD.bazel.
+
+    Args:
+        aliases: `{name: actual_node}` mapping; each entry becomes an
+            `alias(name = name, actual = actual_node)` in the rendered file.
+        exec_files_targets: Optional `{name: target_label}` mapping; each entry
+            becomes an `exec_files(name = name, target = target_label)` rule
+            call (surfaces the EXEC-config resolution of an arch-selecting
+            label). When non-empty, a
+            `load("@sysroots//toolchains:sysroot_dir.bzl", "exec_files")`
+            statement is emitted at the top of the file.
+    """
+    body = [Star.alias(name, actual) for name, actual in aliases.items()]
+    head = [Star.package(default_visibility = ["//visibility:public"])]
+
+    if exec_files_targets:
+        head = [
+            Star.load_("@sysroots//toolchains:sysroot_dir.bzl", "exec_files"),
+        ] + head
+        body.extend([
+            _exec_files(name = name, target = target)
+            for name, target in exec_files_targets.items()
+        ])
+
+    items = head + body
+    return Star.file(header = _HEADER, *items)
 
 # ---------------------------------------------------------------------------
 # Writers
@@ -211,24 +235,32 @@ def write_base_version(rctx, version, entry, build_repo, option_sets, archs):
             continue
 
         # --- {version}/deps/{kind}/BUILD.bazel: sysroot + sysroot_tar ---
+        # `exec_sysroot_tar` mirrors `sysroot_tar` resolved in EXEC config (`cfg
+        # = "exec"` on `exec_files.target`), so the inner arch select() picks
+        # the host arch's tar regardless of `--platforms`. Consumers (pg_build,
+        # pgxs_build) `srcs`-dep both for cross-builds: TARGET tar carries
+        # libs/headers/target-arch tools, EXEC tar carries build-machine tools
+        # (msgfmt, etc.) that meson's `find_program(..., native: true)` invokes
+        # during configure.
         aliases = {
             "sysroot": _sysroot_select(deps_info.sysroot_labels_by_arch),
             "sysroot_tar": _sysroot_select(
                 deps_info.sysroot_tar_labels_by_arch,
             ),
         }
+        exec_files_targets = {"exec_sysroot_tar": ":sysroot_tar"} if kind == "buildtime" else None
         rctx.file(
             "%s/deps/%s/BUILD.bazel" % (version, kind),
-            _deps_kind_build(**aliases),
+            _deps_kind_build(aliases, exec_files_targets = exec_files_targets),
         )
 
         # --- {version}/deps/{kind}/pkgs/BUILD.bazel: per-package ---
-        aliases = dict(zip(deps_info.packages, deps_info.pkgs_labels))
+        pkg_aliases = dict(zip(deps_info.packages, deps_info.pkgs_labels))
 
-        if aliases:
+        if pkg_aliases:
             rctx.file(
                 "%s/deps/%s/pkgs/BUILD.bazel" % (version, kind),
-                _deps_kind_build(**aliases),
+                _deps_kind_build(pkg_aliases),
             )
 
 testing = struct(

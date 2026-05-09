@@ -101,7 +101,11 @@ def _version_deps_from_dict(d):
         runtime = _deps_info_from_dict(d.get("runtime")),
     )
 
-def _target_deps_kind_new(sysroot = None, sysroot_tar = None, packages = None):
+def _target_deps_kind_new(
+        sysroot = None,
+        sysroot_tar = None,
+        exec_sysroot_tar = None,
+        packages = None):
     """Constructs one kind of a `TargetDeps` (`buildtime` or `runtime`).
 
     Args:
@@ -110,15 +114,23 @@ def _target_deps_kind_new(sysroot = None, sysroot_tar = None, packages = None):
         sysroot_tar: Qualified `@hub//.../deps/{kind}:sysroot_tar` alias label,
             or `None` when the kind has no deps. Parallel to `sysroot`; points
             at the upstream `:sysroot.tar` single-file artifact.
+        exec_sysroot_tar: Qualified `@hub//.../deps/{kind}:exec_sysroot_tar`
+            label (an `exec_files`-wrapped `:sysroot_tar`), or `None` when the
+            kind isn't `buildtime`. Resolves to the EXEC host arch's tar
+            regardless of `--platforms`; consumers `srcs`-dep this in parallel
+            with `sysroot_tar` for cross-builds to materialize a host-arch
+            sysroot tree carrying build-machine tools (msgfmt, etc.) while
+            target libs come from the TARGET-config tar.
         packages: List of qualified `@hub//.../deps/{kind}/pkgs:{pkg}` alias
             labels, or empty.
 
     Returns:
-        A `struct(sysroot, sysroot_tar, packages)`.
+        A `struct(sysroot, sysroot_tar, exec_sysroot_tar, packages)`.
     """
     return struct(
         sysroot = sysroot,
         sysroot_tar = sysroot_tar,
+        exec_sysroot_tar = exec_sysroot_tar,
         packages = packages if packages else [],
     )
 
@@ -169,9 +181,19 @@ def _qualify_kind(target_prefix, kind, deps_info):
     for pkg in deps_info.packages:
         fp = bind(prefix = target_prefix, kind = kind, pkg = pkg)
         packages.append(fp("{prefix}/deps/{kind}/pkgs:{pkg}"))
+
+    # `exec_sysroot_tar` only emitted for `buildtime` (where the
+    # `:exec_sysroot_tar` companion alias is rendered by
+    # `monoext/private/base/versions.bzl::write_base_version`); other kinds
+    # leave it `None`.
+    exec_sysroot_tar = None
+    if kind == "buildtime":
+        exec_sysroot_tar = f("{prefix}/deps/{kind}:exec_sysroot_tar")
+
     return _target_deps_kind_new(
         sysroot = f("{prefix}/deps/{kind}:sysroot"),
         sysroot_tar = f("{prefix}/deps/{kind}:sysroot_tar"),
+        exec_sysroot_tar = exec_sysroot_tar,
         packages = packages,
     )
 
@@ -193,6 +215,7 @@ def _kind_from_dict(d):
     return _target_deps_kind_new(
         sysroot = d.get("sysroot"),
         sysroot_tar = d.get("sysroot_tar"),
+        exec_sysroot_tar = d.get("exec_sysroot_tar"),
         packages = d.get("packages", []),
     )
 

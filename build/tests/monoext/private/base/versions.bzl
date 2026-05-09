@@ -150,7 +150,7 @@ def _deps_kind_build_single_alias_test_impl(ctx):
     env = unittest.begin(ctx)
 
     out = _BaseVersions._deps_kind_build(
-        sysroot = "@pg_pkgs//deb/sysroots:sysroot-abc",
+        {"sysroot": "@pg_pkgs//deb/sysroots:sysroot-abc"},
     )
 
     asserts.true(env, 'name = "sysroot"' in out)
@@ -169,12 +169,10 @@ def _deps_kind_build_multiple_aliases_test_impl(ctx):
     """A per-package alias block renders each pkg→label pair."""
     env = unittest.begin(ctx)
 
-    out = _BaseVersions._deps_kind_build(
-        **{
-            "libc6-dev": "@pg_pkgs//deb/libc6-dev:libc6-dev",
-            "libssl-dev": "@pg_pkgs//deb/libssl-dev:libssl-dev",
-        }
-    )
+    out = _BaseVersions._deps_kind_build({
+        "libc6-dev": "@pg_pkgs//deb/libc6-dev:libc6-dev",
+        "libssl-dev": "@pg_pkgs//deb/libssl-dev:libssl-dev",
+    })
 
     asserts.true(env, 'name = "libssl-dev"' in out)
     asserts.true(
