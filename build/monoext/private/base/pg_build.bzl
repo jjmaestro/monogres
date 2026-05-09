@@ -232,7 +232,21 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
                 "-idirafter $$SYSROOT_DIR/usr/include/$$TARGET_MULTIARCH",
                 "-idirafter $$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/perl/" + _PERL_VERSION + "/CORE",
             ]),
-            LIBRARY_PATH = "$$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH",
+            # `LIBRARY_PATH` is the conventional GCC/Clang env for additional
+            # link-time `-L` search dirs; it works for NATIVE builds (host arch
+            # == target arch). For CROSS builds, clang's driver intentionally
+            # SKIPS `LIBRARY_PATH` (`Linker::ConstructJob` in clang's source
+            # gates it on `!TC.isCrossCompiling()`). So `-lzstd` and other
+            # `dependency()`-discovered libs whose `.pc` files emit `-L/usr/lib`
+            # (stripped by pkg-config as a system path, leaving just `-l<name>`)
+            # fall through to the cc_toolchain's `--sysroot=` (libc_sysroot) and
+            # come up empty (libc_sysroot doesn't carry libzstd etc.).
+            #
+            # `LDFLAGS` is read by meson and prepended to every link command, so
+            # the `-L` flags pass through to ld.lld regardless of cross/native
+            # mode. Same path either way: per-PG sysroot's multiarch lib dir
+            # (where libzstd, libssl, libcrypto, libxml2, libxslt, etc. live).
+            LDFLAGS = "-L$$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH",
             # Debian's multi-arch layout splits libs between `/lib/<arch>`
             # (libcrypt, libtinfo, libz) and `/usr/lib/<arch>` (libz3); both are
             # needed in LD_LIBRARY_PATH because the hermetic Linux sandbox has
