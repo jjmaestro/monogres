@@ -165,8 +165,25 @@ def pgxs_build(
                 touch "$$pgxs_src_copy/configure"
             fi
 
-            local arch
-            arch="$$(uname -m)"
+            # `target_multiarch` is the Debian multiarch dirname for the
+            # TARGET arch (e.g. `x86_64-linux-gnu` or `aarch64-linux-gnu`).
+            # From `$(LIBC_SYSROOT_MULTIARCH)`, the target-config libc
+            # sysroot's tuple (`toolchains` make-variables resolve in the
+            # genrule's TARGET config, so this is the build's target arch, not
+            # the BUILD arch where the action runs). A pure arch fact,
+            # identical across the same-snapshot target sysroots, so it names
+            # the extension sysroot's lib dir too. Mirrors `build_multiarch`
+            # below on the exec side.
+            #
+            # `build_multiarch` is the Debian multiarch dirname for the BUILD
+            # arch (where this action runs). Sourced from
+            # `$(LIBC_SYSROOT_EXEC_MULTIARCH)`, the exec-config libc sysroot's
+            # tuple (the exec arch is the build arch). Used to set autoconf's
+            # `--build=` so cross-aware extension configure scripts know they
+            # are not running on the target.
+            local target_multiarch build_multiarch
+            target_multiarch="$(LIBC_SYSROOT_MULTIARCH)"
+            build_multiarch="$(LIBC_SYSROOT_EXEC_MULTIARCH)"
 
             # `@llvm_sysroot` lib dirs that hold llvm-lto's NEEDED libs
             # (libtinfo.so.6 in `lib/<multiarch>`, libLLVM-14.so.1 in
@@ -205,12 +222,27 @@ def pgxs_build(
             # from a nonexistent default sysroot. (Meson-based builds like
             # Postgres get --sysroot via cc_toolchain features and don't
             # need this manually.)
+            # `--target=<triple>` selects clang's TARGET architecture for
+            # codegen + driver behavior (default-multiarch crt path,
+            # cross-compiled libgcc lookup, etc.). Without it clang picks
+            # the EXEC arch (`Target: x86_64-pc-linux-gnu` on amd64), so
+            # `-isystem`/`-L` resolves the right multiarch dirs in the
+            # TARGET sysroot but ld.lld then tries to link x86_64 crt1.o
+            # against aarch64 .o's and fails with `cannot open Scrt1.o`.
+            # Cc_toolchain-driven builds (PG meson) get `--target=` via
+            # the cc_wrapper's feature config; autoconf-style extensions
+            # invoke `$$CC` directly and bypass the toolchain features,
+            # so the flag must be on PG_CFLAGS / PG_LDFLAGS.
+            #
+            # For native builds this is a no-op the EXEC and TARGET
+            # multiarch tuples match.
             local pg_cflags=(
+                "--target=$$target_multiarch"
                 "--sysroot=$$sysroot_dir"
                 "-idirafter $$sysroot_dir/usr/include"
-                "-idirafter $$sysroot_dir/usr/include/$${{arch}}-linux-gnu"
+                "-idirafter $$sysroot_dir/usr/include/$$target_multiarch"
                 "-idirafter $$pg_sysroot_dir/usr/include"
-                "-idirafter $$pg_sysroot_dir/usr/include/$${{arch}}-linux-gnu"
+                "-idirafter $$pg_sysroot_dir/usr/include/$$target_multiarch"
             )
             # NOTE:
             # `--sysroot` is duplicated here so configure's link-only checks
@@ -224,30 +256,61 @@ def pgxs_build(
             # toolchain's cc_wrapper defaults link invocations to `lld` when
             # no `-fuse-ld=...` is otherwise specified.
             local pg_ldflags=(
+                "--target=$$target_multiarch"
                 "--sysroot=$$sysroot_dir"
                 "-Wl,--sysroot=$$sysroot_dir"
-                "-L$$sysroot_dir/usr/lib/$${{arch}}-linux-gnu"
-                "-L$$pg_sysroot_dir/usr/lib/$${{arch}}-linux-gnu"
+                "-L$$sysroot_dir/usr/lib/$$target_multiarch"
+                "-L$$pg_sysroot_dir/usr/lib/$$target_multiarch"
             )
 
             local pkg_config_path=(
-              "$$sysroot_dir/usr/lib/$${{arch}}-linux-gnu/pkgconfig"
+              "$$sysroot_dir/usr/lib/$$target_multiarch/pkgconfig"
               "$$sysroot_dir/usr/share/pkgconfig"
-              "$$pg_sysroot_dir/usr/lib/$${{arch}}-linux-gnu/pkgconfig"
+              "$$pg_sysroot_dir/usr/lib/$$target_multiarch/pkgconfig"
               "$$pg_sysroot_dir/usr/share/pkgconfig"
             )
 
             local library_path=(
-              "$$sysroot_dir/usr/lib/$${{arch}}-linux-gnu"
-              "$$pg_sysroot_dir/usr/lib/$${{arch}}-linux-gnu"
+              "$$sysroot_dir/usr/lib/$$target_multiarch"
+              "$$pg_sysroot_dir/usr/lib/$$target_multiarch"
             )
 
+            # EXEC sysroot paths give build-machine tools (e.g.
+            # `rules_foreign_cc`'s bundled `make`, which dynamically links
+            # against `libm.so.6` / `libc.so.6`) somewhere to find their
+            # EXEC-arch NEEDED libs at action time. Without them, those tools
+            # fail with "cannot open shared object file" because the sandbox
+            # chroot has no host `/lib`. `$(LIBC_SYSROOT_EXEC_DIR)` /
+            # `$(LIBC_SYSROOT_EXEC_MULTIARCH)` / `$(LLVM_SYSROOT_EXEC_DIR)`
+            # resolve in EXEC config regardless of the build's TARGET arch,
+            # so they always point at the host's sysroot. The TARGET-arch
+            # entries below cover link-time `-L` resolution and runtime tool
+            # invocations against the per-PG sysroot.
+            local libc_sysroot_exec llvm_sysroot_exec exec_multiarch
+            libc_sysroot_exec="$$EXT_BUILD_ROOT/$(LIBC_SYSROOT_EXEC_DIR)"
+            llvm_sysroot_exec="$$EXT_BUILD_ROOT/$(LLVM_SYSROOT_EXEC_DIR)"
+            exec_multiarch="$(LIBC_SYSROOT_EXEC_MULTIARCH)"
+
             local ld_library_path=(
-              "$$sysroot_dir/usr/lib/$${{arch}}-linux-gnu"
+              # EXEC-arch: covers build-machine tool NEEDED libs.
+              # `usr/lib/<multiarch>` carries `libffi.so.8` (Debian ships
+              # it via `libffi8` transitive of `libllvm14`) which
+              # `@llvm_sysroot`'s clang dynamic-loads for the `-emit-llvm`
+              # bitcode codegen path PGXS uses.
+              "$$libc_sysroot_exec/lib/$$exec_multiarch"
+              "$$libc_sysroot_exec/usr/lib/$$exec_multiarch"
+              "$$llvm_sysroot_exec/lib/$$exec_multiarch"
+              "$$llvm_sysroot_exec/usr/lib/$$exec_multiarch"
+              "$$llvm_sysroot_exec/usr/lib/llvm-14/lib"
+              # TARGET-arch: extension sysroot for link-time -L and runtime
+              # tool invocations against the per-PG tree.
+              "$$sysroot_dir/usr/lib/$$target_multiarch"
               "$$sysroot_dir/usr/lib"
-              "$$pg_sysroot_dir/usr/lib/$${{arch}}-linux-gnu"
+              "$$pg_sysroot_dir/usr/lib/$$target_multiarch"
               "$$pg_sysroot_dir/usr/lib"
-              "$$llvm_sysroot/lib/$${{arch}}-linux-gnu"
+              # TARGET-arch @llvm_sysroot: llvm-lto NEEDED libs under the
+              # canonical install-base-bind-mount path.
+              "$$llvm_sysroot/lib/$$target_multiarch"
               "$$llvm_sysroot/usr/lib/llvm-14/lib"
             )
 
@@ -287,36 +350,25 @@ def pgxs_build(
             echo "PKG_CONFIG_SYSROOT_DIR: $$PKG_CONFIG_SYSROOT_DIR"
             echo "PKG_CONFIG_PATH: $$PKG_CONFIG_PATH"
 
-            if [ -f "$$pgxs_src_copy/configure" ]
-            then
-                echo
-                echo "configure"
-                echo
-                # Subshell with `cd` instead of GNU `env -C`: busybox env
-                # (what /usr/bin/env resolves to under the hermetic Linux
-                # sandbox) doesn't support `-C`. The subshell form is pure
-                # POSIX and works with both GNU env and busybox env.
-                (
-                    cd "$$pgxs_src_copy" && \
-                    CC="$$cc" \
-                    PG_CONFIG="$$EXT_BUILD_ROOT/$(PG_CONFIG)" \
-                    CFLAGS="$${{pg_cflags[*]}}" \
-                    CPPFLAGS="$${{pg_cflags[*]}}" \
-                    LDFLAGS="$${{pg_ldflags[*]}}" \
-                    PG_CONFIG="$$EXT_BUILD_ROOT/$(PG_CONFIG)" \
-                    "$$pgxs_src_copy/configure"
-                ) || return $$?
-            fi
-
-            echo
-            # PG install-tree path overrides for `make` / `make install`.
-            # Postgres's `Makefile.global` resolves install dirs from
-            # `$$($$PG_CONFIG --<query>)`, which reports PG's configure-time
-            # `--prefix=` (the distro prefix) rather than the action-time
-            # install location. Command-line overrides outrank the
-            # `Makefile.global` `:=` assignments (GNU make precedence), so the
-            # extension installs under `$$abs_pg_install_dir`, where the
-            # relocate step below expects it.
+            # PG-install-tree path overrides for `make` and `configure`.
+            # PG's `lib/pgxs/src/Makefile.global` resolves every install
+            # path (bindir, libdir, sharedir, ...) via
+            # `$$(shell $$(PG_CONFIG) --<query>)` at make-include time, so
+            # extension Makefiles inherit the relocated paths. Under
+            # cross-compile `$$PG_CONFIG` is a target-arch binary that
+            # cannot run on the build host; the `$$(shell ...)` calls
+            # collapse to empty strings and PGXS rules then resolve
+            # `<empty>/<file>` paths that link/install fail on.
+            #
+            # We compute the same paths from `$$abs_pg_install_dir` (the
+            # absolute action-time install location, derived from the
+            # `$(PG_INSTALL_DIR)` make-var, which is in turn derived from
+            # `$(PG_CONFIG)`'s execpath under
+            # `monoext/private/base/toolchain.bzl::_pg_other_template_vars`)
+            # and pass them on the make command line. Command-line
+            # overrides outrank the `:=` assignments in Makefile.global
+            # (GNU make precedence), so the `$$(shell ...)` probes still
+            # run but their results are discarded.
             local abs_pg_install_dir="$$EXT_BUILD_ROOT/$(PG_INSTALL_DIR)"
             local pg_path_overrides=(
                 "bindir=$$abs_pg_install_dir/bin"
@@ -332,6 +384,87 @@ def pgxs_build(
                 "PGXS=$$abs_pg_install_dir/lib/pgxs/src/makefiles/pgxs.mk"
             )
 
+            if [ -f "$$pgxs_src_copy/configure" ]
+            then
+                echo
+                echo "configure"
+                echo
+
+                # autoconf cross-compile signaling: `--host` is the GNU
+                # triplet the binaries will RUN on (target arch), `--build`
+                # is where this configure is RUNNING (build arch). When
+                # they differ, autoconf sets `$$cross_compiling=yes`,
+                # which gates AC_TRY_RUN / AC_CHECK_FILE / etc. on
+                # non-executing fallbacks instead of running target-arch
+                # binaries. Passing both unconditionally also works for
+                # native builds (autoconf canonicalizes via config.sub
+                # and just sets `$$cross_compiling=no`).
+                local build_args=(
+                    "--host=$$target_multiarch"
+                    "--build=$$build_multiarch"
+                )
+
+                # `citusac_pg_config_version` bypasses Citus's
+                # `$$($$PG_CONFIG --version)` probe in `configure`
+                # (patched by `0002-13.2.0-cross-compile-skip-pg_config-
+                # probe.patch` to honor this env var as an override).
+                # The value mirrors what `pg_config --version` would emit
+                # for the target PG build; Citus's `version_num`
+                # extraction regex below the probe parses
+                # `PostgreSQL X.Y...` shape. Set unconditionally because
+                # the Makefile.global VERSION string is what `pg_config`
+                # itself bakes into its `--version` output, so values
+                # match by construction. Non-Citus extension configures
+                # never read this variable and ignore it.
+                local citus_pg_version
+                citus_pg_version="$$(sed -n -E 's/^VERSION[[:space:]]*=[[:space:]]*//p' "$$abs_pg_install_dir/lib/pgxs/src/Makefile.global" | sed -n '1p')"
+
+                # `ac_cv_file_<sanitized-path>` is autoconf's standard
+                # cache-variable override for `AC_CHECK_FILE` results;
+                # when set, autoconf reuses the cached value instead of
+                # probing. `AC_CHECK_FILE` is documented as unsafe under
+                # cross-compilation (autoconf bails with "cannot check
+                # for file existence when cross compiling") because the
+                # check runs on the build host, not the target.
+                # Citus uses `AC_CHECK_FILE(.git, ...)` for `HAS_DOTGIT`
+                # (used only by `Makefile.global.in`'s `GIT_VERSION`
+                # stamping); pre-cache `=no` because the source tarball
+                # has no `.git` directory and we don't want git-version
+                # stamping anyway under sandbox/reproducible builds.
+                # Setting `=no` is harmless for native builds (the
+                # cached value just matches what the probe would find).
+                # Other extensions that use AC_CHECK_FILE in the future
+                # will need the same pre-cache treatment for the same
+                # underlying autoconf limitation.
+
+                # Subshell with `cd` instead of GNU `env -C`: busybox env
+                # (what /usr/bin/env resolves to under the hermetic Linux
+                # sandbox) doesn't support `-C`. The subshell form is pure
+                # POSIX and works with both GNU env and busybox env.
+                local configure_rc=0
+                (
+                    cd "$$pgxs_src_copy" && \
+                    CC="$$cc" \
+                    PG_CONFIG="$$EXT_BUILD_ROOT/$(PG_CONFIG)" \
+                    CFLAGS="$${{pg_cflags[*]}}" \
+                    CPPFLAGS="$${{pg_cflags[*]}}" \
+                    LDFLAGS="$${{pg_ldflags[*]}}" \
+                    PG_CONFIG="$$EXT_BUILD_ROOT/$(PG_CONFIG)" \
+                    citusac_pg_config_version="PostgreSQL $$citus_pg_version" \
+                    ac_cv_file__git=no \
+                    "$$pgxs_src_copy/configure" "$${{build_args[@]}}"
+                ) || configure_rc=$$?
+
+                if [ "$$configure_rc" -ne 0 ]; then
+                    echo
+                    echo "=== configure failed (rc=$$configure_rc); dumping config.log ==="
+                    cat "$$pgxs_src_copy/config.log" 2>&1 || echo "(config.log unreadable)"
+                    echo "=== end config.log ==="
+                    return $$configure_rc
+                fi
+            fi
+
+            echo
             echo "make"
             echo
             local make_overrides=(
@@ -375,7 +508,11 @@ def pgxs_build(
             # `$(PG_INSTALL_DIR)` make variable (set by the pg_template_
             # variable_info rule from `PG_CONFIG.split("/bin/pg_config")[0]`,
             # `monoext/private/base/toolchain.bzl::_pg_other_template_vars`)
-            # prefixed with `$$EXT_BUILD_ROOT`.
+            # prefixed with `$$EXT_BUILD_ROOT`. Computing this from the make
+            # variable (vs. invoking `pg_config --bindir` at action time)
+            # avoids running the TARGET-arch `pg_config` binary on the build
+            # host under cross-compile, where it would fail with "Could not
+            # open '/lib/ld-linux-<target_arch>.so.*'".
             local abs_pg_install_dir="$$EXT_BUILD_ROOT/$(PG_INSTALL_DIR)"
 
             {{
@@ -515,7 +652,10 @@ def pgxs_build(
         toolchains = [
             "@bazel_tools//tools/cpp:current_cc_toolchain",
             "@bsd_tar_toolchains//:resolved_toolchain",
+            "@monogres//toolchains/libc_sysroot:libc_sysroot_dir",
+            "@monogres//toolchains/libc_sysroot:libc_sysroot_exec_dir",
             "@monogres//toolchains/llvm_sysroot:llvm_sysroot_dir",
+            "@monogres//toolchains/llvm_sysroot:llvm_sysroot_exec_dir",
             "@rules_foreign_cc//toolchains:current_make_toolchain",
             "%s//%s:toolchain" % (base_hub, base_version["version"]),
         ],
