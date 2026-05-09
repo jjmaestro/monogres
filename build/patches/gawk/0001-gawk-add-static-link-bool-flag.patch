@@ -1,0 +1,57 @@
+From e854fed441ac4d3f931ee7e34a96d190acd265d7 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Thu, 7 May 2026 03:16:41 +0000
+Subject: [PATCH] patch: add an opt-in :static build flag
+
+The `@gawk//:gawk` `cc_binary` links dynamically by default, so the
+resulting binary carries NEEDED `libc.so.6` / `libm.so.6` entries that
+require the host's `/lib/<cpu>-linux-gnu/` runtime libraries to be
+reachable from the execution environment.
+
+In hermetic sandbox setups that don't bind-mount host runtime libs (e.g.
+Bazel's `--experimental_use_hermetic_linux_sandbox` with a loader-only
+mount manifest), the binary fails at exec time with
+"libc.so.6: cannot open shared object file". The fix at that layer is
+to link gawk fully statically so the binary carries no runtime-lib
+dependency.
+
+Adds an opt-in `bool_flag` `//:static` and a matching `config_setting`
+`//:static_enabled`. The cc_binary's `linkopts` selects on the setting:
+when the flag is unset, the binary links dynamically (gawk's default);
+when set, it links fully statically. Users opt in with
+`--@gawk//:static=true` in their `.bazelrc` or on the command line.
+---
+ BUILD.bazel | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/BUILD.bazel b/BUILD.bazel
+index 01f3eb0..ec1fa97 100644
+--- a/BUILD.bazel
++++ b/BUILD.bazel
+@@ -1,5 +1,16 @@
+ load("@bazel_skylib//rules:copy_file.bzl", "copy_file")
+ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
++load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
++
++bool_flag(
++    name = "static",
++    build_setting_default = False,
++)
++
++config_setting(
++    name = "static_enabled",
++    flag_values = {":static": "True"},
++)
+ 
+ GAWK_COPTS = [
+     "-w",
+@@ -201,5 +212,9 @@ cc_binary(
+     srcs = ["main.c"],
+     copts = GAWK_COPTS,
+     visibility = ["//visibility:public"],
++    linkopts = select({
++        ":static_enabled": ["-static"],
++        "//conditions:default": [],
++    }),
+     deps = [":awk"],
+ )

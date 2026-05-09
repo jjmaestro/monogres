@@ -26,6 +26,15 @@
 # sandbox aborts at first action.
 build:hermetic-linux --sandbox_add_mount_pair=/proc
 
+# Force `@gawk//:gawk` to link statically (opt-in flag added by
+# `//patches/gawk:0001-gawk-add-static-link-bool-flag.patch`). The
+# dynamically-linked default carries NEEDED `libc.so.6` / `libm.so.6` and
+# would fail at action time inside this hermetic chroot, which only
+# bind-mounts the dynamic loader; static linking removes the runtime-lib
+# dependency entirely and keeps gawk-using actions (`tar.bzl`'s
+# `mtree_mutate` and similar) self-contained.
+build:hermetic-linux --@@gawk+//:static=true
+
 # whoami / id / getpwuid lookups (test-setup.sh line 71, rules_distroless,
 # msgfmt). Mount the host's /etc/passwd read-only.
 build:hermetic-linux --sandbox_add_mount_pair=/etc/passwd
