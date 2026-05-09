@@ -20,6 +20,10 @@
       {
         "label": "//catalog/extensions/citus/patches:0001-13.2.0-fix-hardcoded-cpp.patch",
         "spec": ">=13.2.0/*"
+      },
+      {
+        "label": "//catalog/extensions/citus/patches:0002-13.2.0-cross-compile-skip-pg_config-probe.patch",
+        "spec": ">=13.2.0/*"
       }
     ],
     "compatible_with": {

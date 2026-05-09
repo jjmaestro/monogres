@@ -1,0 +1,46 @@
+diff --git a/configure b/configure
+--- a/configure
++++ b/configure
+@@ -2545,8 +2545,17 @@ if test -z "$PG_CONFIG"; then
+    as_fn_error $? "Could not find pg_config. Set PG_CONFIG or PATH." "$LINENO" 5
+ fi
+
+-# check we're building against a supported version of PostgreSQL
+-citusac_pg_config_version=$($PG_CONFIG --version 2>/dev/null)
++# Check we're building against a supported version of PostgreSQL.
++#
++# `$PG_CONFIG --version` is a runtime probe; in cross-compile setups
++# `$PG_CONFIG` is a target-arch binary that cannot execute on the build
++# host. The `citusac_pg_config_version` env var, when set, bypasses the
++# probe — the value is consumed by the existing `version_num` extraction
++# below as if `pg_config` had emitted it. Callers cross-compiling Citus
++# pass `citusac_pg_config_version="PostgreSQL $PG_VERSION_NUM"` (or any
++# equivalent string the extraction regex below recognizes).
++citusac_pg_config_version=${citusac_pg_config_version:-$($PG_CONFIG --version 2>/dev/null)}
++
+ version_num=$(echo "$citusac_pg_config_version"|
+               $SED -e 's/^PostgreSQL \([0-9]*\)\(\.[0-9]*\)\{0,1\}\(.*\)$/\1\2/')
+
+diff --git a/configure.ac b/configure.ac
+--- a/configure.ac
++++ b/configure.ac
+@@ -55,8 +55,17 @@ if test -z "$PG_CONFIG"; then
+    AC_MSG_ERROR([Could not find pg_config. Set PG_CONFIG or PATH.])
+ fi
+
+-# check we're building against a supported version of PostgreSQL
+-citusac_pg_config_version=$($PG_CONFIG --version 2>/dev/null)
++# Check we're building against a supported version of PostgreSQL.
++#
++# `$PG_CONFIG --version` is a runtime probe; in cross-compile setups
++# `$PG_CONFIG` is a target-arch binary that cannot execute on the build
++# host. The `citusac_pg_config_version` env var, when set, bypasses the
++# probe — the value is consumed by the existing `version_num` extraction
++# below as if `pg_config` had emitted it. Callers cross-compiling Citus
++# pass `citusac_pg_config_version="PostgreSQL $PG_VERSION_NUM"` (or any
++# equivalent string the extraction regex below recognizes).
++citusac_pg_config_version=${citusac_pg_config_version:-$($PG_CONFIG --version 2>/dev/null)}
++
+ version_num=$(echo "$citusac_pg_config_version"|
+               $SED -e 's/^PostgreSQL \([[0-9]]*\)\(\.[[0-9]]*\)\{0,1\}\(.*\)$/\1\2/')
+
