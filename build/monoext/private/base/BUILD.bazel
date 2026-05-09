@@ -12,6 +12,7 @@ package(default_visibility = [
 exports_files(
     [
         "Config_overrides.pm",
+        "exec_sysroot_setup.sh",
         "pg_build.bzl",
         "sysroot_setup.sh",
         "toolchain.bzl",

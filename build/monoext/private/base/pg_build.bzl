@@ -20,6 +20,7 @@ load(":toolchain.bzl", "pg_template_variable_info")
 # persistent absolute path when baking `CLANG` into `Makefile.global`), and
 # prints the sysroot absolute path on stdout for `SYSROOT_DIR`.
 _SYSROOT_SETUP_SCRIPT = "@monogres//monoext/private/base:sysroot_setup.sh"
+_EXEC_SYSROOT_SETUP_SCRIPT = "@monogres//monoext/private/base:exec_sysroot_setup.sh"
 
 # Per-arch @libc_sysroot clang wrapper. Cross-PG-version label — the wrapper
 # content is the same for every buildtime sysroot (it's the same
@@ -69,7 +70,12 @@ _PERL_CONFIG_OVERRIDES = "@monogres//monoext/private/base:Config_overrides.pm"
 _PYTHON_BIN = "@monogres//toolchains/python:python3"
 _PYTHON_TOOLCHAIN = "@monogres//toolchains/python:current_python_toolchain"
 
-def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None):
+def _meson_common_args(
+        pg_src,
+        build_options,
+        auto_features,
+        sysroot_tar = None,
+        exec_sysroot_tar = None):
     build_data = [
         "@m4//bin:m4",
         "@flex//bin:flex",
@@ -104,6 +110,20 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
         data.append(sysroot_tar)
         data.append(_SYSROOT_CLANG_WRAPPER)
         build_data.append(_SYSROOT_SETUP_SCRIPT)
+
+        # `exec_sysroot_tar` is the same `:sysroot_tar` artifact resolved in
+        # EXEC config via the `exec_files` rule at the version-root BUILD, so
+        # the inner `@platforms//cpu:*` select() picks the host arch's tar
+        # regardless of `--platforms`. Under cross-compile (host=amd64,
+        # target=arm64) this materializes a parallel amd64 sysroot tree at
+        # `$EXEC_SYSROOT_DIR` carrying build-machine tools (msgfmt, etc.) that
+        # PG meson invokes via `find_program(..., native: true)` during
+        # configure. For native builds the tars are bzlmod-deduplicated to the
+        # same file; the setup script realpath-compares and symlinks the exec
+        # dir to the target dir to skip the ~1GB second extraction.
+        if exec_sysroot_tar:
+            data.append(exec_sysroot_tar)
+            build_data.append(_EXEC_SYSROOT_SETUP_SCRIPT)
 
     toolchains = [
         "@rules_m4//m4:current_m4_toolchain",
@@ -205,6 +225,24 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
                 wrapper = _SYSROOT_CLANG_WRAPPER,
                 llvm_major = LLVM_MAJOR,
             ),
+            # `EXEC_SYSROOT_DIR`: parallel EXEC-arch per-PG sysroot tree. The
+            # exec_sysroot_setup.sh script realpath-compares the target and exec
+            # tars; for NATIVE builds (same file) it symlinks `exec_sysroot ->
+            # sysroot` to skip a redundant ~1GB extraction. For CROSS builds the
+            # tars differ and a second extraction populates
+            # `$EXT_BUILD_ROOT/exec_sysroot` with the EXEC arch's
+            # bin/lib/include tree. The dict-iteration order matters: this
+            # value's `$()` runs AFTER `SYSROOT_DIR` (the symlink in the native
+            # fast-path targets `$EXT_BUILD_ROOT/sysroot` which the setup script
+            # just created).
+            EXEC_SYSROOT_DIR = (
+                "$$(sh $(execpath {exec_setup}) $(execpath {tar}) " +
+                "$(execpath {exec_tar}) $(BSDTAR_BIN))"
+            ).format(
+                exec_setup = _EXEC_SYSROOT_SETUP_SCRIPT,
+                tar = sysroot_tar,
+                exec_tar = exec_sysroot_tar,
+            ) if exec_sysroot_tar else "$$EXT_BUILD_ROOT/sysroot",
             # `TARGET_MULTIARCH`: the Debian multiarch dirname for the TARGET
             # arch (e.g. `x86_64-linux-gnu` or `aarch64-linux-gnu`). From
             # `$(LIBC_SYSROOT_MULTIARCH)`, the target-config libc sysroot's
@@ -287,6 +325,15 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
                 "$$LIBC_SYSROOT_EXEC_DIR/usr/lib/$$LIBC_SYSROOT_EXEC_MULTIARCH",
                 "$$LLVM_SYSROOT_EXEC_DIR/lib/$$LIBC_SYSROOT_EXEC_MULTIARCH",
                 "$$LLVM_SYSROOT_EXEC_DIR/usr/lib/$$LIBC_SYSROOT_EXEC_MULTIARCH",
+                # EXEC per-PG sysroot lib dirs: covers private libs of
+                # build-machine tools that meson invokes during configure /
+                # build (msgfmt -> libgettextsrc-*.so, etc.). For native builds
+                # the path resolves to the same dir as $SYSROOT_DIR/...
+                # (symlinked in exec_sysroot_setup.sh) so this is a no-op
+                # duplicate; under cross-compile it points at the EXEC-arch tree
+                # so amd64 ELFs find their .so deps.
+                "$$EXEC_SYSROOT_DIR/usr/lib/$$LIBC_SYSROOT_EXEC_MULTIARCH",
+                "$$EXEC_SYSROOT_DIR/lib/$$LIBC_SYSROOT_EXEC_MULTIARCH",
                 "$$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH",
                 "$$SYSROOT_DIR/usr/lib",
                 "$$SYSROOT_DIR/lib/$$TARGET_MULTIARCH",
@@ -331,6 +378,15 @@ def _meson_common_args(pg_src, build_options, auto_features, sysroot_tar = None)
         path_components.append(
             "$$LLVM_SYSROOT_EXEC_DIR/usr/lib/llvm-" + LLVM_MAJOR + "/bin",
         )
+
+        # `$$EXEC_SYSROOT_DIR/usr/bin` before `$$SYSROOT_DIR/usr/bin` so PG
+        # meson's `find_program(..., native: true)` picks build-machine binaries
+        # (msgfmt for NLS, etc.) before falling back to the TARGET arch's bins
+        # (which would be aarch64 ELFs under cross-compile and fail to exec on
+        # the amd64 host). For native builds the two paths resolve to the same
+        # directory (exec_sysroot_setup.sh symlinks exec_sysroot -> sysroot) so
+        # ordering is a no-op.
+        path_components.append("$$EXEC_SYSROOT_DIR/usr/bin")
         path_components.append("$$SYSROOT_DIR/usr/bin")
         path_components.append(
             "$$SYSROOT_DIR/usr/lib/llvm-" + LLVM_MAJOR + "/bin",
@@ -437,7 +493,13 @@ find "$$INSTALLDIR" -name 'Makefile.global' -print0 \\
             -e "s|/sysroot/usr/lib/llvm-{major}/bin|/$(LLVM_SYSROOT_DIR)/usr/lib/llvm-{major}/bin|g"
 """.format(major = LLVM_MAJOR)
 
-def _pg_build_meson(name, pg_src, build_options, auto_features, sysroot_tar = None):
+def _pg_build_meson(
+        name,
+        pg_src,
+        build_options,
+        auto_features,
+        sysroot_tar = None,
+        exec_sysroot_tar = None):
     pg_binaries = [
         "initdb",
         "postgres",
@@ -464,6 +526,7 @@ def _pg_build_meson(name, pg_src, build_options, auto_features, sysroot_tar = No
         build_options = build_options,
         auto_features = auto_features,
         sysroot_tar = sysroot_tar,
+        exec_sysroot_tar = exec_sysroot_tar,
     )
 
     meson(**(meson_common_args | dict(
@@ -497,12 +560,19 @@ def _pg_build_meson(name, pg_src, build_options, auto_features, sysroot_tar = No
         output_group = "Meson_logs",
     )
 
-def _pg_build_introspect(name, pg_src, build_options, auto_features, sysroot_tar = None):
+def _pg_build_introspect(
+        name,
+        pg_src,
+        build_options,
+        auto_features,
+        sysroot_tar = None,
+        exec_sysroot_tar = None):
     meson_common_args = _meson_common_args(
         pg_src = pg_src,
         build_options = build_options,
         auto_features = auto_features,
         sysroot_tar = sysroot_tar,
+        exec_sysroot_tar = exec_sysroot_tar,
     )
 
     meson(**(meson_common_args | dict(
@@ -529,7 +599,13 @@ def _pg_build_introspect(name, pg_src, build_options, auto_features, sysroot_tar
         tags = ["manual"],
     )
 
-def pg_build(name, pg_src, build_options, auto_features, sysroot_tar = None):
+def pg_build(
+        name,
+        pg_src,
+        build_options,
+        auto_features,
+        sysroot_tar = None,
+        exec_sysroot_tar = None):
     """
     Generates a Bazel target to build Postgres with the Meson build system.
 
@@ -553,9 +629,24 @@ def pg_build(name, pg_src, build_options, auto_features, sysroot_tar = None):
             via `SYSROOT_DIR`, `PKG_CONFIG_SYSROOT_DIR`, `CFLAGS`,
             `LD_LIBRARY_PATH`, etc. None disables sysroot wiring entirely
             (PG-source-only meson build).
+        exec_sysroot_tar (str): Optional `:exec_sysroot_tar` label (the
+            `exec_files`-wrapped `:sysroot_tar` rendered alongside it). At
+            action time materializes a parallel EXEC-arch sysroot tree at
+            `$EXT_BUILD_ROOT/exec_sysroot` (symlinked to `sysroot` for native
+            builds; extracted separately for cross). Its `usr/bin` is prepended
+            to `PATH` so meson's `find_program(..., native: true)` picks
+            build-machine tools (msgfmt, etc.) before falling back to the TARGET
+            arch's bins.
     """
 
-    _pg_build_meson(name, pg_src, build_options, auto_features, sysroot_tar)
+    _pg_build_meson(
+        name,
+        pg_src,
+        build_options,
+        auto_features,
+        sysroot_tar,
+        exec_sysroot_tar,
+    )
 
     _pg_build_introspect(
         name,
@@ -563,6 +654,7 @@ def pg_build(name, pg_src, build_options, auto_features, sysroot_tar = None):
         build_options,
         auto_features,
         sysroot_tar,
+        exec_sysroot_tar,
     )
 
     pg_template_variable_info(
