@@ -124,6 +124,7 @@ def create_monogres(
             catalog = extensions,
             base_versions = base_data.versions,
             base_hub_name = name,
+            base_flavor = base_data.flavor,
             archs = ARCHS,
             build_repo = build_repo,
         )

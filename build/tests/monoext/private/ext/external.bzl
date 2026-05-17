@@ -172,6 +172,7 @@ def _pg_build_test_impl(ctx):
         base_hub_name = "pg",
         bt_sysroot = "@pg_ext//citus/13.2.0/deps/buildtime:sysroot_tar",
         base_sysroot = "//_base/18.1:sysroot_tar",
+        base_flavor = "postgres",
     )
 
     asserts.true(
@@ -194,6 +195,9 @@ def _pg_build_test_impl(ctx):
     asserts.true(env, '"name": "postgres~18.1"' in out)
     asserts.true(env, '"version": "18.1"' in out)
 
+    # prefix_distro derived from base_flavor
+    asserts.true(env, 'prefix_distro = "/postgres"' in out)
+
     # buildtime sysroot_tar in deps_buildtime list
     asserts.true(
         env,
@@ -210,6 +214,32 @@ def _pg_build_test_impl(ctx):
 
 pg_build_test = unittest.make(_pg_build_test_impl)
 
+def _pg_build_ivorysql_flavor_test_impl(ctx):
+    """`base_flavor = "ivorysql"` renders `ivorysql~5.0` and `prefix_distro = "/ivorysql"`."""
+    env = unittest.begin(ctx)
+
+    out = _External._pg_build(
+        build_repo = "monogres",
+        source_repo = "ivory_ext_src--noset",
+        version = "0.3.0",
+        base_v = "5.0",
+        base_hub_name = "ivory",
+        bt_sysroot = None,
+        base_sysroot = "//_base/5.0:sysroot_tar",
+        base_flavor = "ivorysql",
+    )
+
+    asserts.true(env, '"name": "ivorysql~5.0"' in out)
+    asserts.true(env, '"version": "5.0"' in out)
+    asserts.true(env, 'base_hub = "@ivory"' in out)
+    asserts.true(env, 'prefix_distro = "/ivorysql"' in out)
+
+    return unittest.end(env)
+
+pg_build_ivorysql_flavor_test = unittest.make(
+    _pg_build_ivorysql_flavor_test_impl,
+)
+
 def _pg_build_no_sysroot_test_impl(ctx):
     """With `bt_sysroot = None`, deps_buildtime renders as an empty list."""
     env = unittest.begin(ctx)
@@ -222,6 +252,7 @@ def _pg_build_no_sysroot_test_impl(ctx):
         base_hub_name = "pg",
         bt_sysroot = None,
         base_sysroot = "//_base/18.1:sysroot_tar",
+        base_flavor = "postgres",
     )
 
     asserts.true(env, "deps_buildtime = []" in out)
@@ -264,6 +295,7 @@ TEST_SUITE_TESTS = dict(
     deps_kind_build = deps_kind_build_test,
     ext_root_build = ext_root_build_test,
     pg_build = pg_build_test,
+    pg_build_ivorysql_flavor = pg_build_ivorysql_flavor_test,
     pg_build_no_sysroot = pg_build_no_sysroot_test,
     repo_bzl = repo_bzl_test,
     src_build = src_build_test,

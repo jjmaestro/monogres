@@ -119,7 +119,9 @@ def _pg_build(
         base_v,
         base_hub_name,
         bt_sysroot,
-        base_sysroot):
+        base_sysroot,
+        base_flavor,
+        base_prefix_distro = None):
     """Render {name}/{version}/{base_version}/BUILD.bazel for the extension build.
 
     The source tree is the download_archives `:dir`, a tree artifact keyed on
@@ -130,7 +132,12 @@ def _pg_build(
     (`//_base/<base_v>:sysroot_tar` in the same hub), threaded into the build so
     Postgres-interface deps reach the extension compile via `-idirafter` / `-L`
     without each extension re-declaring them.
+
+    `base_prefix_distro` defaults to `"/" + base_flavor`; every in-tree flavor
+    follows that convention, so callers only need to pass it explicitly if a
+    flavor's install prefix diverges from its name.
     """
+    prefix_distro = base_prefix_distro or "/" + base_flavor
     f = bind(build = build_repo, src = source_repo, v = version)
     return Star.file(
         Star.load_(
@@ -143,8 +150,9 @@ def _pg_build(
             src = f("@{src}//{v}:dir"),
             deps_buildtime = [bt_sysroot] if bt_sysroot else [],
             base_sysroot_tar = base_sysroot,
-            base_version = {"name": "postgres~%s" % base_v, "version": base_v},
+            base_version = {"name": "%s~%s" % (base_flavor, base_v), "version": base_v},
             base_hub = "@%s" % base_hub_name,
+            prefix_distro = prefix_distro,
         ),
         header = _HEADER,
     )
@@ -286,6 +294,7 @@ def write_extension_package(rctx, entry, name, archs):
                     base_hub_name = rctx.attr.base_hub_name,
                     bt_sysroot = bt_sysroot,
                     base_sysroot = "//_base/%s:sysroot_tar" % base_v,
+                    base_flavor = rctx.attr.base_flavor,
                 ),
             )
 

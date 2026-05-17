@@ -5,7 +5,6 @@ Internal to monoext; invoked from generated `@{name}_ext//...` BUILD files.
 """
 
 load("@platform_debian//:versions.bzl", "RELEASE")
-load("//monoext/private/base/build_options:pg.bzl", "DEFAULT_PREFIX_DISTRO")
 load("//toolchains/llvm_sysroot:llvm_version.bzl", "LLVM_MAJOR")
 
 # Action-time setup script (shared with `pg_build.bzl`): extracts the per-PG
@@ -42,7 +41,7 @@ def pgxs_build(
         base_version,
         base_hub,
         base_sysroot_tar,
-        prefix_distro = DEFAULT_PREFIX_DISTRO,
+        prefix_distro,
         debug = False):
     """Builds a PGXS extension with the [PGXS build system].
 
@@ -77,8 +76,9 @@ def pgxs_build(
             (`@pg_ext//_base/<base_v>:sysroot_tar`), layered into the compile
             via `-idirafter` / `-L` so Postgres's interface deps are reachable
             without each extension re-declaring them.
-        prefix_distro (str): The base prefix path for the distro install
-            (defaults to `DEFAULT_PREFIX_DISTRO`).
+        prefix_distro (str): The base prefix path for the distro install (e.g.
+            `"/postgres"`, `"/ivorysql"`). The base version is appended
+            internally.
         debug (bool): If `True`, prints a debug message for each command
             executed.
     """

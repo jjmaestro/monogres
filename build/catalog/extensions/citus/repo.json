@@ -27,7 +27,9 @@
       }
     ],
     "compatible_with": {
-      "13.2.0": "<=17"
+      "postgres": {
+        "13.2.0": "<=17"
+      }
     },
     "deps": {
       "buildtime": {

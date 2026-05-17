@@ -87,7 +87,7 @@ def create_ext_src(ctx, hub_name, catalog_label):
         extensions = extensions,
     )
 
-def _build_external(extensions, versions_deps, base_versions, hub_name):
+def _build_external(extensions, versions_deps, base_versions, base_flavor, hub_name):
     """Builds JSON-encoded `ExtExternalEntry` values for ext_repo.
 
     `hub_name` is used to pre-qualify all `@{hub_name}//{ext}/{ext_v}/...` alias
@@ -107,7 +107,13 @@ def _build_external(extensions, versions_deps, base_versions, hub_name):
             ext_version: [
                 base_v
                 for base_v in base_versions
-                if is_compatible(name, ext_version, base_v, metadata)
+                if is_compatible(
+                    name,
+                    ext_version,
+                    base_flavor,
+                    base_v,
+                    metadata,
+                )
             ]
             for ext_version in ext.ext_versions
         }
@@ -119,6 +125,7 @@ def _build_external(extensions, versions_deps, base_versions, hub_name):
             compatible_base_versions = compatible_base_versions,
             source_repo = ext.source_repo,
             ext_versions_deps = ext_versions_deps,
+            base_flavor = base_flavor,
         )
         entries[name] = json.encode(entry)
 
@@ -151,6 +158,7 @@ def create_ext(
         catalog,
         base_versions,
         base_hub_name,
+        base_flavor,
         archs,
         build_repo = "monogres"):
     """Build entries and create the extensions hub repo.
@@ -169,6 +177,7 @@ def create_ext(
         base_versions: Sorted list of base version strings.
         base_hub_name: Apparent name of the base hub repo (the `tag.name`
             value). Extension builds and `PG_CFG` are resolved from this repo.
+        base_flavor: Base flavor identity (e.g. "postgres", "ivorysql").
         archs: List of architecture names for per-arch targets.
         build_repo: Repo containing the build rules (default `"monogres"`).
     """
@@ -181,15 +190,22 @@ def create_ext(
         external,
         pkgs_result.versions_deps,
         base_versions,
+        base_flavor,
         hub_name,
     )
 
     entries |= _build_contrib(contrib, hub_name)
 
-    # Per-PG-version buildtime VersionDeps for the layered `_base/<pg_v>`
-    # packages: every PGXS extension built against a given PG version sees that
-    # version's buildtime sysroot as `-idirafter` / `-L` overlay.
-    pg_versions_deps = pkgs_result.versions_deps.get("postgres", {})
+    # Per-base-version buildtime VersionDeps for the layered `_base/<base_v>`
+    # packages: every PGXS extension built against a given base version sees
+    # that version's buildtime sysroot as `-idirafter` / `-L` overlay.
+    #
+    # Keyed by THIS hub's flavor, which is the key `pkgs_group` is built under
+    # (`base.bzl` names the group after the flavor). Naming any other flavor
+    # here reads as an empty dict, and an empty dict renders no `_base/<base_v>`
+    # package at all, which every extension compatible with this flavor is
+    # already pointing at.
+    base_versions_deps = pkgs_result.versions_deps.get(base_flavor, {})
 
     ext_repo(
         name = hub_name,
@@ -197,9 +213,10 @@ def create_ext(
         catalog = catalog,
         entries = entries,
         base_hub_name = base_hub_name,
+        base_flavor = base_flavor,
         locks = locks,
         build_repo = build_repo,
-        pg_versions_deps = json.encode(pg_versions_deps),
+        base_versions_deps = json.encode(base_versions_deps),
     )
 
 testing = struct(

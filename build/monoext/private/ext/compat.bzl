@@ -8,15 +8,15 @@ extension-specific lookup (reads `compatible_with` map from an extension's
 
 load("//monoext/private/base:compat.bzl", "is_compatible_with")
 
-def is_compatible(name, version, base_version, metadata = None, debug = False):
+def is_compatible(name, version, flavor, base_version, metadata = None, debug = False):
     """
     Checks if a given extension version is compatible with a base version.
 
     Args:
         name (str): The name of the extension.
         version (str): The version of the extension being checked.
-        base_version (str): The base version to check against (the constraint
-            scheme is currently PGVER, since the base flavor is PostgreSQL).
+        flavor (str): Base flavor identity (e.g. "postgres", "ivorysql").
+        base_version (str): The base version to check against.
         metadata (dict, optional): Optional metadata with `compatible_with`
             mapping.
         debug (bool): If True, prints a debug message on incompatibility.
@@ -26,8 +26,20 @@ def is_compatible(name, version, base_version, metadata = None, debug = False):
         version, `False` otherwise.
     """
     metadata = metadata or {}
-    cspec = metadata.get("compatible_with", {}).get(version, "*")
+    compat = metadata.get("compatible_with")
 
-    debug_prefix = "Extension %r v%s" % (name, version) if debug else None
+    if compat == None:
+        cspec = "*"  # whole-key absent → wildcard for all flavors
+    else:
+        flavor_compat = compat.get(flavor)
+        if flavor_compat == None:
+            return False  # explicit opt-in: missing flavor key → not compatible
+        cspec = flavor_compat.get(version)
+        if cspec == None:
+            return False  # ext_v not declared for this flavor
+
+    debug_prefix = (
+        "Extension %r v%s [flavor=%s]" % (name, version, flavor) if debug else None
+    )
 
     return is_compatible_with(base_version, cspec, debug_prefix)

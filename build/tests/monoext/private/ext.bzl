@@ -52,6 +52,7 @@ def _build_external_basic_test_impl(ctx):
         extensions,
         versions_deps,
         base_versions = ["17.0", "18.1"],
+        base_flavor = "postgres",
         hub_name = "pg_ext",
     )
 
@@ -126,7 +127,7 @@ def _build_external_compatible_with_filters_test_impl(ctx):
         "myext": _ExtSchema.ExtensionEntry.new(
             ext_versions = ["1.0.0"],
             is_contrib = False,
-            metadata = {"compatible_with": {"1.0.0": "<18"}},
+            metadata = {"compatible_with": {"postgres": {"1.0.0": "<18"}}},
             source_repo = "pg_ext_src--myext",
             lock = "@pg_ext_src--myext//:lock.json",
         ),
@@ -136,6 +137,7 @@ def _build_external_compatible_with_filters_test_impl(ctx):
         extensions,
         versions_deps = {},
         base_versions = ["16.0", "17.0", "18.1"],
+        base_flavor = "postgres",
         hub_name = "pg_ext",
     )
 
@@ -174,6 +176,7 @@ def _build_external_no_deps_gives_empty_deps_test_impl(ctx):
         extensions,
         versions_deps = {},
         base_versions = ["18.1"],
+        base_flavor = "postgres",
         hub_name = "pg_ext",
     )
 

@@ -105,9 +105,9 @@ def _ext_source_from_dict(d):
         version = d["version"],
     )
 
-def _base_version_struct(base_v):
+def _base_version_struct(base_v, flavor = "postgres"):
     """Synthesizes the `base_version = struct(name, version)` baked on targets."""
-    return struct(name = "postgres~%s" % base_v, version = base_v)
+    return struct(name = "%s~%s" % (flavor, base_v), version = base_v)
 
 def _base_version_from_dict(d):
     return struct(name = d["name"], version = d["version"])
@@ -121,7 +121,13 @@ def _ext_external_target_init(artifact, deps, base_version, source, version):
         version = version,
     )
 
-def _ext_external_target_new(ext_hub_name, ext_name, ext_version, base_v, version_deps):
+def _ext_external_target_new(
+        ext_hub_name,
+        ext_name,
+        ext_version,
+        base_v,
+        version_deps,
+        flavor = "postgres"):
     """Constructs an `ExtExternalTarget`.
 
     Derives artifact, base_version, deps, and source from primitive inputs.
@@ -132,6 +138,7 @@ def _ext_external_target_new(ext_hub_name, ext_name, ext_version, base_v, versio
         ext_version: Extension version string.
         base_v: Base version string.
         version_deps: `VersionDeps` for this ext_version, or `None`.
+        flavor: Base flavor identity (e.g. "postgres", "ivorysql").
 
     Returns:
         An `ExtExternalTarget` struct.
@@ -146,7 +153,7 @@ def _ext_external_target_new(ext_hub_name, ext_name, ext_version, base_v, versio
     return _ext_external_target_init(
         artifact = f("@{hub}//{ext}/{ext_v}/{base_v}:{base_v}"),
         deps = _PkgsSchema.TargetDeps.qualify(f("@{hub}//{ext}/{ext_v}"), vd),
-        base_version = _base_version_struct(base_v),
+        base_version = _base_version_struct(base_v, flavor = flavor),
         source = _ext_source_init(
             dir = f("@{hub}//{ext}/{ext_v}:dir"),
             files = f("@{hub}//{ext}/{ext_v}:files"),
@@ -170,7 +177,7 @@ def _ext_contrib_target_init(artifact, base_version):
         base_version = base_version,
     )
 
-def _ext_contrib_target_new(ext_hub_name, ext_name, base_v):
+def _ext_contrib_target_new(ext_hub_name, ext_name, base_v, flavor = "postgres"):
     """Constructs an `ExtContribTarget`.
 
     Derives artifact and base_version from primitive inputs. Contribs have no
@@ -180,6 +187,7 @@ def _ext_contrib_target_new(ext_hub_name, ext_name, base_v):
         ext_hub_name: Apparent name of the extensions hub repo.
         ext_name: Contrib extension name.
         base_v: Base version string.
+        flavor: Base flavor identity (e.g. "postgres", "ivorysql").
 
     Returns:
         A `struct(artifact, base_version)`.
@@ -187,7 +195,7 @@ def _ext_contrib_target_new(ext_hub_name, ext_name, base_v):
     f = bind(hub = ext_hub_name, name = ext_name, base_v = base_v)
     return _ext_contrib_target_init(
         artifact = f("@{hub}//contrib/{name}/{base_v}:tar"),
-        base_version = _base_version_struct(base_v),
+        base_version = _base_version_struct(base_v, flavor = flavor),
     )
 
 def _ext_contrib_target_from_dict(d):
@@ -225,7 +233,8 @@ def _ext_external_entry_new(
         compatible_base_versions,
         source_repo,
         ext_versions_deps,
-        lock = None):
+        lock = None,
+        base_flavor = "postgres"):
     """Constructs an `ExtExternalEntry`.
 
     Derives deps, sources, and targets from primitive inputs. The
@@ -241,6 +250,7 @@ def _ext_external_entry_new(
         ext_versions_deps: `{ext_version: VersionDeps}` from the shared deps
             pool.
         lock: Decoded lockfile contents, or `None` (default at encode time).
+        base_flavor: Base flavor identity (e.g. "postgres", "ivorysql").
 
     Returns:
         An `ExtExternalEntry` struct.
@@ -274,7 +284,10 @@ def _ext_external_entry_new(
             targets.append(_ext_external_target_init(
                 artifact = f("@{hub}//{ext}/{ext_v}/{base_v}:{base_v}"),
                 deps = deps[ext_v],
-                base_version = _base_version_struct(base_v),
+                base_version = _base_version_struct(
+                    base_v,
+                    flavor = base_flavor,
+                ),
                 source = sources_by_version[ext_v],
                 version = ext_v,
             ))
@@ -325,7 +338,12 @@ def _ext_contrib_entry_init(ext_versions, metadata, name, targets = []):
         targets = targets,
     )
 
-def _ext_contrib_entry_new(ext_hub_name, ext_name, ext_versions, metadata):
+def _ext_contrib_entry_new(
+        ext_hub_name,
+        ext_name,
+        ext_versions,
+        metadata,
+        base_flavor = "postgres"):
     """Constructs an `ExtContribEntry`.
 
     Derives targets from primitive inputs.
@@ -335,6 +353,7 @@ def _ext_contrib_entry_new(ext_hub_name, ext_name, ext_versions, metadata):
         ext_name: Contrib extension name.
         ext_versions: Sorted list of base version strings the contrib ships for.
         metadata: Raw contrib `metadata` block.
+        base_flavor: Base flavor identity (e.g. "postgres", "ivorysql").
 
     Returns:
         An `ExtContribEntry` struct.
@@ -344,7 +363,7 @@ def _ext_contrib_entry_new(ext_hub_name, ext_name, ext_versions, metadata):
         f = bind(hub = ext_hub_name, name = ext_name, base_v = base_v)
         targets.append(_ext_contrib_target_init(
             artifact = f("@{hub}//contrib/{name}/{base_v}:tar"),
-            base_version = _base_version_struct(base_v),
+            base_version = _base_version_struct(base_v, flavor = base_flavor),
         ))
     return _ext_contrib_entry_init(
         ext_versions = ext_versions,

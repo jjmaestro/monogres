@@ -29,14 +29,14 @@ def _root_build_bzl():
     )
 
 def _base_build(sysroot_tar_labels_by_arch):
-    """Render `_base/<pg_v>/BUILD.bazel`.
+    """Render `_base/<base_v>/BUILD.bazel`.
 
-    Exposes the per-PG buildtime sysroot tar via a single `:sysroot_tar` alias
-    that selects the per-arch label from `DepsInfo.sysroot_tar_labels_by_arch`.
-    PGXS extensions reference this alias as `//_base/<pg_v>:sysroot_tar`,
-    threaded through `pgxs_build.base_sysroot_tar` so the action extracts
-    Postgres's buildtime sysroot alongside the extension's own and layers it via
-    `-idirafter` / `-L`.
+    Exposes the per-base-version buildtime sysroot tar via a single
+    `:sysroot_tar` alias that selects the per-arch label from
+    `DepsInfo.sysroot_tar_labels_by_arch`. PGXS extensions reference this alias
+    as `//_base/<base_v>:sysroot_tar`, threaded through
+    `pgxs_build.base_sysroot_tar` so the action extracts Postgres's buildtime
+    sysroot alongside the extension's own and layers it via `-idirafter` / `-L`.
     """
     return Star.file(
         Star.package(default_visibility = ["//visibility:public"]),
@@ -50,23 +50,23 @@ def _base_build(sysroot_tar_labels_by_arch):
         header = _HEADER,
     )
 
-def _write_base_packages(rctx, pg_versions_deps):
-    """Render `_base/<pg_v>/BUILD.bazel` for each PG version with buildtime deps.
+def _write_base_packages(rctx, base_versions_deps):
+    """Render `_base/<base_v>/BUILD.bazel` per base version with buildtime deps.
 
     Args:
         rctx: Repository context.
-        pg_versions_deps: `{pg_version: VersionDeps}` for the `"postgres"` group
-            from `PkgsResult.versions_deps`. Versions without buildtime deps
-            (none expected for Postgres) are skipped.
+        base_versions_deps: `{base_version: VersionDeps}` for this hub's flavor
+            group from `PkgsResult.versions_deps`. Versions without buildtime
+            deps (none expected for a base flavor) are skipped.
     """
-    for pg_v, vd in pg_versions_deps.items():
+    for base_v, vd in base_versions_deps.items():
         if not vd.buildtime:
             continue
         labels_by_arch = vd.buildtime.sysroot_tar_labels_by_arch
         if not labels_by_arch:
             continue
         rctx.file(
-            "_base/%s/BUILD.bazel" % pg_v,
+            "_base/%s/BUILD.bazel" % base_v,
             _base_build(labels_by_arch),
         )
 
@@ -169,9 +169,9 @@ def _impl(rctx):
     contrib_entries = {}
     archs = rctx.attr.archs
 
-    pg_versions_deps = {
-        pg_v: _PkgsSchema.VersionDeps.from_dict(vd)
-        for pg_v, vd in json.decode(rctx.attr.pg_versions_deps).items()
+    base_versions_deps = {
+        base_v: _PkgsSchema.VersionDeps.from_dict(vd)
+        for base_v, vd in json.decode(rctx.attr.base_versions_deps).items()
     }
 
     for name in sorted(rctx.attr.entries):
@@ -196,7 +196,7 @@ def _impl(rctx):
             external_entries.append(entry)
             write_extension_package(rctx, entry, name, archs = archs)
 
-    _write_base_packages(rctx, pg_versions_deps)
+    _write_base_packages(rctx, base_versions_deps)
 
     rctx.file("BUILD.bazel", _root_build_bzl())
     rctx.file("all.bzl", _root_all_bzl(
@@ -210,9 +210,10 @@ _ATTRS = dict(
     catalog = attr.label(mandatory = True),
     entries = attr.string_dict(mandatory = True),
     base_hub_name = attr.string(mandatory = True),
+    base_flavor = attr.string(mandatory = True),
     locks = attr.string_keyed_label_dict(default = {}),
     build_repo = attr.string(default = "monogres"),
-    pg_versions_deps = attr.string(mandatory = True),
+    base_versions_deps = attr.string(mandatory = True),
 )
 
 ext_repo = repository_rule(

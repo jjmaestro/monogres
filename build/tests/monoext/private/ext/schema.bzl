@@ -86,13 +86,14 @@ def _make_version_deps():
         ),
     )
 
-def _make_external_target(ext_v = "13.2.0", base_v = "18.1"):
+def _make_external_target(ext_v = "13.2.0", base_v = "18.1", flavor = "postgres"):
     return _ExtSchema.ExtExternalTarget.new(
         ext_hub_name = "pg_ext",
         ext_name = "citus",
         ext_version = ext_v,
         base_v = base_v,
         version_deps = _make_version_deps(),
+        flavor = flavor,
     )
 
 def _ext_external_target_roundtrip_test_impl(ctx):
@@ -216,14 +217,52 @@ ext_contrib_entry_roundtrip_test = unittest.make(
     _ext_contrib_entry_roundtrip_test_impl,
 )
 
+def _ext_external_target_ivorysql_flavor_test_impl(ctx):
+    env = unittest.begin(ctx)
+
+    target = _make_external_target(
+        ext_v = "0.3.0",
+        base_v = "5.0",
+        flavor = "ivorysql",
+    )
+    asserts.equals(env, "ivorysql~5.0", target.base_version.name)
+    asserts.equals(env, "5.0", target.base_version.version)
+
+    return unittest.end(env)
+
+ext_external_target_ivorysql_flavor_test = unittest.make(
+    _ext_external_target_ivorysql_flavor_test_impl,
+)
+
+def _ext_contrib_target_ivorysql_flavor_test_impl(ctx):
+    env = unittest.begin(ctx)
+
+    target = _ExtSchema.ExtContribTarget.new(
+        "ivory_ext",
+        "hstore",
+        "5.0",
+        flavor = "ivorysql",
+    )
+    asserts.equals(env, "@ivory_ext//contrib/hstore/5.0:tar", target.artifact)
+    asserts.equals(env, "ivorysql~5.0", target.base_version.name)
+    asserts.equals(env, "5.0", target.base_version.version)
+
+    return unittest.end(env)
+
+ext_contrib_target_ivorysql_flavor_test = unittest.make(
+    _ext_contrib_target_ivorysql_flavor_test_impl,
+)
+
 TEST_SUITE_NAME = "schema"
 
 TEST_SUITE_TESTS = dict(
     ext_contrib_entry_roundtrip = ext_contrib_entry_roundtrip_test,
+    ext_contrib_target_ivorysql_flavor = ext_contrib_target_ivorysql_flavor_test,
     ext_contrib_target_roundtrip = ext_contrib_target_roundtrip_test,
     ext_data_defaults = ext_data_defaults_test,
     ext_data_new = ext_data_new_test,
     ext_external_entry_roundtrip = ext_external_entry_roundtrip_test,
+    ext_external_target_ivorysql_flavor = ext_external_target_ivorysql_flavor_test,
     ext_external_target_roundtrip = ext_external_target_roundtrip_test,
     extension_entry_contrib = extension_entry_contrib_test,
 )
