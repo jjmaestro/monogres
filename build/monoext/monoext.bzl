@@ -71,7 +71,12 @@ def create_monogres(
     base_data = create_base_src(ctx, name, base)
 
     # 2. extension sources (+ catalog read): @{name}_ext_src__{ext}
-    ext_data = create_ext_src(ctx, ext_name, extensions)
+    ext_data = create_ext_src(
+        ctx,
+        ext_name,
+        extensions,
+        base_flavor = base_data.flavor,
+    )
 
     package_groups = [base_data.pkgs_group] + list(ext_data.pkgs_groups)
 

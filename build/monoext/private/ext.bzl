@@ -16,7 +16,7 @@ load("//monoext/private/ext:compat.bzl", "is_compatible")
 load("//monoext/private/ext:hub.bzl", "ext_repo")
 load("//monoext/private/ext:schema.bzl", _ExtSchema = "schema")
 
-def create_ext_src(ctx, hub_name, catalog_label):
+def create_ext_src(ctx, hub_name, catalog_label, base_flavor = "postgres"):
     """Read extension catalog, create per-ext source repos, return ExtData.
 
     Reads the catalog `index.json` and each extension's `repo.json`. For
@@ -31,6 +31,8 @@ def create_ext_src(ctx, hub_name, catalog_label):
             `{tag.name}_ext`), used to derive source repo names as
             `{hub_name}_src__{ext_name}`.
         catalog_label: Label of the catalog `index.json`, or `None`.
+        base_flavor: Base flavor identity (e.g. "postgres", "ivorysql"). Used to
+            filter contrib metadata to the flavor's slice.
 
     Returns:
         An `ExtData` struct (see `//monoext/private/ext:schema.bzl`).
@@ -70,10 +72,30 @@ def create_ext_src(ctx, hub_name, catalog_label):
         repo_json = catalog_label.relative(":contrib/%s/repo.json" % ext_name)
         repo = json.decode(ctx.read(repo_json))
 
+        versions_raw = repo.get("versions", {})
+        files_raw = repo.get("metadata", {}).get("files", {})
+
+        # Support both old schema (versions: [...]) and new (versions: {flavor:
+        # [...]})
+        if type(versions_raw) == "list":
+            flavor_versions = sorted(
+                versions_raw,
+            ) if base_flavor == "postgres" else []
+            files_by_flavor = {"postgres": files_raw}
+        else:
+            flavor_versions = sorted(versions_raw.get(base_flavor, []))
+            files_by_flavor = files_raw
+
+        if not flavor_versions:
+            continue  # contrib does not ship for this flavor → skip
+
+        metadata = dict(repo.get("metadata", {}))
+        metadata["files"] = files_by_flavor.get(base_flavor, {})
+
         extensions[ext_name] = _ExtSchema.ExtensionEntry.new(
-            ext_versions = sorted(repo.get("versions", [])),
+            ext_versions = flavor_versions,
             is_contrib = True,
-            metadata = repo.get("metadata", {}),
+            metadata = metadata,
         )
 
     pkgs_groups = [
@@ -131,7 +153,7 @@ def _build_external(extensions, versions_deps, base_versions, base_flavor, hub_n
 
     return entries
 
-def _build_contrib(extensions, hub_name):
+def _build_contrib(extensions, hub_name, base_flavor = "postgres"):
     """Builds JSON-encoded `ExtContribEntry` values for ext_repo.
 
     `hub_name` is used to pre-qualify `@{hub_name}//contrib/{name}/{base_v}:tar`
@@ -146,6 +168,7 @@ def _build_contrib(extensions, hub_name):
             ext_name = name,
             ext_versions = ext.ext_versions,
             metadata = ext.metadata,
+            base_flavor = base_flavor,
         )
         entries[name] = json.encode(entry)
 
@@ -194,7 +217,7 @@ def create_ext(
         hub_name,
     )
 
-    entries |= _build_contrib(contrib, hub_name)
+    entries |= _build_contrib(contrib, hub_name, base_flavor)
 
     # Per-base-version buildtime VersionDeps for the layered `_base/<base_v>`
     # packages: every PGXS extension built against a given base version sees

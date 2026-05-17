@@ -4,33 +4,46 @@
 # gen_contrib (macro + rule) + update_contrib (run)
 # ---------------------------------------------------------------------------
 
-def _get_contrib_data(introspections, option_set):
-    """Extract {ext_name: {pg_version: [files]}} from introspections."""
+def _get_contrib_data(introspections_list, option_set):
+    """[INTROSPECTIONS, ...] -> {ext_name: {flavor: {base_v: [paths]}}}"""
     all_contribs = {}
 
-    for key, introspection in introspections.items():
-        pg_version, opt_set = key
-        if opt_set != option_set:
-            continue
+    for introspections in introspections_list:
+        for key, introspection in introspections.items():
+            base_version, opt_set = key
+            if opt_set != option_set:
+                continue
 
-        for name, data in introspection["contrib"].items():
-            if name not in all_contribs:
-                all_contribs[name] = {}
-            all_contribs[name][pg_version] = data["paths"]
+            flavor = introspection["flavor"]
+            for name, data in introspection["contrib"].items():
+                if name not in all_contribs:
+                    all_contribs[name] = {}
+                if flavor not in all_contribs[name]:
+                    all_contribs[name][flavor] = {}
+                all_contribs[name][flavor][base_version] = data["paths"]
 
     return all_contribs
 
 def _gen_contrib_repo_json(versions_data):
-    """Build the repo.json content string for one contrib extension."""
-    sorted_versions = sorted(versions_data.keys())
+    """{flavor: {base_v: [paths]}} -> rendered repo.json string"""
+    sorted_flavors = sorted(versions_data.keys())
 
     repo_json = {
         "kind": "contrib",
         "metadata": {
-            "files": {v: versions_data[v] for v in sorted_versions},
+            "files": {
+                f: {
+                    bv: versions_data[f][bv]
+                    for bv in sorted(versions_data[f].keys())
+                }
+                for f in sorted_flavors
+            },
         },
         "version": 1,
-        "versions": sorted_versions,
+        "versions": {
+            f: sorted(versions_data[f].keys())
+            for f in sorted_flavors
+        },
     }
 
     return json.encode_indent(repo_json, indent = "  ")
@@ -54,7 +67,7 @@ _gen_contrib = rule(
     attrs = {
         "contribs_json": attr.string(
             mandatory = True,
-            doc = "JSON-encoded {ext_name: {pg_version: [paths]}} contrib data",
+            doc = "JSON-encoded {ext_name: {flavor: {base_v: [paths]}}} contrib data",
         ),
     },
 )
@@ -64,7 +77,9 @@ def gen_contrib(name, introspections, option_set = "full"):
 
     Args:
         name: rule target name.
-        introspections: INTROSPECTIONS dict from @pg//:introspect.bzl.
+        introspections: list of INTROSPECTIONS dicts (one per base flavor, from
+            @{hub}//:introspect.bzl). Each entry's introspection["flavor"]
+            identifies the flavor, so no caller-side flavor keys are needed.
         option_set: option set to filter by (default "full").
     """
     contribs = _get_contrib_data(introspections, option_set)

@@ -210,7 +210,11 @@ def _build_contrib_basic_test_impl(ctx):
         ),
     }
 
-    entries = _Ext._build_contrib(extensions, hub_name = "pg_ext")
+    entries = _Ext._build_contrib(
+        extensions,
+        hub_name = "pg_ext",
+        base_flavor = "postgres",
+    )
 
     asserts.equals(env, ["pgcrypto"], sorted(entries))
 
