@@ -11,7 +11,7 @@ For the full list of available options, see [PostgreSQL Features] and
 [`meson_options.txt`]: https://github.com/postgres/postgres/blob/master/meson_options.txt
 """
 
-load("//monoext/private/base:compat.bzl", "is_compatible_with")
+load(":helpers.bzl", _Helpers = "helpers")
 
 # NOTE:
 # Postgres embeds the install paths via a generated pg_config.h that uses the
@@ -102,29 +102,6 @@ _OPTION_SETS = dict(
 OPTION_SETS = _OPTION_SETS.keys()
 DEFAULT_OPTION_SET = OPTION_SETS[-1]
 
-def is_compatible(option, version, build_options_metadata, debug = False):
-    """
-    Checks if a build option is compatible with the given Postgres version.
-
-    Args:
-        option (string): The name of the build option to check.
-        version (string): Postgres major.minor version (e.g., "16.0").
-        build_options_metadata (dict): A dictionary mapping Postgres build
-            options to their compatible PG version constraints spec.
-        debug (bool): If `True`, prints a debug message if the build option is
-            incompatible.
-
-    Returns:
-        `True` if the build option is compatible with the version, `False`
-        otherwise.
-    """
-    compatible_with = build_options_metadata.get(option, {"compatible": "*"})
-    version_constraints = compatible_with["compatible"]
-
-    debug_prefix = "PG build option %r" % option if debug else None
-
-    return is_compatible_with(version, version_constraints, debug_prefix)
-
 def build_options(
         version,
         option_set,
@@ -155,52 +132,15 @@ def build_options(
     if option_set not in OPTION_SETS:
         fail("Invalid option set: %r" % option_set)
 
-    options = _DEFAULT_OPTIONS | dict([
-        option if type(option) == "tuple" else (option, "enabled")
-        for option in _OPTION_SETS[option_set]
-        if option != None
-    ])
-
-    def is_enabled(option):
-        return options.get(option, None) in ("enabled", "true")
-
-    def is_disabled(option):
-        return options.get(option, None) in ("disabled", "false")
-
-    # we always begin with auto-features=disabled so that we enable each option
-    # explicitly but:
-    # - we also allow an "all" wildcard for convenience
-    # - we always disable some options unless explicitly enabled
-    # - we always enable some options unless explicitly disabled
-    auto_features = "disabled"
-
-    if "all" in options:
-        auto_features = "enabled"
-        options.pop("all")
-
-        for option, value in _DISABLED_UNLESS_EXPLICITLY_ENABLED:
-            if (
-                is_compatible(
-                    option,
-                    version,
-                    build_options_metadata,
-                    debug,
-                ) and
-                not is_enabled(option)
-            ):
-                options[option] = value
-    else:
-        for option, value in _ENABLED_UNLESS_EXPLICITLY_DISABLED:
-            if (
-                is_compatible(
-                    option,
-                    version,
-                    build_options_metadata,
-                    debug,
-                ) and
-                not is_disabled(option)
-            ):
-                options[option] = value
+    options, auto_features = _Helpers.compute(
+        default_options = _DEFAULT_OPTIONS,
+        option_set_options = _OPTION_SETS[option_set],
+        enabled_unless_disabled = _ENABLED_UNLESS_EXPLICITLY_DISABLED,
+        disabled_unless_enabled = _DISABLED_UNLESS_EXPLICITLY_ENABLED,
+        version = version,
+        build_options_metadata = build_options_metadata,
+        debug = debug,
+    )
 
     options["prefix_distro"] = "%s/%s" % (prefix_distro, version)
 

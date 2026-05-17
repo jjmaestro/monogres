@@ -39,10 +39,36 @@ def _base_data_new_test_impl(ctx):
     asserts.equals(env, {"x": 1}, pd.metadata)
     asserts.equals(env, "pg_src", pd.source_repo)
     asserts.equals(env, ["17.0", "18.1"], pd.versions)
+    asserts.equals(env, "postgres", pd.flavor)
 
     return unittest.end(env)
 
 base_data_new_test = unittest.make(_base_data_new_test_impl)
+
+def _base_data_new_with_flavor_test_impl(ctx):
+    env = unittest.begin(ctx)
+
+    pd = _BaseSchema.BaseData.new(
+        pkgs_group = struct(
+            name = "ivorysql",
+            versions = ["3.0"],
+            metadata = {},
+        ),
+        default_version = "3.0",
+        introspect_repos = {},
+        introspect_paths_repos = {},
+        metadata = {"flavor": "ivorysql"},
+        source_repo = "ivory_src",
+        versions = ["3.0"],
+        flavor = "ivorysql",
+    )
+    asserts.equals(env, "ivorysql", pd.flavor)
+
+    return unittest.end(env)
+
+base_data_new_with_flavor_test = unittest.make(
+    _base_data_new_with_flavor_test_impl,
+)
 
 def _make_version_deps():
     bt = _PkgsSchema.DepsInfo.new(
@@ -150,6 +176,7 @@ TEST_SUITE_NAME = "schema"
 
 TEST_SUITE_TESTS = dict(
     base_data_new = base_data_new_test,
+    base_data_new_with_flavor = base_data_new_with_flavor_test,
     base_entry_decode_defaults = base_entry_decode_defaults_test,
     base_entry_roundtrip = base_entry_roundtrip_test,
     base_source_roundtrip = base_source_roundtrip_test,

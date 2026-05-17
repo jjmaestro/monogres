@@ -382,6 +382,7 @@ def _pg_introspect_paths_impl(rctx):
                 name: {"paths": paths.contrib_paths[name]}
                 for name in paths.contrib_names
             },
+            "flavor": rctx.attr.flavor,
             "postgres": {"paths": paths.postgres_paths},
         }
 
@@ -406,6 +407,12 @@ actual JSON parsing is deferred until a consumer loads introspect.bzl.
 """
 
 _PATHS_ATTRS = dict(
+    flavor = attr.string(
+        doc = "Catalog flavor (e.g. 'postgres', 'ivorysql'). Rendered into " +
+              "each INTROSPECTION so consumers (gen_contrib) read the flavor " +
+              "from the data rather than a caller-supplied key.",
+        mandatory = True,
+    ),
     introspect_jsons = attr.label_keyed_string_dict(
         doc = """
         Introspect JSON labels for this version. Keys are labels pointing

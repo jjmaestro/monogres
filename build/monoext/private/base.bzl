@@ -27,7 +27,11 @@ load(
     "pg_introspect_version_repo",
 )
 load("//monoext/private/base:schema.bzl", _BaseSchema = "schema")
-load("//monoext/private/base/build_options:pg.bzl", "OPTION_SETS", "build_options")
+load(
+    "//monoext/private/base/build_options:flavors.bzl",
+    "DEFAULT_FLAVOR",
+    "FLAVORS",
+)
 load("//monoext/private/pkgs:schema.bzl", _PkgsSchema = "schema")
 
 def create_base_src(ctx, hub_name, base_label):
@@ -51,6 +55,14 @@ def create_base_src(ctx, hub_name, base_label):
     index = Index.new(src_repo, ctx.read(base_label))
     metadata = index.metadata
     versions = sorted(index.repos.keys())
+
+    flavor = metadata.get("flavor", DEFAULT_FLAVOR)
+    if flavor not in FLAVORS:
+        fail("Unknown flavor %r in %s (known: %s)" % (
+            flavor,
+            base_label,
+            sorted(FLAVORS.keys()),
+        ))
 
     download_archives(
         ctx = ctx,
@@ -97,6 +109,7 @@ def create_base_src(ctx, hub_name, base_label):
         pg_introspect_paths_repo(
             name = paths_repo_name,
             version = v,
+            flavor = flavor,
             introspect_jsons = jsons_by_label,
         )
         introspect_paths_repos[v] = paths_repo_name
@@ -107,13 +120,14 @@ def create_base_src(ctx, hub_name, base_label):
         introspect_paths_repos = introspect_paths_repos,
         metadata = metadata,
         pkgs_group = pkgs_group(
-            "postgres",
+            flavor,
             versions,
             metadata,
             version_scheme = Version.SCHEME.PGVER,
         ),
         source_repo = src_repo,
         versions = versions,
+        flavor = flavor,
     )
 
 def _build_entries(base_data, versions_deps, hub_name):
@@ -133,14 +147,15 @@ def _build_entries(base_data, versions_deps, hub_name):
     metadata = base_data.metadata
     source_repo = base_data.source_repo
     build_options_metadata = metadata.get("build_options", {})
+    flavor_mod = FLAVORS[base_data.flavor]
     entries = {}
 
     for version in sorted(base_data.versions):
         vd = versions_deps.get(version) or _PkgsSchema.VersionDeps.new()
 
         targets = []
-        for option_set in OPTION_SETS:
-            options, auto_features = build_options(
+        for option_set in flavor_mod.OPTION_SETS:
+            options, auto_features = flavor_mod.build_options(
                 version,
                 option_set,
                 build_options_metadata,
@@ -178,7 +193,9 @@ def create_base(hub_name, base_data, pkgs_result, archs, build_repo = "monogres"
         archs: List of architecture names for per-arch targets.
         build_repo: Build repo name (default "monogres").
     """
-    versions_deps = pkgs_result.versions_deps.get("postgres", {})
+    flavor = base_data.flavor
+    flavor_mod = FLAVORS[flavor]
+    versions_deps = pkgs_result.versions_deps.get(flavor, {})
 
     entries = _build_entries(base_data, versions_deps, hub_name)
 
@@ -186,12 +203,13 @@ def create_base(hub_name, base_data, pkgs_result, archs, build_repo = "monogres"
         name = hub_name,
         archs = list(archs),
         entries = entries,
-        option_sets = json.encode(list(OPTION_SETS)),
+        option_sets = json.encode(list(flavor_mod.OPTION_SETS)),
         default_version = base_data.default_version,
         introspect_repos = base_data.introspect_repos,
         introspect_paths_repos = base_data.introspect_paths_repos,
         pg_src = "@%s" % base_data.source_repo,
         build_repo = build_repo,
+        flavor = flavor,
     )
 
 testing = struct(

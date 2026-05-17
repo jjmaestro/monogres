@@ -5,12 +5,32 @@ package(default_visibility = [
     "//tests/monoext:__subpackages__",
 ])
 
-exports_files(["pg.bzl"])
+exports_files([
+    "flavors.bzl",
+    "helpers.bzl",
+    "pg.bzl",
+])
+
+bzl_library(
+    name = "helpers",
+    srcs = ["helpers.bzl"],
+    deps = [
+        "//monoext/private/base:compat",
+    ],
+)
 
 bzl_library(
     name = "pg",
     srcs = ["pg.bzl"],
     deps = [
-        "//monoext/private/base:compat",
+        ":helpers",
+    ],
+)
+
+bzl_library(
+    name = "flavors",
+    srcs = ["flavors.bzl"],
+    deps = [
+        ":pg",
     ],
 )

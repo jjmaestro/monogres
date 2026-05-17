@@ -27,7 +27,7 @@ def _root_build():
         header = _HEADER,
     )
 
-def _root_all_bzl(entries, option_sets, default_version, archs):
+def _root_all_bzl(entries, option_sets, default_version, archs, flavor):
     """Render all.bzl with a baked-in CFG struct and module metadata."""
     all_targets = []
     all_sources = []
@@ -66,7 +66,7 @@ def _root_all_bzl(entries, option_sets, default_version, archs):
             Star.assign("_SOURCES", Star.ref(Star.igen(all_sources))),
             Star.assign("_TARGETS", Star.ref(Star.igen(all_targets))),
             Star.assign("CFG", Star.ref(Star.igen(struct(
-                name = "postgres",
+                name = flavor,
                 default = Star.ref(default_target_expr),
                 default_source = Star.ref(default_source_expr),
                 sources = Star.ref("_SOURCES"),
@@ -103,6 +103,7 @@ def _impl(rctx):
         option_sets,
         rctx.attr.default_version,
         archs,
+        rctx.attr.flavor,
     ))
 
     write_introspect(rctx)
@@ -121,6 +122,11 @@ _ATTRS = dict(
         allow_single_file = True,
     ),
     build_repo = attr.string(default = "monogres"),
+    flavor = attr.string(
+        doc = "Flavor identity (e.g. `\"postgres\"`, `\"ivorysql\"`). " +
+              "Baked into `CFG.name` in the generated `all.bzl`.",
+        default = "postgres",
+    ),
 )
 
 base_repo = repository_rule(

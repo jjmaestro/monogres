@@ -3,9 +3,9 @@ Unit tests for monoext/private/base/hub.bzl render helpers.
 
 Covers the two pure helpers:
 - `_root_build()`: top-level BUILD.bazel
-- `_root_all_bzl(entries, option_sets, default_version)`: the baked-in
-  `CFG` struct (with `sources` + `default_source`), `VERSIONS`, `OPTION_SETS`,
-  `DEFAULT_VERSION` assignments
+- `_root_all_bzl(entries, option_sets, default_version, archs, flavor)`: the
+  baked-in `CFG` struct (with `name = flavor`, `sources` + `default_source`),
+  `VERSIONS`, `OPTION_SETS`, `DEFAULT_VERSION` assignments
 """
 
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
@@ -86,7 +86,13 @@ def _root_all_bzl_top_level_assignments_test_impl(ctx):
     env = unittest.begin(ctx)
 
     entries = {"18.1": _entry("18.1", _OPTION_SETS)}
-    out = _BaseHub._root_all_bzl(entries, _OPTION_SETS, "18.1", ARCHS)
+    out = _BaseHub._root_all_bzl(
+        entries,
+        _OPTION_SETS,
+        "18.1",
+        ARCHS,
+        "postgres",
+    )
 
     asserts.true(env, "DEFAULT_VERSION = " in out)
     asserts.true(env, 'KINDS = ["buildtime", "runtime"]' in out)
@@ -129,7 +135,13 @@ def _root_all_bzl_default_index_is_last_option_set_test_impl(ctx):
         "17.0": _entry("17.0", _OPTION_SETS),  # 4 targets (indices 0..3)
         "18.1": _entry("18.1", _OPTION_SETS),  # 4 targets (indices 4..7)
     }
-    out = _BaseHub._root_all_bzl(entries, _OPTION_SETS, "18.1", ARCHS)
+    out = _BaseHub._root_all_bzl(
+        entries,
+        _OPTION_SETS,
+        "18.1",
+        ARCHS,
+        "postgres",
+    )
 
     # default_version=18.1 × last option_set=full → target index 7
     asserts.true(env, "_TARGETS[7]" in out)
@@ -152,7 +164,13 @@ def _root_all_bzl_sorted_versions_test_impl(ctx):
         "17.0": _entry("17.0", _OPTION_SETS),
         "18.1": _entry("18.1", _OPTION_SETS),
     }
-    out = _BaseHub._root_all_bzl(entries, _OPTION_SETS, "18.1", ARCHS)
+    out = _BaseHub._root_all_bzl(
+        entries,
+        _OPTION_SETS,
+        "18.1",
+        ARCHS,
+        "postgres",
+    )
 
     asserts.true(
         env,
@@ -170,7 +188,13 @@ def _root_all_bzl_deps_struct_populated_test_impl(ctx):
     env = unittest.begin(ctx)
 
     entries = {"18.1": _entry("18.1", _OPTION_SETS, versions_deps = _vd_full())}
-    out = _BaseHub._root_all_bzl(entries, _OPTION_SETS, "18.1", ARCHS)
+    out = _BaseHub._root_all_bzl(
+        entries,
+        _OPTION_SETS,
+        "18.1",
+        ARCHS,
+        "postgres",
+    )
 
     # buildtime kind
     asserts.true(env, '"@pg//18.1/deps/buildtime:sysroot"' in out)
@@ -199,7 +223,13 @@ def _root_all_bzl_deps_struct_empty_test_impl(ctx):
     env = unittest.begin(ctx)
 
     entries = {"18.1": _entry("18.1", _OPTION_SETS)}
-    out = _BaseHub._root_all_bzl(entries, _OPTION_SETS, "18.1", ARCHS)
+    out = _BaseHub._root_all_bzl(
+        entries,
+        _OPTION_SETS,
+        "18.1",
+        ARCHS,
+        "postgres",
+    )
 
     asserts.true(env, "sysroot = None" in out)
     asserts.true(env, "packages = []" in out)
@@ -225,7 +255,13 @@ def _root_all_bzl_hub_name_is_baked_test_impl(ctx):
             hub_name = "mypg",
         ),
     }
-    out = _BaseHub._root_all_bzl(entries, _OPTION_SETS, "18.1", ARCHS)
+    out = _BaseHub._root_all_bzl(
+        entries,
+        _OPTION_SETS,
+        "18.1",
+        ARCHS,
+        "postgres",
+    )
 
     asserts.true(env, '"@mypg//18.1/deps/buildtime:sysroot"' in out)
     asserts.true(env, '"@mypg//18.1/full:tar"' in out)
@@ -241,12 +277,35 @@ root_all_bzl_hub_name_is_baked_test = unittest.make(
     _root_all_bzl_hub_name_is_baked_test_impl,
 )
 
+def _root_all_bzl_flavor_baked_into_cfg_name_test_impl(ctx):
+    """`flavor` arg becomes `CFG.name` in the rendered all.bzl."""
+    env = unittest.begin(ctx)
+
+    entries = {"3.0": _entry("3.0", _OPTION_SETS)}
+    out = _BaseHub._root_all_bzl(
+        entries,
+        _OPTION_SETS,
+        "3.0",
+        ARCHS,
+        "ivorysql",
+    )
+
+    asserts.true(env, 'name = "ivorysql"' in out)
+    asserts.false(env, 'name = "postgres"' in out)
+
+    return unittest.end(env)
+
+root_all_bzl_flavor_baked_into_cfg_name_test = unittest.make(
+    _root_all_bzl_flavor_baked_into_cfg_name_test_impl,
+)
+
 TEST_SUITE_NAME = "hub"
 
 TEST_SUITE_TESTS = dict(
     root_all_bzl_default_index_is_last_option_set = root_all_bzl_default_index_is_last_option_set_test,
     root_all_bzl_deps_struct_empty = root_all_bzl_deps_struct_empty_test,
     root_all_bzl_deps_struct_populated = root_all_bzl_deps_struct_populated_test,
+    root_all_bzl_flavor_baked_into_cfg_name = root_all_bzl_flavor_baked_into_cfg_name_test,
     root_all_bzl_hub_name_is_baked = root_all_bzl_hub_name_is_baked_test,
     root_all_bzl_sorted_versions = root_all_bzl_sorted_versions_test,
     root_all_bzl_top_level_assignments = root_all_bzl_top_level_assignments_test,

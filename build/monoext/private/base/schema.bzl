@@ -29,7 +29,8 @@ def _base_data_new(
         introspect_paths_repos,
         metadata,
         source_repo,
-        versions):
+        versions,
+        flavor = "postgres"):
     """Constructs a `BaseData`.
 
     Args:
@@ -44,6 +45,9 @@ def _base_data_new(
         metadata: Raw `metadata` block from `repo.json`.
         source_repo: Name of the `@{name}_src` source index repo.
         versions: Sorted list of all base versions from `repo.json`.
+        flavor: Flavor identity from `metadata.flavor` (e.g. `"postgres"`,
+            `"ivorysql"`). Drives build_options dispatch, the `pkgs_group` key,
+            and the `CFG.name` baked into `all.bzl`.
 
     Returns:
         A `BaseData` struct.
@@ -56,6 +60,7 @@ def _base_data_new(
         metadata = metadata,
         source_repo = source_repo,
         versions = versions,
+        flavor = flavor,
     )
 
 def _base_source_init(dir, files, version):
