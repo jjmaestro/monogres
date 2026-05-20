@@ -4,6 +4,7 @@ module(
 )
 
 bazel_dep(name = "bazel_skylib", version = "1.9.0", dev_dependency = True)
+bazel_dep(name = "gawk", version = "5.3.2.bcr.7", dev_dependency = True)
 bazel_dep(name = "monogres", version = "", dev_dependency = True)
 bazel_dep(name = "rules_python", version = "1.9.0", dev_dependency = True)
 bazel_dep(name = "platforms", version = "1.1.0", dev_dependency = True)
@@ -59,6 +60,21 @@ archive_override(
     sha256 = "185e9e328ba59ccdc6f97968b2bbe31d7d2f64590aa321df7ca754cf5777f9e4",
     strip_prefix = "bazel_download_archives-{}".format(BDA_VERSION),
     url = "https://github.com/jjmaestro/bazel_download_archives/archive/refs/tags/v{}.tar.gz".format(BDA_VERSION),
+)
+
+# Root-module overrides do not propagate through dependencies, so the examples
+# workspace must mirror the monogres gawk override: the shared
+# `.bazelrc.sandbox_linux` sets `--@@gawk+//:static=true` for every hermetic
+# build, and the `:static` bool_flag only exists once the patch is applied.
+# Without the mirror, a fresh fetch in this workspace dies at option loading
+# with "no such target '@@gawk+//:static'". `examples/patches` is a symlink to
+# `../patches`, so the patch file is shared.
+single_version_override(
+    module_name = "gawk",
+    patch_strip = 1,
+    patches = [
+        "//patches/gawk:0001-gawk-add-static-link-bool-flag.patch",
+    ],
 )
 
 # Root-module overrides do not propagate through dependencies, so the examples

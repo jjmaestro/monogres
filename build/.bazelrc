@@ -84,6 +84,13 @@ build:hermetic-linux --sandbox_default_allow_network=false
 test:hermetic-linux --sandbox_default_allow_network=false
 common:hermetic-linux --incompatible_allow_tags_propagation
 
+# Hermetic execution is the project default: plain `bazel build` / `bazel test`
+# run in the empty-chroot sandbox with the amd64 loader + platform. RBE and
+# cross invocations pass their own `--config=` (e.g. `--config=remote-buildbarn
+# --config=linux-arm64-buildbarn`), whose strategy + platform override the
+# defaults set here.
+build --config=hermetic-linux-amd64
+
 common:linux-amd64 --extra_toolchains=@llvm_toolchain//:cc-toolchain-x86_64-linux
 common:linux-arm64 --extra_toolchains=@llvm_toolchain//:cc-toolchain-aarch64-linux
 

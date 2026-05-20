@@ -10,6 +10,11 @@ NixOS project. `flake.nix` + `.envrc` (direnv) provide the dev shell.
   `nix develop --command bash -c 'git commit ...'`
 - **Bazel**: always inside Docker as `postgres`.
   `docker exec -u postgres bzlsndbx-monogres_x86_64 bazel ...`
+- **Hermetic by default**: `.bazelrc` defaults `build` (inherited by `test`/`run`)
+  to `--config=hermetic-linux-<arch>` (e.g. `hermetic-linux-amd64`), so every Bazel
+  command runs in the empty-chroot hermetic sandbox with no extra flags. Keep runs
+  hermetic; never disable the sandbox. Cross-arch/RBE override with their own
+  `--config=` (e.g. `--config=remote-buildbarn --config=linux-arm64-buildbarn`).
 - **Docker**: start container (if not running)
   `nix develop --command bash -c 'make -C build/docker run-image USE_CACHE=true DETACHED=true'`
   Container: `bzlsndbx-<project>_<arch>` (ask user if arch != x86_64)
