@@ -57,6 +57,13 @@ This pulls the packages listed in `debian.json`:
 - `libperl-dev`: `libperl.so` symlink + `perl.h` headers for
   compile/link
 - `libperl5.36`: `libperl.so.5.36` runtime library
+- `libipc-run-perl`: `IPC::Run`, a TEST-only module for the TAP lane.
+  The test-enabled build variant (`{v}/{opt}/test`) flips meson
+  `tap_tests=enabled`, whose configure gate (`config/check_modules.pl`)
+  `use`s `IPC::Run`; the TAP harness also drives clusters through it.
+  It lives in the toolchain (not the per-PG deps) because the configure
+  gate runs under this toolchain's perl. `PERL5LIB` includes
+  `usr/share/perl5` (Debian's third-party vendor dir) so it resolves.
 
 Transitive deps (`libc6`, `libcrypt1`, `perl-modules-5.36`, `dpkg`,
 etc.) get resolved by the lockfile generator. The resolved set

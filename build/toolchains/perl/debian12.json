@@ -6,6 +6,7 @@
   "packages": [
     "perl-base",
     "libperl-dev",
-    "libperl5.36"
+    "libperl5.36",
+    "libipc-run-perl"
   ]
 }

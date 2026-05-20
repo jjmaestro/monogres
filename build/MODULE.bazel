@@ -280,7 +280,12 @@ sysroots = use_extension("@sysroots//:extension.bzl", "sysroots")
 # and the runtime shared library (`libperl5.36`) all from the same
 # `apt_snapshot`. The three-way ABI lockstep Postgres's plperl build requires
 # (interpreter, build-link libperl, runtime libperl all at the same MAJOR.MINOR)
-# becomes a property of the toolchain by construction.
+# becomes a property of the toolchain by construction. `libipc-run-perl`
+# (IPC::Run) is a TEST-only module: the test-enabled build variant
+# (`{v}/{opt}/test`) flips meson `tap_tests=enabled`, whose configure gate
+# (`config/check_modules.pl`) `use`s IPC::Run, and the TAP harness drives
+# clusters through it. It rides the toolchain (not the per-PG deps) because
+# configure runs under the toolchain perl, not the deps sysroot.
 sysroots.apt(
     name = "perl_sysroot",
     lock = "//toolchains/perl/locks:perl_sysroot.lock",
