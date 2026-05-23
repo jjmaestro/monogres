@@ -193,6 +193,36 @@ get_multiple_match_fails_test = unittest.make(
     _get_multiple_match_fails_test_impl,
 )
 
+def _get_wildcard_plus_versioned_test_impl(ctx):
+    """`"*"` is a base set; a matching version-gated spec unions onto it."""
+    env = unittest.begin(ctx)
+    pgver = Version.SCHEME.PGVER
+
+    deps = {
+        "*": ["base-a", "base-b"],
+        "<16.0": ["extra-old"],
+    }
+
+    # PG < 16 gets the base plus the version-gated addition.
+    asserts.equals(
+        env,
+        ["base-a", "base-b", "extra-old"],
+        get_version_deps("15.0", deps, version_scheme = pgver),
+    )
+
+    # PG >= 16 gets the base only.
+    asserts.equals(
+        env,
+        ["base-a", "base-b"],
+        get_version_deps("16.0", deps, version_scheme = pgver),
+    )
+
+    return unittest.end(env)
+
+get_wildcard_plus_versioned_test = unittest.make(
+    _get_wildcard_plus_versioned_test_impl,
+)
+
 def _parse_spec_test_impl(ctx):
     """_parse_spec splits version_spec/arch_spec correctly"""
     env = unittest.begin(ctx)
@@ -281,6 +311,7 @@ TEST_SUITE_TESTS = dict(
     get_version_specific = get_version_specific_test,
     get_empty_spec_map = get_empty_spec_map_test,
     get_multiple_match_fails = get_multiple_match_fails_test,
+    get_wildcard_plus_versioned = get_wildcard_plus_versioned_test,
     get_version_deps_arch = get_version_deps_arch_test,
 )
 

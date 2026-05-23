@@ -9,8 +9,9 @@ Three-phase pattern:
   default_source labels, per-version sources, per-target artifact + deps struct
   shape). With labels now baked into CFG, no string interpolation happens here —
   the test just walks `target.artifact`, `target.source.*`, `target.deps.*`.
-- Phase 3: `build_test` on the default target + each of its four deps labels
-  (buildtime/runtime × sysroot/sample-package).
+- Phase 3: `build_test` on the default target + each populated kind's deps
+  labels (buildtime/runtime/test × sysroot/sample-package); a kind with no
+  declared deps (e.g. an empty `test`) is skipped.
 """
 
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
@@ -51,8 +52,8 @@ def _invariants_test_impl(ctx):
             t["artifact"],
         )
 
-    # every deps entry has a consistent kind, non-empty sysroot, and at least
-    # one package label (PG always has both kinds).
+    # every emitted deps entry (empty kinds are filtered out in e2e_tests) has a
+    # consistent kind, non-empty sysroot, and at least one package label.
     for d in json.decode(ctx.attr.deps_json):
         asserts.true(env, d["kind"] in KINDS)
         asserts.equals(
@@ -100,6 +101,8 @@ def e2e_tests(name, cfg):
     for t in cfg.targets:
         for kind in KINDS:
             kd = getattr(t.deps, kind)
+            if not kd.sysroot:
+                continue  # kind not declared for this target (e.g. empty `test`)
             deps.append(dict(
                 version = t.version,
                 option_set = t.option_set,
@@ -124,6 +127,8 @@ def e2e_tests(name, cfg):
     build_targets = [default_target.artifact]
     for kind in KINDS:
         kd = getattr(default_target.deps, kind)
+        if not kd.sysroot:
+            continue  # kind not declared for this target (e.g. empty `test`)
         build_targets.append(kd.sysroot)
         build_targets.append(kd.packages[0])
 

@@ -105,16 +105,20 @@ def _base_target_init(
         introspect,
         option_set,
         source,
-        version):
+        version,
+        pg_base_version = None,
+        test_build_options = {}):
     return struct(
         artifact = artifact,
         auto_features = auto_features,
         build_options = build_options,
+        test_build_options = test_build_options,
         deps = deps,
         introspect = introspect,
         option_set = option_set,
         source = source,
         version = version,
+        pg_base_version = pg_base_version or version,
     )
 
 def _base_target_new(
@@ -123,7 +127,9 @@ def _base_target_new(
         option_set,
         auto_features,
         build_options,
-        version_deps):
+        version_deps,
+        pg_base_version = None,
+        test_build_options = {}):
     """Constructs a `BaseTarget`.
 
     Derives hub-rooted artifact, introspect, deps, and source labels from the
@@ -137,6 +143,15 @@ def _base_target_new(
             `"disabled"`).
         build_options: Dict of Meson build options.
         version_deps: `VersionDeps` for this version, or `None`.
+        pg_base_version: Upstream PostgreSQL major.minor this flavor version is
+            built on (for the `postgres` flavor, the version itself). Sourced
+            from `FLAVORS[<flavor>].pg_base_version(version)`; defaults to
+            `version` when omitted. Gates PG-version-specific tooling in the
+            build wrapper (e.g. the PG17 src/bin backup tools).
+        test_build_options: Dict of Meson build options for the test-enabled
+            sibling build (`{version}/{option_set}/test/`), i.e. `build_options`
+            plus the `_TEST_OVERLAY` (tap_tests, ...). Empty `{}` when the
+            caller does not render a test variant.
 
     Returns:
         A `BaseTarget` struct.
@@ -147,6 +162,7 @@ def _base_target_new(
         artifact = f("@{hub}//{v}/{opt}:tar"),
         auto_features = auto_features,
         build_options = build_options,
+        test_build_options = test_build_options,
         deps = _PkgsSchema.TargetDeps.qualify(f("@{hub}//{v}"), vd),
         introspect = f("@{hub}//{v}/{opt}:introspect"),
         option_set = option_set,
@@ -156,6 +172,7 @@ def _base_target_new(
             version = version,
         ),
         version = version,
+        pg_base_version = pg_base_version,
     )
 
 def _base_target_from_dict(d):
@@ -164,11 +181,13 @@ def _base_target_from_dict(d):
         artifact = d["artifact"],
         auto_features = d["auto_features"],
         build_options = d["build_options"],
+        test_build_options = d.get("test_build_options", {}),
         deps = _PkgsSchema.TargetDeps.from_dict(d["deps"]),
         introspect = d["introspect"],
         option_set = d["option_set"],
         source = _base_source_from_dict(d["source"]),
         version = d["version"],
+        pg_base_version = d.get("pg_base_version", d["version"]),
     )
 
 def _base_entry_init(source_repo, source = None, targets = [], versions_deps = None):

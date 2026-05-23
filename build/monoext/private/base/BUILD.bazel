@@ -14,6 +14,7 @@ exports_files(
         "Config_overrides.pm",
         "exec_sysroot_setup.sh",
         "pg_build.bzl",
+        "sysroot_lib.sh",
         "sysroot_setup.sh",
         "toolchain.bzl",
     ],

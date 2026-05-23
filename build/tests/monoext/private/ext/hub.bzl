@@ -95,7 +95,7 @@ def _root_all_bzl_externals_only_test_impl(ctx):
     asserts.true(env, "VERSIONS_E0" in out)
 
     # top-level assignments
-    asserts.true(env, 'KINDS = ["buildtime", "runtime"]' in out)
+    asserts.true(env, 'KINDS = ["buildtime", "runtime", "test"]' in out)
     asserts.true(env, "CFGS = " in out)
     asserts.true(env, "REPOS = " in out)
     asserts.true(env, "EXTENSIONS = sorted(CFGS.keys())" in out)
@@ -176,7 +176,7 @@ def _root_all_bzl_empty_test_impl(ctx):
     )
 
     for name in (
-        'KINDS = ["buildtime", "runtime"]',
+        'KINDS = ["buildtime", "runtime", "test"]',
         "CFGS = ",
         "REPOS = ",
         "EXTENSIONS = sorted(CFGS.keys())",

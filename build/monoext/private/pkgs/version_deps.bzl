@@ -83,8 +83,10 @@ def get_version_deps(
         _fail = fail):
     """Gets which deps packages apply to a specific version.
 
-    Scans all version specs in deps, collects matches, and fails if more than
-    one spec matches.
+    The `"*"` spec is the base set, applied to every version. Every other spec
+    is a version-gated addition unioned on top; at most one of those may match a
+    given version (overlapping version ranges fail). Returns the base plus the
+    matching addition (deduplicated, order-preserving).
 
     Args:
         version: Version string (e.g. `"13.2.0"` for extensions, `"15.0"` for
@@ -99,17 +101,34 @@ def get_version_deps(
     Returns:
         A list of packages for this version, or `[]` if no spec matches.
     """
+
+    # `"*"` is the base set, included for every version. Every other spec is a
+    # version-gated ADDITION unioned on top of the base; at most one of those
+    # may match (overlapping version ranges remain a configuration error). This
+    # lets a version range add a package without restating the base list (e.g.
+    # PG <16 needs libipc-run-perl for `configure --enable-tap-tests`, which
+    # meson does not check at configure time).
+    base = deps.get("*", [])
     matches = [
         (spec_str, packages)
         for spec_str, packages in deps.items()
-        if spec_matches(spec_str, version, arch, version_scheme)
+        if spec_str != "*" and spec_matches(
+            spec_str,
+            version,
+            arch,
+            version_scheme,
+        )
     ]
 
     if len(matches) > 1:
         msg = "Version %s matched multiple dep specs: %r"
         return _fail(msg % (version, [m[0] for m in matches]))
 
-    return matches[0][1] if matches else []
+    result = list(base)
+    for pkg in (matches[0][1] if matches else []):
+        if pkg not in result:
+            result.append(pkg)
+    return result
 
 testing = struct(
     _parse_spec = _parse_spec,

@@ -6,7 +6,7 @@ Defines:
 - `DepsInfo`: one deps bundle (`{packages, pkgs_labels,
   sysroot_labels_by_arch}`) produced by `//monoext/private:pkgs.bzl` when
   mapping resolved apt groups back to per-extension versions.
-- `VersionDeps`: a `{buildtime, runtime}` pair of optional `DepsInfo`s.
+- `VersionDeps`: a `{buildtime, runtime, test}` triple of optional `DepsInfo`s.
 - `TargetDeps`: consumer-facing projection of `VersionDeps` with
   qualified `@hub//{prefix}/deps/...` alias labels. Baked onto each
   `BaseTarget.deps` and `ExtExternalEntry.deps` before the JSON boundary so the
@@ -23,8 +23,10 @@ load("//monoext/private:repo_names.bzl", "bind")
 
 # Canonical iteration order of the `VersionDeps` / `TargetDeps` kinds. Internal
 # consumers (writers, collectors) loop over this constant instead of inlining
-# the tuple; see `schema.KINDS` at the bottom.
-KINDS = ("buildtime", "runtime")
+# the tuple; see `schema.KINDS` at the bottom. `test` deps are test-only:
+# layered on `runtime` at test time, excluded from the production runtime
+# closure.
+KINDS = ("buildtime", "runtime", "test")
 
 def _deps_info_new(
         packages = [],
@@ -73,19 +75,22 @@ def _deps_info_from_dict(d):
         sysroot_tar_labels_by_arch = d.get("sysroot_tar_labels_by_arch", {}),
     )
 
-def _version_deps_new(buildtime = None, runtime = None):
+def _version_deps_new(buildtime = None, runtime = None, test = None):
     """Constructs a `VersionDeps`.
 
     Args:
         buildtime: `DepsInfo` for build-time deps, or `None`.
         runtime: `DepsInfo` for run-time deps, or `None`.
+        test: `DepsInfo` for test-only deps, or `None`. Layered on `runtime` at
+            test time; excluded from the production runtime closure.
 
     Returns:
-        A `struct(buildtime, runtime)`.
+        A `struct(buildtime, runtime, test)`.
     """
     return struct(
         buildtime = buildtime,
         runtime = runtime,
+        test = test,
     )
 
 def _version_deps_from_dict(d):
@@ -99,6 +104,7 @@ def _version_deps_from_dict(d):
     return _version_deps_new(
         buildtime = _deps_info_from_dict(d.get("buildtime")),
         runtime = _deps_info_from_dict(d.get("runtime")),
+        test = _deps_info_from_dict(d.get("test")),
     )
 
 def _target_deps_kind_new(
@@ -134,7 +140,7 @@ def _target_deps_kind_new(
         packages = packages if packages else [],
     )
 
-def _target_deps_new(buildtime = None, runtime = None):
+def _target_deps_new(buildtime = None, runtime = None, test = None):
     """Constructs a `TargetDeps`.
 
     Args:
@@ -142,14 +148,18 @@ def _target_deps_new(buildtime = None, runtime = None):
             for the empty-kind default.
         runtime: `struct(sysroot, packages)` for the runtime kind, or `None` for
             the empty-kind default.
+        test: `struct(sysroot, packages)` for the test kind, or `None` for the
+            empty-kind default.
 
     Returns:
-        A `struct(buildtime, runtime)` with both kinds always present (empty
-        defaults for missing kinds) so downstream consumers see a uniform shape.
+        A `struct(buildtime, runtime, test)` with all kinds always present
+        (empty defaults for missing kinds) so downstream consumers see a uniform
+        shape.
     """
     return struct(
         buildtime = buildtime if buildtime else _target_deps_kind_new(),
         runtime = runtime if runtime else _target_deps_kind_new(),
+        test = test if test else _target_deps_kind_new(),
     )
 
 def _target_deps_qualify(target_prefix, version_deps):
@@ -171,6 +181,7 @@ def _target_deps_qualify(target_prefix, version_deps):
     return _target_deps_new(
         buildtime = _qualify_kind(target_prefix, "buildtime", vd.buildtime),
         runtime = _qualify_kind(target_prefix, "runtime", vd.runtime),
+        test = _qualify_kind(target_prefix, "test", vd.test),
     )
 
 def _qualify_kind(target_prefix, kind, deps_info):
@@ -208,6 +219,7 @@ def _target_deps_from_dict(d):
     return _target_deps_new(
         buildtime = _kind_from_dict(d.get("buildtime")),
         runtime = _kind_from_dict(d.get("runtime")),
+        test = _kind_from_dict(d.get("test")),
     )
 
 def _kind_from_dict(d):

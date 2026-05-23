@@ -251,6 +251,9 @@ def create_pkgs(ctx, hub_name, groups, lock = None):
                 runtime = group_dep_info.get(
                     ext_dep_groups.get("runtime", {}).get((name, version)),
                 ),
+                test = group_dep_info.get(
+                    ext_dep_groups.get("test", {}).get((name, version)),
+                ),
             )
         versions_deps[name] = vd
 

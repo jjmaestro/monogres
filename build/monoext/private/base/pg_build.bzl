@@ -11,6 +11,7 @@ variables, toolchain references, and Meson options needed for the build.
 load("@rules_foreign_cc//foreign_cc:meson.bzl", "meson")
 load("//toolchains/llvm_sysroot:llvm_version.bzl", "LLVM_MAJOR")
 load("//toolchains/perl:perl_toolchain.bzl", _PERL_VERSION = "PERL_VERSION")
+load(":compat.bzl", "is_compatible_with")
 load(":toolchain.bzl", "pg_template_variable_info")
 
 # Action-time setup script: extracts the per-PG sysroot tar into
@@ -19,6 +20,7 @@ load(":toolchain.bzl", "pg_template_variable_info")
 # into the extracted tree (so meson canonicalizes the symlink into the wrapper's
 # persistent absolute path when baking `CLANG` into `Makefile.global`), and
 # prints the sysroot absolute path on stdout for `SYSROOT_DIR`.
+_SYSROOT_LIB = "@monogres//monoext/private/base:sysroot_lib.sh"
 _SYSROOT_SETUP_SCRIPT = "@monogres//monoext/private/base:sysroot_setup.sh"
 _EXEC_SYSROOT_SETUP_SCRIPT = "@monogres//monoext/private/base:exec_sysroot_setup.sh"
 
@@ -75,7 +77,8 @@ def _meson_common_args(
         build_options,
         auto_features,
         sysroot_tar = None,
-        exec_sysroot_tar = None):
+        exec_sysroot_tar = None,
+        src_dir = None):
     build_data = [
         "@m4//bin:m4",
         "@flex//bin:flex",
@@ -100,6 +103,13 @@ def _meson_common_args(
     # `data + build_data` (framework.bzl:612), so both are equally available at
     # action time; only the configuration differs.
     data = []
+    if src_dir:
+        # The source tree (target cfg), so `$(execpath src_dir)` below resolves
+        # to its Bazel-computed root (`external/<repo>/<v>/gh`) for the
+        # `__FILE__` prefix-map. `src_dir` is the `:dir_path` alias, the same
+        # directory rules_foreign_cc reads as `lib_source`, so this adds no new
+        # action input.
+        data.append(src_dir)
     if sysroot_tar:
         # The tar is the only `:sysroot_tar` artifact consumers see; the full
         # normalized tree lives inside. At action time the setup script extracts
@@ -109,6 +119,7 @@ def _meson_common_args(
         # sandbox-extracted copy).
         data.append(sysroot_tar)
         data.append(_SYSROOT_CLANG_WRAPPER)
+        build_data.append(_SYSROOT_LIB)
         build_data.append(_SYSROOT_SETUP_SCRIPT)
 
         # `exec_sysroot_tar` is the same `:sysroot_tar` artifact resolved in
@@ -137,6 +148,16 @@ def _meson_common_args(
         _PERL_TOOLCHAIN,
         _PYTHON_TOOLCHAIN,
     ]
+
+    # Map the build-time source root out of `__FILE__`: PostgreSQL bakes the
+    # source path of every translation unit into `.rodata` (via the `__FILE__`
+    # in elog/ereport/assert), so the embedded path depends on the build layout
+    # unless canonicalized. `$$PG_SRC_PREFIX` (resolved in env_sysroot below) is
+    # the build-relative source root the compiler sees; stripping it leaves the
+    # package-relative path (`src/...`, `contrib/...`).
+    macro_prefix_map = (
+        ["-fmacro-prefix-map=$$PG_SRC_PREFIX="] if src_dir else []
+    )
 
     env = dict(
         BISON = "$(execpath @bison//bin:bison)",
@@ -185,6 +206,12 @@ def _meson_common_args(
             "$$PERL_SYSROOT_DIR/usr/lib/$(PERL_MULTIARCH)/perl-base",
             "$$PERL_SYSROOT_DIR/usr/lib/$(PERL_MULTIARCH)/perl/" + _PERL_VERSION,
             "$$PERL_SYSROOT_DIR/usr/share/perl/" + _PERL_VERSION,
+            # Third-party (non-core) modules land in the unversioned vendor dir,
+            # e.g. IPC::Run (libipc-run-perl) at usr/share/perl5/IPC/Run.pm. The
+            # test-enabled build variant flips meson `tap_tests=enabled`, whose
+            # configure gate (config/check_modules.pl) `use`s IPC::Run; without
+            # this entry @INC misses it. Inert for production builds.
+            "$$PERL_SYSROOT_DIR/usr/share/perl5",
         ]),
     )
 
@@ -260,12 +287,12 @@ def _meson_common_args(
                 "$$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/pkgconfig",
                 "$$SYSROOT_DIR/usr/share/pkgconfig",
             ]),
-            CFLAGS = " ".join([
+            CFLAGS = " ".join(macro_prefix_map + [
                 "-idirafter $$SYSROOT_DIR/usr/include",
                 "-idirafter $$SYSROOT_DIR/usr/include/$$TARGET_MULTIARCH",
                 "-idirafter $$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/perl/" + _PERL_VERSION + "/CORE",
             ]),
-            CXXFLAGS = " ".join([
+            CXXFLAGS = " ".join(macro_prefix_map + [
                 "-idirafter $$SYSROOT_DIR/usr/include",
                 "-idirafter $$SYSROOT_DIR/usr/include/$$TARGET_MULTIARCH",
                 "-idirafter $$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/perl/" + _PERL_VERSION + "/CORE",
@@ -352,6 +379,24 @@ def _meson_common_args(
             PERL_DEBIAN_ARCHLIB = "$$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/perl/" + _PERL_VERSION,
         )
 
+    # `PG_SRC_PREFIX`: the source root as the compiler sees it in `__FILE__`,
+    # for the prefix-map (`macro_prefix_map` above). `$(execpath src_dir)` gives
+    # the Bazel-computed source root (`external/<repo>/<v>/gh`,
+    # execroot-relative); rules_foreign_cc runs the compiler from
+    # `$BUILD_TMPDIR`, so the baked `__FILE__` is that root relative to the
+    # build dir. `$BUILD_TMPDIR` is `$EXT_BUILD_ROOT/<build-rel>`, so the climb
+    # is one `..` per component of `<build-rel>` (sed turns each into `..`);
+    # prepending it to the source root yields the same relative path meson
+    # bakes. Pure bash so busybox `realpath` (no `--relative-to`) is not needed.
+    # Prepended so the shell expands it when CFLAGS / CXXFLAGS are exported.
+    if src_dir:
+        env_sysroot = {
+            "PG_SRC_PREFIX": (
+                "$$(echo $${BUILD_TMPDIR#$$EXT_BUILD_ROOT/} | " +
+                "sed 's#[^/][^/]*#..#g')/$(execpath %s)/"
+            ) % src_dir,
+        } | env_sysroot
+
     # Build PATH with @perl_sysroot's `usr/bin` FIRST, so meson's
     # `find_program('perl')` resolves to the Debian perl-base 5.36 interpreter
     # from `@perl_sysroot` (ABI-locked with the per-PG sysroot's libperl-dev /
@@ -423,7 +468,16 @@ def _meson_common_args(
     } if sysroot_tar else {}
 
     # env_sysroot must be merged first so SYSROOT_DIR is set before other
-    # variables that reference it (PKG_CONFIG_SYSROOT_DIR, etc.)
+    # variables that reference it (PKG_CONFIG_SYSROOT_DIR, etc.) The
+    # test-enabled build variant (tap_tests=enabled) additionally lifts
+    # src/test/modules fixtures into the install tree (see
+    # _TEST_MODULES_CAPTURE) so the `modules:` suites can load them; production
+    # keeps the postfix to the sandbox-path rewrite + regress support modules
+    # only.
+    postfix = _STRIP_SANDBOX_PATHS_POSTFIX
+    if build_options.get("tap_tests") == "enabled":
+        postfix += _TEST_MODULES_CAPTURE
+
     return dict(
         build_data = build_data,
         cross_binaries = cross_binaries,
@@ -432,7 +486,7 @@ def _meson_common_args(
         lib_source = pg_src,
         native_binaries = {},
         options = build_options | meson_tool_options,
-        postfix_script = _STRIP_SANDBOX_PATHS_POSTFIX,
+        postfix_script = postfix,
         target_args = {
             "setup": [
                 "--auto-features=%s" % auto_features,
@@ -491,13 +545,77 @@ find "$$INSTALLDIR" -name 'Makefile.global' -print0 \\
             -e 's|/sandbox/linux-sandbox/[0-9]+/execroot/[^/]+/|/|g' \\
             -e "s|/sysroot/usr/lib/llvm-{major}/bin/clang\\b|/$(LIBC_SYSROOT_DIR)/usr/lib/llvm-{major}/bin/clang|g" \\
             -e "s|/sysroot/usr/lib/llvm-{major}/bin|/$(LLVM_SYSROOT_DIR)/usr/lib/llvm-{major}/bin|g"
+
+# Capture the regression support modules (regress.so, plus refint.so/autoinc.so
+# on PG<18) into pkglibdir. They are built with `install: false` (pg_test_mod_args),
+# so `meson install` never emits them, yet core pg_regress needs regress.so on
+# `--dlpath` (test_setup.sql does `CREATE FUNCTION ... AS '@libdir@/regress.so'`)
+# and the trigger tests need refint/autoinc. They are still BUILT by the default
+# `meson compile`, so copy them out of the build dir into the install tree.
+mkdir -p "$$INSTALLDIR/lib/postgresql"
+for mod in regress refint autoinc; do
+    found=$$(find "$$BUILD_TMPDIR" -name "$$mod.so" -type f 2>/dev/null | head -1)
+    if [ -n "$$found" ]; then cp -f "$$found" "$$INSTALLDIR/lib/postgresql/"; fi
+done
 """.format(major = LLVM_MAJOR)
+
+# Capture src/test/modules test fixtures into the install tree. Appended to the
+# meson postfix only for the test-enabled build variant (tap_tests=enabled); the
+# production tree never ships test fixtures.
+#
+# Why this is needed (and is not a meson-native install): PostgreSQL marks every
+# src/test/modules module `install: false` (pg_test_mod_args) on purpose; they
+# are test fixtures, not shipped artifacts. No meson option installs them,
+# `meson install` skips them by definition, and rules_foreign_cc's `out_*`
+# capture is install-dir-relative so it cannot reach them either. Upstream runs
+# them via `meson test` against the BUILD tree (pointing dynamic_library_path /
+# extension_control_path at the build dir), never an installed tree. Our harness
+# runs pg_regress against the installed `:tar`, so the only way to make the
+# `modules:` regress and isolation suites work is to lift the built fixtures
+# into the tree here, as the regress-support capture above does for the same
+# `install: false` reason.
+#
+# The capture has three parts. The module `.so` (built by `meson compile` into
+# $$BUILD_TMPDIR) is copied into pkglibdir, which for this libdir=lib build is
+# `lib/` itself (alongside the contrib .so), NOT `lib/postgresql/` (that subdir
+# only holds the --dlpath regress-support libs); so `LOAD '<name>'` and `CREATE
+# EXTENSION` resolve `$$libdir/<name>`. The `.control` and extension scripts
+# (`<name>--<ver>.sql`) are static SOURCE files; rules_foreign_cc builds meson
+# out-of-source, so they live under $$EXT_BUILD_ROOT, not $$BUILD_TMPDIR, and we
+# search both roots. The test executables (test_escape, libpq_pipeline,
+# test_json_parser_*) are run by a TAP suite by bare name on PATH (IPC::Run);
+# like the rest they are `install: false`, so they never reach bin/, and the set
+# varies by version (test_escape is PG18+, test_json_parser_* PG17+,
+# libpq_pipeline 16+). The libpq TAP suites likewise drive libpq_uri_regress and
+# libpq_testclient (src/interfaces/libpq/test/), and pg_bsd_indent's TAP suite
+# drives pg_bsd_indent (src/tools/pg_bsd_indent/); both are `install: false`
+# too, yet built by default. Capture every +x file directly under those test
+# dirs (excluding the .so and the .p/ build intermediates) into a dedicated
+# test_bin/ tree rather than naming each one. out_data_dirs captures the whole
+# tree; the harness puts test_bin/ on PATH for the TAP lane.
+_TEST_MODULES_CAPTURE = """
+mkdir -p "$$INSTALLDIR/share/extension" "$$INSTALLDIR/test_bin"
+find "$$BUILD_TMPDIR" -path '*/src/test/modules/*' -name '*.so' -type f \\
+    -exec cp -f {} "$$INSTALLDIR/lib/" \\;
+for __src_root in "$$BUILD_TMPDIR" "$$EXT_BUILD_ROOT"; do
+    find "$$__src_root" -path '*/src/test/modules/*' \\
+        \\( -name '*.control' -o -name '*--*.sql' \\) -type f \\
+        -exec cp -f {} "$$INSTALLDIR/share/extension/" \\; 2>/dev/null || true
+done
+find "$$BUILD_TMPDIR" \\( -path '*/src/test/modules/*' \\
+    -o -path '*/src/interfaces/libpq/test/*' \\
+    -o -path '*/src/tools/pg_bsd_indent/*' \\) -type f -perm -100 \\
+    ! -path '*/*.p/*' ! -name '*.so' \\
+    -exec cp -f {} "$$INSTALLDIR/test_bin/" \\;
+"""
 
 def _pg_build_meson(
         name,
         pg_src,
         build_options,
+        version,
         auto_features,
+        pg_base_version = None,
         sysroot_tar = None,
         exec_sysroot_tar = None):
     pg_binaries = [
@@ -514,6 +632,59 @@ def _pg_build_meson(
             "oid2name",
         ])
 
+    # The test-enabled variant (tap_tests=enabled) additionally installs the
+    # client/server tools the TAP suites drive by bare name (a standby test runs
+    # pg_basebackup, a dump test runs pg_dump). They must land in a real bin/
+    # alongside lib/, because a tool such as pg_createsubscriber starts the
+    # server via find_other_exec, which resolves "postgres" relative to the
+    # calling binary and only relocates pkglibdir from a "bin/" dir. The
+    # production set above stays curated; these are core src/bin tools.
+    if build_options.get("tap_tests") == "enabled":
+        pg_binaries.extend([
+            # psql drives pg_regress (it shells out to psql to run each test's
+            # SQL); pg_ctl stops the --temp-instance postmaster.
+            "psql",
+            "pg_ctl",
+            "pg_basebackup",
+            "pg_receivewal",
+            "pg_recvlogical",
+            "pg_dump",
+            "pg_dumpall",
+            "pg_restore",
+            "pg_rewind",
+            "pg_waldump",
+            "pg_amcheck",
+            "pg_controldata",
+            "pg_resetwal",
+            "pg_checksums",
+            "pg_archivecleanup",
+            "pg_verifybackup",
+            "pg_test_fsync",
+            "pg_test_timing",
+            "createdb",
+            "dropdb",
+            "createuser",
+            "dropuser",
+            "clusterdb",
+            "vacuumdb",
+            "reindexdb",
+            "pgbench",
+            "pg_upgrade",
+            "ecpg",
+        ])
+
+        # pg_combinebackup, pg_walsummary, and pg_createsubscriber are src/bin
+        # tools added in PG17; gate on the upstream PostgreSQL base
+        # (pg_base_version, not the flavor's own version number) so the curated
+        # list stays valid on PG16 while PG17-based forks (e.g. IvorySQL >= 4.0)
+        # still capture them.
+        if is_compatible_with(pg_base_version or version, ">=17.0"):
+            pg_binaries.extend([
+                "pg_combinebackup",
+                "pg_walsummary",
+                "pg_createsubscriber",
+            ])
+
     # including lib in out_data_dirs because even when it's out_lib_dir's
     # default, it's not included in declared_outputs
     out_data_dirs = [
@@ -521,12 +692,28 @@ def _pg_build_meson(
         "share",
     ]
 
+    # The test variant also stages the install:false src/test helpers into
+    # test_bin/ (see _TEST_MODULES_CAPTURE), captured as a whole tree since the
+    # set varies by version; the harness puts test_bin/ on the TAP PATH.
+    if build_options.get("tap_tests") == "enabled":
+        out_data_dirs.append("test_bin")
+
+    # The `:dir_path` sibling of `pg_src` is the extracted source directory;
+    # passing it lets `_meson_common_args` resolve the source root for the
+    # `__FILE__` prefix-map via `$(execpath)` (Bazel-computed) rather than a
+    # hand-built path. It is the path that is wanted here and not the contents,
+    # which is what `:dir_path` is for: `:dir` is a copy of the same tree, and
+    # its Bazel-computed root is that copy's, not the one meson compiles from.
+    # `pg_src` is the `@<src>//<v>` lib_source label.
+    src_dir = pg_src + ":dir_path"
+
     meson_common_args = _meson_common_args(
         pg_src = pg_src,
         build_options = build_options,
         auto_features = auto_features,
         sysroot_tar = sysroot_tar,
         exec_sysroot_tar = exec_sysroot_tar,
+        src_dir = src_dir,
     )
 
     meson(**(meson_common_args | dict(
@@ -603,7 +790,9 @@ def pg_build(
         name,
         pg_src,
         build_options,
+        version,
         auto_features,
+        pg_base_version = None,
         sysroot_tar = None,
         exec_sysroot_tar = None):
     """
@@ -617,6 +806,14 @@ def pg_build(
         pg_src (str): The external Bazel repo with the Postgres source code.
         build_options (dict): Meson build options that configure optional
             Postgres features and other compilation parameters.
+        version (str): The flavor's version (e.g. "16.11" for postgres, "5.0"
+            for IvorySQL). Used as the fallback PG base when `pg_base_version`
+            is not supplied.
+        pg_base_version (str): The upstream PostgreSQL major.minor this build is
+            based on (for the `postgres` flavor, equal to `version`). Gates the
+            PG17 src/bin backup tools in the test variant's captured set on the
+            real PostgreSQL version rather than the flavor's own version number.
+            Defaults to `version`.
         auto_features (str): Controls whether Meson build options and optional
             Postgres features not specified in `build_options` will be
             `enable`d, `disable`d or `auto` (enabled or disabled based on
@@ -643,7 +840,9 @@ def pg_build(
         name,
         pg_src,
         build_options,
+        version,
         auto_features,
+        pg_base_version,
         sysroot_tar,
         exec_sysroot_tar,
     )

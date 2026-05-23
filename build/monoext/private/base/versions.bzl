@@ -51,16 +51,58 @@ def _version_root_build(version, default_option_set):
         header = _HEADER,
     )
 
-def _option_set_build(build_repo, target, source_repo, version, option_set):
-    """Render {version}/{option_set}/BUILD.bazel.
+def _option_set_build(
+        build_repo,
+        target,
+        source_repo,
+        version,
+        option_set,
+        build_options = None):
+    """Render a production or test-variant {version}/{option_set} build package.
 
-    The production package exposes a runtime / SDK split: `:tar` (the shippable
-    runtime: backend, frontends, loadable modules) and `:tar.dev` (the SDK: the
-    full `meson install` an out-of-tree extension / libpq client compiles
-    against, headers + PGXS + pkg-config + static archives). `:tar.dev` is the
-    raw build and `:tar` carves the dev-only paths back out of it.
+    The production package exposes a runtime / SDK / test surface: `:tar` (the
+    shippable runtime: backend, frontends, loadable modules), `:tar.dev` (the
+    SDK: the full `meson install` an out-of-tree extension / libpq client
+    compiles against, headers + PGXS + pkg-config + static archives), and
+    `:tar.test` (the install:false test fixtures over the SDK, aliased from the
+    test-enabled sibling). `:tar.dev` is the raw build and `:tar` carves the
+    dev-only paths back out of it.
+
+    The test-enabled sibling (`{version}/{option_set}/test/`) is a single
+    tap_tests-enabled build named `:tar` (the `_TEST_OVERLAY`-augmented
+    `target.test_build_options`); it is the fixtures source `:tar.test` aliases.
     """
     f = bind(build = build_repo, src = source_repo, v = version)
+
+    # `build_options` is None for the production package and the
+    # `target.test_build_options` dict for the test-enabled sibling.
+    is_test = build_options != None
+    bopts = build_options if is_test else target.build_options
+
+    if is_test:
+        return Star.file(
+            Star.load_(
+                f("@{build}//monoext/private/base:pg_build.bzl"),
+                "pg_build",
+            ),
+            Star.package(default_visibility = ["//visibility:public"]),
+            _pg_build(
+                name = "tar",
+                pg_src = f("@{src}//{v}"),
+                build_options = bopts,
+                version = version,
+                pg_base_version = target.pg_base_version,
+                auto_features = target.auto_features,
+                sysroot_tar = target.deps.buildtime.sysroot_tar,
+                exec_sysroot_tar = target.deps.buildtime.exec_sysroot_tar,
+            ),
+            Star.alias(name = option_set, actual = ":tar"),
+            header = _HEADER,
+        )
+
+    # Production: the full `meson install` is the SDK tree (`:tar.dev`); the
+    # runtime `:tar` carves the dev-only paths out of its `gen_dir` (the whole
+    # INSTALLDIR, captured as one tree artifact). Both ride the SAME compile.
     return Star.file(
         Star.load_(
             f("@{build}//monoext/private/base:pg_build.bzl"),
@@ -74,7 +116,9 @@ def _option_set_build(build_repo, target, source_repo, version, option_set):
         _pg_build(
             name = "tar.dev",
             pg_src = f("@{src}//{v}"),
-            build_options = target.build_options,
+            build_options = bopts,
+            version = version,
+            pg_base_version = target.pg_base_version,
             auto_features = target.auto_features,
             sysroot_tar = target.deps.buildtime.sysroot_tar,
             exec_sysroot_tar = target.deps.buildtime.exec_sysroot_tar,
@@ -88,6 +132,10 @@ def _option_set_build(build_repo, target, source_repo, version, option_set):
             name = "tar",
             base = ":tar.dev.gen_dir",
             exclude = _MESON_DEV_PATHS,
+        ),
+        Star.alias(
+            name = "tar.test",
+            actual = "//%s/%s/test:tar" % (version, option_set),
         ),
         Star.alias(name = option_set, actual = ":tar"),
         header = _HEADER,
@@ -202,6 +250,24 @@ def write_base_version(rctx, version, entry, build_repo, option_sets, archs):
                 source_repo,
                 version,
                 option_set,
+            ),
+        )
+
+        # --- {version}/{option_set}/test/BUILD.bazel: test-enabled build variant
+        # (tap_tests, ...). Same wrapper + sysroots as production, built with
+        # the `_TEST_OVERLAY`-augmented options. The TAP lane depends on
+        # `//{v}/{opt}/test:tar`; the production `:tar` is untouched. Parallels
+        # the per-arch `{opt}/{arch}/` subpackage (no per-arch wrapper yet:
+        # native test runs only).
+        rctx.file(
+            "%s/%s/test/BUILD.bazel" % (version, option_set),
+            _option_set_build(
+                build_repo,
+                target,
+                source_repo,
+                version,
+                option_set,
+                build_options = target.test_build_options,
             ),
         )
 

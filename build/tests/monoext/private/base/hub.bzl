@@ -95,7 +95,7 @@ def _root_all_bzl_top_level_assignments_test_impl(ctx):
     )
 
     asserts.true(env, "DEFAULT_VERSION = " in out)
-    asserts.true(env, 'KINDS = ["buildtime", "runtime"]' in out)
+    asserts.true(env, 'KINDS = ["buildtime", "runtime", "test"]' in out)
     asserts.true(env, "OPTION_SETS = " in out)
     asserts.true(env, "VERSIONS = " in out)
     asserts.true(env, "_SOURCES = " in out)

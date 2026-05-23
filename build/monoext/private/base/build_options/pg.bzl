@@ -145,3 +145,13 @@ def build_options(
     options["prefix_distro"] = "%s/%s" % (prefix_distro, version)
 
     return options, auto_features
+
+def pg_base_version(version):
+    """The upstream PostgreSQL major.minor a flavor is built on.
+
+    For the `postgres` flavor the base IS the version itself. Flavors that fork
+    a specific PostgreSQL release override this to report that upstream base,
+    which gates PG-version-specific tooling (e.g. the PG17 src/bin backup tools)
+    on the real PostgreSQL version rather than the flavor's own version number.
+    """
+    return version
