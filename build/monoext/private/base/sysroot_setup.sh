@@ -2,6 +2,10 @@
 # shellcheck disable=SC2154,SC2250
 # Action-time setup of the per-PG sysroot for `pg_build` / `pgxs_build`.
 #
+# Extraction, multiarch detection, and the chroot lib symlinks are delegated to
+# the sibling `sysroot_lib.sh`; this script layers the build-only perl Config +
+# clang-wrapper post-processing on top.
+#
 # Inputs (all come from `$(execpath ...)` substitutions, which
 # `rules_foreign_cc` auto-prepends with `$EXT_BUILD_ROOT/` — see
 # https://github.com/bazel-contrib/rules_foreign_cc/blob/0.12.0/foreign_cc/private/make_env_vars.bzl#L123-L124
@@ -48,14 +52,19 @@ if [ $# -ne 4 ]; then
     exit 2
 fi
 
+# Shared extract / multiarch / chroot-symlink mechanics, in a sibling lib (both
+# this script and the lib are materialized into the action via build_data), so
+# source it relative to $0.
+# shellcheck disable=SC1091 source=sysroot_lib.sh
+. "$(dirname "$0")/sysroot_lib.sh"
+
 tar_abs=$1
 wrapper_abs=$2
 bsdtar_abs=$3
 llvm_major=$4
 
 SR=${EXT_BUILD_ROOT}/sysroot
-mkdir -p "$SR"
-"$bsdtar_abs" -xf "$tar_abs" -C "$SR"
+extract_tars "$bsdtar_abs" "$SR" "$tar_abs"
 
 # Bridge Debian's multiarch libperl layout to the Config_overrides shim's
 # claimed `archlibexp` ($SR/usr/lib/<cpu>-linux-gnu/perl/<ver>). Debian's
@@ -67,20 +76,10 @@ mkdir -p "$SR"
 # dir is discovered from the tree rather than pinned, so this tracks
 # whatever Debian perl the sysroot ships.
 #
-# `multiarch` is derived from the sysroot tree (the only `*-linux-gnu`
-# child of `usr/lib/`) rather than `uname -m`. Under cross-compile
-# (host=amd64, target=arm64) `uname -m` reports the HOST arch, but the
-# sysroot's multiarch dir carries the TARGET arch; mismatching the two
-# breaks plperl's `cc.links` probe at link time.
-multiarch=
-for d in "$SR/usr/lib/"*-linux-gnu; do
-    base=$(basename "$d")
-    case "$base" in
-        x86_64-linux-gnu|aarch64-linux-gnu) multiarch=$base ;;
-        *) ;;
-    esac
-done
-[ -n "$multiarch" ] || { echo "no multiarch dir found in $SR/usr/lib" >&2; exit 1; }
+# `derive_multiarch` reads the triplet from the sysroot tree (not `uname -m`,
+# which reports the HOST arch and breaks plperl's `cc.links` probe under
+# cross-compile, where the sysroot carries the TARGET arch).
+multiarch=$(derive_multiarch "$SR") || exit 1
 multiarch_lib="$SR/usr/lib/$multiarch"
 for perl_core in "$multiarch_lib"/perl/*/CORE; do
     if [ -e "$multiarch_lib/libperl.so" ] && [ -d "$perl_core" ]; then
@@ -132,44 +131,15 @@ fi
 mkdir -p "$SR/usr/lib/llvm-$llvm_major/bin"
 ln -sf "$wrapper_abs" "$SR/usr/lib/llvm-$llvm_major/bin/clang"
 
-# Symlink sysroot libs into the chroot's standard `/lib/<cpu>-linux-gnu/`
-# and `/usr/lib/<cpu>-linux-gnu/` paths so ELFs that load deps via ld.so's
-# default search list (perl from @perl_sysroot, llvm-config, libllvm14,
-# msgfmt, etc.) find their NEEDED libs without the hermetic-Linux-sandbox
-# manifest having to bind-mount host /lib/<cpu>-linux-gnu/lib*.so* files
-# in. The chroot is a per-action tmpfs so these symlinks come back fresh
-# for every action run.
-#
-# Existing-target skip: `.bazelrc.sandbox_linux_<arch>` still bind-mounts
-# the toolchains_llvm libc / libstdc++ / libgcc_s / libz / libtinfo set
-# (those are needed by exec-config actions that build their own tools via
-# clang outside any sysroot-extraction context; see the manifest comment).
-# `-e` covers those: `ln -sf` over a bind-mounted target can fail or have
-# unexpected semantics, so let the bind-mount win where they overlap. The
-# loop still fills in the rest of the sysroot's lib trees (libcrypt,
-# libgssapi-krb5, libssl, libxml2, libllvm14, ...) at standard paths so
-# their consumers don't need explicit per-tool LD_LIBRARY_PATH entries.
-#
-# Best-effort: Bazel's hermetic linux-sandbox keeps `/lib/<multiarch>/` and
-# `/usr/lib/<multiarch>/` read-only after applying the bind-mount manifest.
-# `mkdir -p` is a no-op on an existing dir (success); `ln -s` against a
-# read-only parent fails with EROFS. Suppress the failure and keep going:
-# the affected lib (e.g. libdbus-1.so.3 transitively pulled by
-# libavahi-compat-libdnssd-dev / libsystemd-dev) is not actually needed at
-# build time by any of our build-time ELFs (clang, ld, ar, perl,
-# llvm-config, ...); only PG's runtime needs it, and the runtime image
-# pulls the sysroot's copy through tar packaging, not through these
-# chroot-path symlinks.
-for srcdir in "$SR/lib/$multiarch" "$SR/usr/lib/$multiarch"; do
-    [ -d "$srcdir" ] || continue
-    dstdir=${srcdir#"$SR"}
-    mkdir -p "$dstdir" 2>/dev/null || continue
-    for src in "$srcdir"/*; do
-        [ -e "$src" ] || continue
-        dst="$dstdir/$(basename "$src")"
-        [ -e "$dst" ] && continue
-        ln -s "$src" "$dst" 2>/dev/null || true
-    done
-done
+# Symlink the sysroot's multiarch libs into the chroot's standard lib paths so
+# build-time ELFs (perl, llvm-config, libllvm14, msgfmt, ...) resolve their
+# NEEDED .so via ld.so's default search, without the sandbox manifest having to
+# bind-mount host /lib/<arch>/lib*.so* in. `symlink_chroot_libs` skips
+# pre-existing targets (`.bazelrc.sandbox_linux_<arch>` still bind-mounts the
+# toolchains_llvm libc/libstdc++/libgcc_s/libz/libtinfo set, needed by
+# exec-config tool builds) and best-effort suppresses EROFS on the sandbox's
+# read-only lib dirs (the libs that fail there, e.g. libdbus, are runtime-only
+# and reach PG via tar packaging, not these chroot symlinks).
+symlink_chroot_libs "$SR" "$multiarch"
 
 echo "$SR"

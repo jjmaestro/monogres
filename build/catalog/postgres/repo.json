@@ -413,6 +413,7 @@
             "*": [
               "gettext",
               "libavahi-compat-libdnssd1",
+              "libc-bin",
               "libcurl4",
               "libedit2",
               "libgssapi-krb5-2",
@@ -437,6 +438,7 @@
               "llvm-14-runtime",
               "ncurses-term",
               "tcl",
+              "tcl8.6",
               "tzdata",
               "zlib1g"
             ]

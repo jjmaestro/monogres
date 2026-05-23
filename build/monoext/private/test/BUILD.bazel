@@ -1,0 +1,17 @@
+# Hermetic, Bazel-run PostgreSQL regression testing.
+#
+# closure_setup.sh is the test-execution analog of
+# //monoext/private/base:sysroot_setup.sh: it populates the empty hermetic
+# chroot with a runtime library closure assembled from sysroot tars so the
+# installed PostgreSQL binaries resolve their NEEDED libs via ld.so's default
+# search. regress_runner.sh is the shared per-suite harness the test-target
+# codegen drives (see report_build/streams/F_codegen/CALL_CONVENTION.md). The
+# real per-version suites are rendered into the @<hub> / @<hub>_ext repos by the
+# introspect codegen, not declared here.
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "closure_setup.sh",
+    "regress_runner.sh",
+])

@@ -13,6 +13,12 @@ load("//toolchains/llvm_sysroot:llvm_version.bzl", "LLVM_MAJOR")
 # prints the absolute sysroot path on stdout.
 _SYSROOT_SETUP_SCRIPT = "@monogres//monoext/private/base:sysroot_setup.sh"
 
+# sysroot_setup.sh sources this sibling lib (the shared extract / multiarch /
+# chroot-symlink helpers) via `. $(dirname $0)/sysroot_lib.sh`, so it must ride
+# the action inputs alongside the setup script; the two are co-located in the
+# same package, so $0-relative resolution finds it once both are staged.
+_SYSROOT_LIB_SCRIPT = "@monogres//monoext/private/base:sysroot_lib.sh"
+
 # Per-arch @libc_sysroot clang wrapper. Used for the action-time symlink dance
 # so meson canonicalizes the symlink into the wrapper's persistent absolute path
 # (under `/external/sysroots++sysroots+libc_sysroot/...`).
@@ -106,6 +112,7 @@ def pgxs_build(
         _SYSROOT_CLANG_WRAPPER,
         _LLVM_SYSROOT,
         _SYSROOT_SETUP_SCRIPT,
+        _SYSROOT_LIB_SCRIPT,
     ]
 
     native.genrule(
