@@ -337,6 +337,10 @@
       {
         "label": "//catalog/postgres/patches:0019-16.0-backport-bitcode-cflags-c_args.patch",
         "spec": ">=16.0,<17.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0020-17.0-fix-test-jsonb_jsonpath-pin-time_tz-utc-offset.patch",
+        "spec": "17.0/*"
       }
     ],
     "deps": {
