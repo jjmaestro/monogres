@@ -1,0 +1,6 @@
+load(":schema.bzl", schema_suite = "test_suite")
+load(":suites.bzl", suites_suite = "test_suite")
+
+schema_suite()
+
+suites_suite()

@@ -12,6 +12,11 @@ load("//monoext/private/base:introspect.bzl", "write_introspect")
 load("//monoext/private/base:schema.bzl", _BaseSchema = "schema")
 load("//monoext/private/base:versions.bzl", "write_base_version")
 load("//monoext/private/pkgs:schema.bzl", _PkgsSchema = "schema")
+load(
+    "//monoext/private/test:introspect.bzl",
+    "INTROSPECT_ATTRS",
+    "render_core_tests",
+)
 
 # ---------------------------------------------------------------------------
 # File rendering helpers
@@ -108,6 +113,11 @@ def _impl(rctx):
 
     write_introspect(rctx)
 
+    # The core/pl/module test introspect: one `sh_test` per suite under
+    # `<v>/<opt>/tests/`. A no-op when the introspect attrs are empty (a flavor
+    # with no `+test` introspect variant).
+    render_core_tests(rctx, rctx.attr.flavor, rctx.attr.build_repo)
+
 _ATTRS = dict(
     archs = attr.string_list(mandatory = True),
     entries = attr.string_dict(mandatory = True),
@@ -127,6 +137,11 @@ _ATTRS = dict(
               "Baked into `CFG.name` in the generated `all.bzl`.",
         default = "postgres",
     ),
+    # The test-introspect attrs (`+test` introspect labels + per-(v,opt) label
+    # maps + overrides + the `introspect_jsons` content dict), filled by
+    # `introspect.introspect_payload`. The base hub now renders the
+    # core/pl/module suites in addition to the build targets.
+    **INTROSPECT_ATTRS
 )
 
 base_repo = repository_rule(

@@ -109,7 +109,9 @@ def create_monogres(
     # 4. shared deps pool: @{name}_pkgs
     pkgs_result = create_pkgs(ctx, pkgs_name, package_groups, lock = lock)
 
-    # 5. base hub: @{name}
+    # 5. base hub: @{name}. Renders the build targets AND the core/pl/module
+    # test introspect (one sh_test per (version x option_set x suite) under
+    # `<v>/<opt>/tests/`).
     create_base(
         hub_name = name,
         base_data = base_data,
@@ -120,7 +122,10 @@ def create_monogres(
 
     repos = [name, pkgs_name]
 
-    # 6. extensions hub: @{name}_ext (if extensions set)
+    # 6. extensions hub: @{name}_ext (if extensions set). Renders the extension
+    # builds AND the contrib test introspect (`contrib/<name>/<v>/tests`). Runs
+    # after create_base so the install + source trees the contrib suites depend
+    # on exist.
     if extensions:
         create_ext(
             hub_name = ext_name,
@@ -130,6 +135,7 @@ def create_monogres(
             base_versions = base_data.versions,
             base_hub_name = name,
             base_flavor = base_data.flavor,
+            base_data = base_data,
             archs = ARCHS,
             build_repo = build_repo,
         )

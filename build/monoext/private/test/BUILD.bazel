@@ -9,9 +9,43 @@
 # real per-version suites are rendered into the @<hub> / @<hub>_ext repos by the
 # introspect codegen, not declared here.
 
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+
 package(default_visibility = ["//visibility:public"])
 
 exports_files([
     "closure_setup.sh",
     "regress_runner.sh",
 ])
+
+# PG_TEST_EXTRA opt-in groups. Each names an external prerequisite the hermetic
+# sandbox cannot provision (an SSL cert setup, an LDAP slapd, a Kerberos KDC,
+# special DNS, a WAL-consistency build knob). A TAP suite gated on a group (via
+# target_compatible_with on its `<group>_enabled` config_setting, see
+# suites.bzl::_TAP_REQUIRES_PG_TEST_EXTRA) renders Bazel SKIPPED by default
+# instead of self-skipping to a green PASS, so a CI summary distinguishes "ran
+# and passed" from "could not run here". A future non-hermetic lane that
+# provisions the service flips `--//monoext/private/test:pg_test_extra_<group>`.
+_PG_TEST_EXTRA_GROUPS = [
+    "ssl",
+    "ldap",
+    "kerberos",
+    "load_balance",
+    "wal_consistency_checking",
+]
+
+[
+    bool_flag(
+        name = "pg_test_extra_" + group,
+        build_setting_default = False,
+    )
+    for group in _PG_TEST_EXTRA_GROUPS
+]
+
+[
+    config_setting(
+        name = group + "_enabled",
+        flag_values = {":pg_test_extra_" + group: "True"},
+    )
+    for group in _PG_TEST_EXTRA_GROUPS
+]

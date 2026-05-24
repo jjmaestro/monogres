@@ -12,6 +12,7 @@ load("//monoext/private/ext:contrib.bzl", "write_contrib_extension")
 load("//monoext/private/ext:external.bzl", "write_extension_package")
 load("//monoext/private/ext:schema.bzl", _ExtSchema = "schema")
 load("//monoext/private/pkgs:schema.bzl", _PkgsSchema = "schema")
+load("//monoext/private/test:introspect.bzl", "INTROSPECT_ATTRS", "render_contrib_tests")
 load("//platforms:targets.bzl", "ARCH_CPU")
 
 # ---------------------------------------------------------------------------
@@ -205,6 +206,11 @@ def _impl(rctx):
         archs = archs,
     ))
 
+    # The contrib test introspect: one `sh_test` per contrib suite under
+    # `contrib/<name>/<v>/tests`, run against the base hub's install tree. A
+    # no-op when the introspect is empty.
+    render_contrib_tests(rctx, rctx.attr.base_flavor, rctx.attr.build_repo)
+
 _ATTRS = dict(
     archs = attr.string_list(mandatory = True),
     catalog = attr.label(mandatory = True),
@@ -214,6 +220,13 @@ _ATTRS = dict(
     locks = attr.string_keyed_label_dict(default = {}),
     build_repo = attr.string(default = "monogres"),
     base_versions_deps = attr.string(mandatory = True),
+    # The flavor's OPTION_SETS (JSON list); the contrib introspect runs against
+    # the last (default) option set's install tree.
+    option_sets = attr.string(default = "[]"),
+    # The test-introspect attrs (filled by `introspect.introspect_payload`,
+    # pointing at the base hub). The extensions hub now renders the contrib
+    # suites alongside the extension builds.
+    **INTROSPECT_ATTRS
 )
 
 ext_repo = repository_rule(

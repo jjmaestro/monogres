@@ -5,3 +5,5 @@
 [default.extend-words]
 # CPY is a valid ruff rule code (flake8-copyright)
 CPY = "CPY"
+# brin is a PostgreSQL access method (BRIN index) + regress test name
+brin = "brin"

@@ -15,6 +15,7 @@ load("//monoext/private:repo_names.bzl", "bind", "repo_names")
 load("//monoext/private/ext:compat.bzl", "is_compatible")
 load("//monoext/private/ext:hub.bzl", "ext_repo")
 load("//monoext/private/ext:schema.bzl", _ExtSchema = "schema")
+load("//monoext/private/test:introspect.bzl", "introspect_payload")
 
 def create_ext_src(ctx, hub_name, catalog_label, base_flavor = "postgres"):
     """Read extension catalog, create per-ext source repos, return ExtData.
@@ -182,6 +183,7 @@ def create_ext(
         base_versions,
         base_hub_name,
         base_flavor,
+        base_data,
         archs,
         build_repo = "monogres"):
     """Build entries and create the extensions hub repo.
@@ -201,6 +203,10 @@ def create_ext(
         base_hub_name: Apparent name of the base hub repo (the `tag.name`
             value). Extension builds and `PG_CFG` are resolved from this repo.
         base_flavor: Base flavor identity (e.g. "postgres", "ivorysql").
+        base_data: `BaseData` from `create_base_src`. Supplies the
+            test-introspect inputs (introspect, overrides) for the contrib test
+            suites the extensions hub now renders under
+            `contrib/<name>/<v>/tests`.
         archs: List of architecture names for per-arch targets.
         build_repo: Repo containing the build rules (default `"monogres"`).
     """
@@ -230,6 +236,10 @@ def create_ext(
     # already pointing at.
     base_versions_deps = pkgs_result.versions_deps.get(base_flavor, {})
 
+    # `introspect_payload` (keyed on the BASE hub, where the install trees live)
+    # supplies `option_sets` + the test-introspect attrs; the extensions hub
+    # renders the contrib suites under `contrib/<name>/<v>/tests` alongside the
+    # builds.
     ext_repo(
         name = hub_name,
         archs = list(archs),
@@ -240,6 +250,7 @@ def create_ext(
         locks = locks,
         build_repo = build_repo,
         base_versions_deps = json.encode(base_versions_deps),
+        **introspect_payload(base_hub_name, base_data)
     )
 
 testing = struct(

@@ -20,6 +20,7 @@ load("@download_archives//lib:index.bzl", Index = "index")
 load("@version_utils//version:version.bzl", Version = "version")
 load("//monoext/private:pkgs.bzl", "pkgs_group")
 load("//monoext/private:repo_names.bzl", "bind", "repo_names")
+load("//monoext/private/base:compat.bzl", "is_compatible_with")
 load("//monoext/private/base:hub.bzl", "base_repo")
 load(
     "//monoext/private/base:introspect.bzl",
@@ -33,6 +34,19 @@ load(
     "FLAVORS",
 )
 load("//monoext/private/pkgs:schema.bzl", _PkgsSchema = "schema")
+load("//monoext/private/test:introspect.bzl", "introspect_payload")
+
+# Build options layered onto a production option set to produce its test-enabled
+# sibling, rendered as the `{version}/{option_set}/test/` build by
+# `versions.bzl`. Applied as a post-compute override on the options dict so it
+# beats the production pins (`tap_tests` is pinned `disabled` in every set)
+# without perturbing the production `:tar`. Flavor-agnostic: it speaks the Meson
+# option vocabulary that `configure_args.bzl` also maps to autoconf `--enable-X`
+# on the make path. Additive; extend with cassert / injection_points / debug
+# when those test lanes land.
+_TEST_OVERLAY = {
+    "tap_tests": "enabled",
+}
 
 def create_base_src(ctx, hub_name, base_label):
     """Create base source repos, introspect repos, and return base_data.
@@ -153,6 +167,12 @@ def _build_entries(base_data, versions_deps, hub_name):
     for version in sorted(base_data.versions):
         vd = versions_deps.get(version) or _PkgsSchema.VersionDeps.new()
 
+        # Upstream PostgreSQL base for this flavor version (postgres: the
+        # version itself; forks: the PG release they track). Lets the build
+        # wrapper gate PG-version-specific tooling on the real PG version, not
+        # the flavor's own version number.
+        pg_base_version = flavor_mod.pg_base_version(version)
+
         targets = []
         for option_set in flavor_mod.OPTION_SETS:
             options, auto_features = flavor_mod.build_options(
@@ -161,13 +181,35 @@ def _build_entries(base_data, versions_deps, hub_name):
                 build_options_metadata,
             )
 
+            # Test-enabled sibling options: production options plus the
+            # `_TEST_OVERLAY` (tap_tests, ...). `versions.bzl` renders these
+            # into the `{version}/{option_set}/test/` build; the production
+            # `:tar` keeps `options` untouched. `auto_features` is shared (the
+            # overlay only forces specific feature values, not the auto
+            # default).
+            test_build_options = dict(options)
+            test_build_options.update(_TEST_OVERLAY)
+
+            # injection_points is a meson PG17+ option; gate on the catalog's
+            # compatibility spec (metadata.build_options.injection_points) so
+            # the test variant enables it only where the build accepts it.
+            # Enabling it is what makes the regenerated test introspect carry
+            # the injection_points module suites and enable_injection_points=yes
+            # env faithfully, with no codegen-side override.
+            ip_meta = build_options_metadata.get("injection_points")
+            ip_spec = ip_meta.get("compatible") if ip_meta else None
+            if ip_spec and is_compatible_with(version, ip_spec):
+                test_build_options["injection_points"] = "true"
+
             targets.append(_BaseSchema.BaseTarget.new(
                 hub_name = hub_name,
                 version = version,
                 option_set = option_set,
                 auto_features = auto_features,
                 build_options = options,
+                test_build_options = test_build_options,
                 version_deps = vd,
+                pg_base_version = pg_base_version,
             ))
 
         entry = _BaseSchema.BaseEntry.new(
@@ -194,22 +236,24 @@ def create_base(hub_name, base_data, pkgs_result, archs, build_repo = "monogres"
         build_repo: Build repo name (default "monogres").
     """
     flavor = base_data.flavor
-    flavor_mod = FLAVORS[flavor]
     versions_deps = pkgs_result.versions_deps.get(flavor, {})
 
     entries = _build_entries(base_data, versions_deps, hub_name)
 
+    # `introspect_payload` supplies `option_sets` + the test-introspect attrs;
+    # the base hub renders the core/pl/module suites alongside the build
+    # targets.
     base_repo(
         name = hub_name,
         archs = list(archs),
         entries = entries,
-        option_sets = json.encode(list(flavor_mod.OPTION_SETS)),
         default_version = base_data.default_version,
         introspect_repos = base_data.introspect_repos,
         introspect_paths_repos = base_data.introspect_paths_repos,
         pg_src = "@%s" % base_data.source_repo,
         build_repo = build_repo,
         flavor = flavor,
+        **introspect_payload(hub_name, base_data)
     )
 
 testing = struct(
