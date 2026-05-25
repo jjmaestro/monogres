@@ -2,165 +2,169 @@
   "kind": "contrib",
   "metadata": {
     "files": {
-      "16.0": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "16.1": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "16.10": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "16.11": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "16.2": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "16.3": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "16.4": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "16.5": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "16.6": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "16.7": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "16.8": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "16.9": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "17.0": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "17.1": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "17.2": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "17.3": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "17.4": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "17.5": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "17.6": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "17.7": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "18.0": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1--1.2.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ],
-      "18.1": [
-        "lib/lo.so",
-        "share/extension/lo--1.0--1.1.sql",
-        "share/extension/lo--1.1--1.2.sql",
-        "share/extension/lo--1.1.sql",
-        "share/extension/lo.control"
-      ]
+      "postgres": {
+        "16.0": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "16.1": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "16.10": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "16.11": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "16.2": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "16.3": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "16.4": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "16.5": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "16.6": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "16.7": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "16.8": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "16.9": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "17.0": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "17.1": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "17.2": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "17.3": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "17.4": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "17.5": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "17.6": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "17.7": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "18.0": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1--1.2.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
+        "18.1": [
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1--1.2.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ]
+      }
     }
   },
   "version": 1,
-  "versions": [
-    "16.0",
-    "16.1",
-    "16.10",
-    "16.11",
-    "16.2",
-    "16.3",
-    "16.4",
-    "16.5",
-    "16.6",
-    "16.7",
-    "16.8",
-    "16.9",
-    "17.0",
-    "17.1",
-    "17.2",
-    "17.3",
-    "17.4",
-    "17.5",
-    "17.6",
-    "17.7",
-    "18.0",
-    "18.1"
-  ]
+  "versions": {
+    "postgres": [
+      "16.0",
+      "16.1",
+      "16.10",
+      "16.11",
+      "16.2",
+      "16.3",
+      "16.4",
+      "16.5",
+      "16.6",
+      "16.7",
+      "16.8",
+      "16.9",
+      "17.0",
+      "17.1",
+      "17.2",
+      "17.3",
+      "17.4",
+      "17.5",
+      "17.6",
+      "17.7",
+      "18.0",
+      "18.1"
+    ]
+  }
 }

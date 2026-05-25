@@ -2,97 +2,101 @@
   "kind": "contrib",
   "metadata": {
     "files": {
-      "16.0": [
-        "lib/test_decoding.so"
-      ],
-      "16.1": [
-        "lib/test_decoding.so"
-      ],
-      "16.10": [
-        "lib/test_decoding.so"
-      ],
-      "16.11": [
-        "lib/test_decoding.so"
-      ],
-      "16.2": [
-        "lib/test_decoding.so"
-      ],
-      "16.3": [
-        "lib/test_decoding.so"
-      ],
-      "16.4": [
-        "lib/test_decoding.so"
-      ],
-      "16.5": [
-        "lib/test_decoding.so"
-      ],
-      "16.6": [
-        "lib/test_decoding.so"
-      ],
-      "16.7": [
-        "lib/test_decoding.so"
-      ],
-      "16.8": [
-        "lib/test_decoding.so"
-      ],
-      "16.9": [
-        "lib/test_decoding.so"
-      ],
-      "17.0": [
-        "lib/test_decoding.so"
-      ],
-      "17.1": [
-        "lib/test_decoding.so"
-      ],
-      "17.2": [
-        "lib/test_decoding.so"
-      ],
-      "17.3": [
-        "lib/test_decoding.so"
-      ],
-      "17.4": [
-        "lib/test_decoding.so"
-      ],
-      "17.5": [
-        "lib/test_decoding.so"
-      ],
-      "17.6": [
-        "lib/test_decoding.so"
-      ],
-      "17.7": [
-        "lib/test_decoding.so"
-      ],
-      "18.0": [
-        "lib/test_decoding.so"
-      ],
-      "18.1": [
-        "lib/test_decoding.so"
-      ]
+      "postgres": {
+        "16.0": [
+          "lib/test_decoding.so"
+        ],
+        "16.1": [
+          "lib/test_decoding.so"
+        ],
+        "16.10": [
+          "lib/test_decoding.so"
+        ],
+        "16.11": [
+          "lib/test_decoding.so"
+        ],
+        "16.2": [
+          "lib/test_decoding.so"
+        ],
+        "16.3": [
+          "lib/test_decoding.so"
+        ],
+        "16.4": [
+          "lib/test_decoding.so"
+        ],
+        "16.5": [
+          "lib/test_decoding.so"
+        ],
+        "16.6": [
+          "lib/test_decoding.so"
+        ],
+        "16.7": [
+          "lib/test_decoding.so"
+        ],
+        "16.8": [
+          "lib/test_decoding.so"
+        ],
+        "16.9": [
+          "lib/test_decoding.so"
+        ],
+        "17.0": [
+          "lib/test_decoding.so"
+        ],
+        "17.1": [
+          "lib/test_decoding.so"
+        ],
+        "17.2": [
+          "lib/test_decoding.so"
+        ],
+        "17.3": [
+          "lib/test_decoding.so"
+        ],
+        "17.4": [
+          "lib/test_decoding.so"
+        ],
+        "17.5": [
+          "lib/test_decoding.so"
+        ],
+        "17.6": [
+          "lib/test_decoding.so"
+        ],
+        "17.7": [
+          "lib/test_decoding.so"
+        ],
+        "18.0": [
+          "lib/test_decoding.so"
+        ],
+        "18.1": [
+          "lib/test_decoding.so"
+        ]
+      }
     }
   },
   "version": 1,
-  "versions": [
-    "16.0",
-    "16.1",
-    "16.10",
-    "16.11",
-    "16.2",
-    "16.3",
-    "16.4",
-    "16.5",
-    "16.6",
-    "16.7",
-    "16.8",
-    "16.9",
-    "17.0",
-    "17.1",
-    "17.2",
-    "17.3",
-    "17.4",
-    "17.5",
-    "17.6",
-    "17.7",
-    "18.0",
-    "18.1"
-  ]
+  "versions": {
+    "postgres": [
+      "16.0",
+      "16.1",
+      "16.10",
+      "16.11",
+      "16.2",
+      "16.3",
+      "16.4",
+      "16.5",
+      "16.6",
+      "16.7",
+      "16.8",
+      "16.9",
+      "17.0",
+      "17.1",
+      "17.2",
+      "17.3",
+      "17.4",
+      "17.5",
+      "17.6",
+      "17.7",
+      "18.0",
+      "18.1"
+    ]
+  }
 }

@@ -2,117 +2,121 @@
   "kind": "contrib",
   "metadata": {
     "files": {
-      "16.0": [
-        "lib/adminpack.so",
-        "share/extension/adminpack--1.0--1.1.sql",
-        "share/extension/adminpack--1.0.sql",
-        "share/extension/adminpack--1.1--2.0.sql",
-        "share/extension/adminpack--2.0--2.1.sql",
-        "share/extension/adminpack.control"
-      ],
-      "16.1": [
-        "lib/adminpack.so",
-        "share/extension/adminpack--1.0--1.1.sql",
-        "share/extension/adminpack--1.0.sql",
-        "share/extension/adminpack--1.1--2.0.sql",
-        "share/extension/adminpack--2.0--2.1.sql",
-        "share/extension/adminpack.control"
-      ],
-      "16.10": [
-        "lib/adminpack.so",
-        "share/extension/adminpack--1.0--1.1.sql",
-        "share/extension/adminpack--1.0.sql",
-        "share/extension/adminpack--1.1--2.0.sql",
-        "share/extension/adminpack--2.0--2.1.sql",
-        "share/extension/adminpack.control"
-      ],
-      "16.11": [
-        "lib/adminpack.so",
-        "share/extension/adminpack--1.0--1.1.sql",
-        "share/extension/adminpack--1.0.sql",
-        "share/extension/adminpack--1.1--2.0.sql",
-        "share/extension/adminpack--2.0--2.1.sql",
-        "share/extension/adminpack.control"
-      ],
-      "16.2": [
-        "lib/adminpack.so",
-        "share/extension/adminpack--1.0--1.1.sql",
-        "share/extension/adminpack--1.0.sql",
-        "share/extension/adminpack--1.1--2.0.sql",
-        "share/extension/adminpack--2.0--2.1.sql",
-        "share/extension/adminpack.control"
-      ],
-      "16.3": [
-        "lib/adminpack.so",
-        "share/extension/adminpack--1.0--1.1.sql",
-        "share/extension/adminpack--1.0.sql",
-        "share/extension/adminpack--1.1--2.0.sql",
-        "share/extension/adminpack--2.0--2.1.sql",
-        "share/extension/adminpack.control"
-      ],
-      "16.4": [
-        "lib/adminpack.so",
-        "share/extension/adminpack--1.0--1.1.sql",
-        "share/extension/adminpack--1.0.sql",
-        "share/extension/adminpack--1.1--2.0.sql",
-        "share/extension/adminpack--2.0--2.1.sql",
-        "share/extension/adminpack.control"
-      ],
-      "16.5": [
-        "lib/adminpack.so",
-        "share/extension/adminpack--1.0--1.1.sql",
-        "share/extension/adminpack--1.0.sql",
-        "share/extension/adminpack--1.1--2.0.sql",
-        "share/extension/adminpack--2.0--2.1.sql",
-        "share/extension/adminpack.control"
-      ],
-      "16.6": [
-        "lib/adminpack.so",
-        "share/extension/adminpack--1.0--1.1.sql",
-        "share/extension/adminpack--1.0.sql",
-        "share/extension/adminpack--1.1--2.0.sql",
-        "share/extension/adminpack--2.0--2.1.sql",
-        "share/extension/adminpack.control"
-      ],
-      "16.7": [
-        "lib/adminpack.so",
-        "share/extension/adminpack--1.0--1.1.sql",
-        "share/extension/adminpack--1.0.sql",
-        "share/extension/adminpack--1.1--2.0.sql",
-        "share/extension/adminpack--2.0--2.1.sql",
-        "share/extension/adminpack.control"
-      ],
-      "16.8": [
-        "lib/adminpack.so",
-        "share/extension/adminpack--1.0--1.1.sql",
-        "share/extension/adminpack--1.0.sql",
-        "share/extension/adminpack--1.1--2.0.sql",
-        "share/extension/adminpack--2.0--2.1.sql",
-        "share/extension/adminpack.control"
-      ],
-      "16.9": [
-        "lib/adminpack.so",
-        "share/extension/adminpack--1.0--1.1.sql",
-        "share/extension/adminpack--1.0.sql",
-        "share/extension/adminpack--1.1--2.0.sql",
-        "share/extension/adminpack--2.0--2.1.sql",
-        "share/extension/adminpack.control"
-      ]
+      "postgres": {
+        "16.0": [
+          "lib/adminpack.so",
+          "share/extension/adminpack--1.0--1.1.sql",
+          "share/extension/adminpack--1.0.sql",
+          "share/extension/adminpack--1.1--2.0.sql",
+          "share/extension/adminpack--2.0--2.1.sql",
+          "share/extension/adminpack.control"
+        ],
+        "16.1": [
+          "lib/adminpack.so",
+          "share/extension/adminpack--1.0--1.1.sql",
+          "share/extension/adminpack--1.0.sql",
+          "share/extension/adminpack--1.1--2.0.sql",
+          "share/extension/adminpack--2.0--2.1.sql",
+          "share/extension/adminpack.control"
+        ],
+        "16.10": [
+          "lib/adminpack.so",
+          "share/extension/adminpack--1.0--1.1.sql",
+          "share/extension/adminpack--1.0.sql",
+          "share/extension/adminpack--1.1--2.0.sql",
+          "share/extension/adminpack--2.0--2.1.sql",
+          "share/extension/adminpack.control"
+        ],
+        "16.11": [
+          "lib/adminpack.so",
+          "share/extension/adminpack--1.0--1.1.sql",
+          "share/extension/adminpack--1.0.sql",
+          "share/extension/adminpack--1.1--2.0.sql",
+          "share/extension/adminpack--2.0--2.1.sql",
+          "share/extension/adminpack.control"
+        ],
+        "16.2": [
+          "lib/adminpack.so",
+          "share/extension/adminpack--1.0--1.1.sql",
+          "share/extension/adminpack--1.0.sql",
+          "share/extension/adminpack--1.1--2.0.sql",
+          "share/extension/adminpack--2.0--2.1.sql",
+          "share/extension/adminpack.control"
+        ],
+        "16.3": [
+          "lib/adminpack.so",
+          "share/extension/adminpack--1.0--1.1.sql",
+          "share/extension/adminpack--1.0.sql",
+          "share/extension/adminpack--1.1--2.0.sql",
+          "share/extension/adminpack--2.0--2.1.sql",
+          "share/extension/adminpack.control"
+        ],
+        "16.4": [
+          "lib/adminpack.so",
+          "share/extension/adminpack--1.0--1.1.sql",
+          "share/extension/adminpack--1.0.sql",
+          "share/extension/adminpack--1.1--2.0.sql",
+          "share/extension/adminpack--2.0--2.1.sql",
+          "share/extension/adminpack.control"
+        ],
+        "16.5": [
+          "lib/adminpack.so",
+          "share/extension/adminpack--1.0--1.1.sql",
+          "share/extension/adminpack--1.0.sql",
+          "share/extension/adminpack--1.1--2.0.sql",
+          "share/extension/adminpack--2.0--2.1.sql",
+          "share/extension/adminpack.control"
+        ],
+        "16.6": [
+          "lib/adminpack.so",
+          "share/extension/adminpack--1.0--1.1.sql",
+          "share/extension/adminpack--1.0.sql",
+          "share/extension/adminpack--1.1--2.0.sql",
+          "share/extension/adminpack--2.0--2.1.sql",
+          "share/extension/adminpack.control"
+        ],
+        "16.7": [
+          "lib/adminpack.so",
+          "share/extension/adminpack--1.0--1.1.sql",
+          "share/extension/adminpack--1.0.sql",
+          "share/extension/adminpack--1.1--2.0.sql",
+          "share/extension/adminpack--2.0--2.1.sql",
+          "share/extension/adminpack.control"
+        ],
+        "16.8": [
+          "lib/adminpack.so",
+          "share/extension/adminpack--1.0--1.1.sql",
+          "share/extension/adminpack--1.0.sql",
+          "share/extension/adminpack--1.1--2.0.sql",
+          "share/extension/adminpack--2.0--2.1.sql",
+          "share/extension/adminpack.control"
+        ],
+        "16.9": [
+          "lib/adminpack.so",
+          "share/extension/adminpack--1.0--1.1.sql",
+          "share/extension/adminpack--1.0.sql",
+          "share/extension/adminpack--1.1--2.0.sql",
+          "share/extension/adminpack--2.0--2.1.sql",
+          "share/extension/adminpack.control"
+        ]
+      }
     }
   },
   "version": 1,
-  "versions": [
-    "16.0",
-    "16.1",
-    "16.10",
-    "16.11",
-    "16.2",
-    "16.3",
-    "16.4",
-    "16.5",
-    "16.6",
-    "16.7",
-    "16.8",
-    "16.9"
-  ]
+  "versions": {
+    "postgres": [
+      "16.0",
+      "16.1",
+      "16.10",
+      "16.11",
+      "16.2",
+      "16.3",
+      "16.4",
+      "16.5",
+      "16.6",
+      "16.7",
+      "16.8",
+      "16.9"
+    ]
+  }
 }
