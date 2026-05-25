@@ -1,17 +1,20 @@
 """
-Generate maximally-idempotent introspect JSONs for the @pg hub.
+Generate maximally-idempotent introspect JSONs for a monogres flavor hub
+(`@pg`, `@ivory`, …); instantiated once per flavor in `//build/tools:BUILD.bazel`.
 
 Usage
 -----
 
     bazel run //build/tools:gen_pg_introspect_jsons
 
-The build target wires every `@pg//<v>/<os>:introspect` (manual) target as a
+The build target wires every `@<hub>//<v>/<os>:introspect` (manual) target as a
 data dependency, so `bazel run` builds the inputs as a prerequisite before
-executing this script. Outputs are written back to the source tree at
-`build/catalog/postgres/introspect/postgres~<v>~<os>.json` using the
-`BUILD_WORKSPACE_DIRECTORY` env var that Bazel sets when running via `bazel
-run` (see `build/tools/gen_index.bzl` for the same pattern).
+executing this script. Outputs are written back to the source tree under
+`build/catalog/<flavor>/introspect/`: the production introspect as
+`<flavor>~<v>~<os>.json`, and the test-enabled build variant
+(tap_tests/injection_points on) as `<flavor>~<v>~<os>+test.json`. The script
+uses the `BUILD_WORKSPACE_DIRECTORY` env var that Bazel sets when running via
+`bazel run` (see `build/tools/gen_index.bzl` for the same pattern).
 
 Why this script exists
 ----------------------
@@ -215,6 +218,7 @@ Tradeoffs:
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import os
@@ -273,16 +277,9 @@ SUBSTITUTIONS: list[tuple[re.Pattern[str], str]] = [
     # rules so their match wins when the prefix is present.
     (re.compile(r"/execroot/_main"), "<BAZEL-BUILD>"),
     # --- Bzlmod canonical repo names ---
-    # Per-version PG source repos (`download_archives` convention) come in
-    # two shapes:
-    #   - `<module>+pg_src-<v>`  (versioned repo name; version baked in)
-    #   - `<module>+pg_src`      (single repo, version is a subdirectory)
-    # The optional group covers both. Must run before <PG_HUB> since
-    # `+pg_src` also contains the `+pg` substring.
-    (re.compile(r'external/[^/"]+\+pg_src(?:-[^/"]+)?(?=[/"])'), "external/<PG_SRC>"),
-    # @pg hub itself (e.g. `+monoext+pg`, `monogres++monoext+pg`).
-    # The lookahead boundary keeps us from over-matching `@pg_ext` etc.
-    (re.compile(r'external/[^/"]+\+pg(?=[/"])'), "external/<PG_HUB>"),
+    # The source/hub repo-name normalization (`+<hub>_src` -> <PG_SRC>,
+    # `+<hub>` -> <PG_HUB>) is applied in `make_comparable`, parameterized by
+    # the hub repo name so it covers every flavor hub (`pg`, `ivory`, …).
     # --- Bazel exec-config / mnemonic digests ---
     # `__cfg<hash>` is Bazel's per-config marker; `-ST-<hash>` is the
     # mnemonic digest embedded in `bazel-out/<arch>-opt-exec-ST-<hash>/`.
@@ -478,16 +475,9 @@ _COPY_INTROSPECT_DIR_NAME = "copy_introspect"
 # segment (`.../<v>/<os>/test/introspect/tar.json`). Its build flips tap_tests
 # on (plus injection_points where the version supports it), so it is written
 # into the shared `introspect/` catalog under a `+test` filename variant
-# (`postgres~<v>~<os>+test.json`) beside the tap-disabled production sibling.
+# (`<flavor>~<v>~<os>+test.json`) beside the tap-disabled production sibling.
 _TEST_VARIANT_DIR_NAME = "test"
 _TEST_VARIANT_SUFFIX = "+test"
-
-# Where the cleaned JSONs end up, relative to BUILD_WORKSPACE_DIRECTORY.
-# Note: `BUILD_WORKSPACE_DIRECTORY` is the directory containing MODULE.bazel
-# — which in this repo is `build/`, not the worktree root. So the path
-# component below does NOT start with `build/`. From the worktree root the
-# final location is `build/catalog/postgres/introspect/`.
-_CATALOG_REL_PATH = ("catalog", "postgres", "introspect")
 
 
 # ---------------------------------------------------------------------------
@@ -672,7 +662,12 @@ def normalize_structural(content: str) -> str:
     return json.dumps(data, indent=4) + "\n"
 
 
-def make_comparable(content: str, pg_version: str) -> str:
+def make_comparable(
+    content: str,
+    pg_version: str,
+    hub_repo: str = "pg",
+    flavor: str = "postgres",
+) -> str:
     """Normalize all volatile tokens in a Meson introspect JSON.
 
     Args:
@@ -680,6 +675,10 @@ def make_comparable(content: str, pg_version: str) -> str:
         pg_version: PG version string (e.g. `"17.4"`) — used for the
             `<PG_VERSION>` substitution (literal string replace; only
             applied once we've cleaned the path-based tokens).
+        hub_repo: monogres hub repo name (`"pg"`, `"ivory"`, …) — drives the
+            bzlmod source/hub repo-name normalization.
+        flavor: catalog flavor (`"postgres"`, `"ivorysql"`, …) — drives the
+            `<PG_TARGET>` target-name normalization.
 
     Returns:
         The normalized JSON string. Idempotent: passing the result back
@@ -687,13 +686,28 @@ def make_comparable(content: str, pg_version: str) -> str:
     """
     for pattern, replacement in SUBSTITUTIONS:
         content = pattern.sub(replacement, content)
+    # Bzlmod canonical repo names, parameterized by the hub repo name. The
+    # per-version source repos come in two shapes (`+<hub>_src-<v>` and
+    # `+<hub>_src`); `<PG_SRC>` must run before `<PG_HUB>` because `+<hub>_src`
+    # also contains the `+<hub>` substring. They match disjoint path segments
+    # from the rest, so applying them here yields the same output as inlining.
+    content = re.sub(
+        rf'external/[^/"]+\+{re.escape(hub_repo)}_src(?:-[^/"]+)?(?=[/"])',
+        "external/<PG_SRC>",
+        content,
+    )
+    content = re.sub(
+        rf'external/[^/"]+\+{re.escape(hub_repo)}(?=[/"])',
+        "external/<PG_HUB>",
+        content,
+    )
     # `pg_version` is a literal (e.g. "17.4") known at call time. Doing it
     # as a `str.replace` is faster than a regex and avoids quoting issues.
     content = content.replace(pg_version, "<PG_VERSION>")
     # `<PG_TARGET>` depends on `<PG_VERSION>` being substituted first, so
     # do it now rather than via SUBSTITUTIONS.
     content = re.sub(
-        r"postgres~<PG_VERSION>~[a-z]+",
+        rf"{re.escape(flavor)}~<PG_VERSION>~[a-z]+",
         "<PG_TARGET>",
         content,
     )
@@ -802,11 +816,16 @@ def _split_version_and_option_set(tar_json: Path) -> tuple[str, str, str]:
     return version_dir.name, option_set_dir.name, variant
 
 
-def _process_one(tar_json: Path, catalog_dir: Path) -> tuple[str, str | None]:
+def _process_one(
+    tar_json: Path,
+    catalog_dir: Path,
+    hub_repo: str,
+    flavor: str,
+) -> tuple[str, str | None]:
     """Worker: read one tar.json, normalize, write to `<catalog>/<…>.json`.
 
     Both variants share the `introspect/` catalog dir; the test-enabled
-    introspect takes a `+test` filename suffix (`postgres~<v>~<os>+test.json`)
+    introspect takes a `+test` filename suffix (`<flavor>~<v>~<os>+test.json`)
     so it sits beside its production sibling.
 
     Top-level by necessity — `ProcessPoolExecutor` workers pickle the
@@ -818,11 +837,13 @@ def _process_one(tar_json: Path, catalog_dir: Path) -> tuple[str, str | None]:
     """
     pg_version, option_set, variant = _split_version_and_option_set(tar_json)
     suffix = _TEST_VARIANT_SUFFIX if variant == "test" else ""
-    out = catalog_dir / f"postgres~{pg_version}~{option_set}{suffix}.json"
+    out = catalog_dir / f"{flavor}~{pg_version}~{option_set}{suffix}.json"
     try:
         cleaned = make_comparable(
             tar_json.read_text(encoding="utf-8"),
             pg_version,
+            hub_repo,
+            flavor,
         )
         out.write_text(cleaned, encoding="utf-8")
         # Mark read-only to discourage hand-edits; the legacy script
@@ -838,15 +859,32 @@ def main() -> int:
     # already prefixes every line; we don't need a redundant level tag.
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
+    parser = argparse.ArgumentParser(description="Normalize introspect JSONs.")
+    parser.add_argument(
+        "--hub",
+        default="pg",
+        help="monogres hub repo name (e.g. 'pg', 'ivory').",
+    )
+    parser.add_argument(
+        "--flavor",
+        default="postgres",
+        help="catalog flavor (e.g. 'postgres', 'ivorysql').",
+    )
+    args = parser.parse_args()
+    hub_repo = args.hub
+    flavor = args.flavor
+
     workspace_env = os.environ.get("BUILD_WORKSPACE_DIRECTORY")
     if not workspace_env:
         raise SystemExit(_ERR_NO_WORKSPACE)
-    catalog_dir = Path(workspace_env).joinpath(*_CATALOG_REL_PATH)
+    # `BUILD_WORKSPACE_DIRECTORY` is the directory containing MODULE.bazel,
+    # which in this repo is `build/`; from the worktree root the final
+    # location is `build/catalog/<flavor>/introspect/`.
+    catalog_dir = Path(workspace_env).joinpath("catalog", flavor, "introspect")
     catalog_dir.mkdir(parents=True, exist_ok=True)
 
-    # Wipe stale outputs first so renames / drops are picked up cleanly,
-    # matching the legacy shell `rm -rf "${json_dir}"/postgres~*.json`.
-    for stale in catalog_dir.glob("postgres~*.json"):
+    # Wipe stale outputs first so renames / drops are picked up cleanly.
+    for stale in catalog_dir.glob(f"{flavor}~*.json"):
         stale.chmod(0o644)  # ensure removal succeeds (we set 0444 below)
         stale.unlink()
 
@@ -867,6 +905,8 @@ def main() -> int:
             _process_one,
             tar_jsons,
             repeat(catalog_dir),
+            repeat(hub_repo),
+            repeat(flavor),
         ):
             if err is None:
                 successes.append(out_path)
