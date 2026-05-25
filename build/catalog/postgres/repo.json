@@ -111,6 +111,34 @@
         "compatible": "<18.0"
       }
     },
+    "test_overrides": {
+      "unaccent": {
+        "encoding": "UTF8"
+      },
+      "pgrowlocks": {
+        "load_extension": ["pgrowlocks"]
+      },
+      "tcn": {
+        "load_extension": ["tcn"]
+      },
+      "pltcl": {
+        "load_extension": ["pltcl"]
+      },
+      "hstore_plpython": {
+        "load_extension": ["hstore"]
+      },
+      "ltree_plpython": {
+        "load_extension": ["ltree"]
+      },
+      "postgres_fdw": {
+        "isolation": {
+          "load_extension": ["postgres_fdw"]
+        }
+      },
+      "sepgsql": {
+        "exclude": "SELinux shell harness; impractical in the hermetic sandbox"
+      }
+    },
     "introspect": {
       "18.1": {
         "barebones": "//catalog/postgres/introspect:postgres~18.1~barebones.json",

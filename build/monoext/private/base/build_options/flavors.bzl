@@ -19,6 +19,7 @@ FLAVORS = {
         OPTION_SETS = _pg_OPTION_SETS,
         build_options = _pg_build_options,
         pg_base_version = _pg_pg_base_version,
+        test = True,
     ),
 }
 
