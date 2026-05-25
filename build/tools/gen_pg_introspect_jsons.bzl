@@ -2,7 +2,10 @@
 
 The associated Python tool (`gen_pg_introspect_jsons.py`) walks its runfiles for
 every `@pg//<v>/<os>:introspect` output and writes normalized copies into the
-source tree under `build/catalog/postgres/introspect/`.
+source tree under `build/catalog/postgres/introspect/`. It also reads each
+test-enabled build variant introspect (`@pg//<v>/<os>/test:introspect`,
+tap_tests on) and writes it beside the production sibling as
+`postgres~<v>~<os>+test.json`, the introspect that drives the test lane.
 
 We enumerate the `(version, option_set)` matrix at BUILD-load time from
 `@pg//:all.bzl` (already used by `//build/examples/private/base:BUILD.bazel`),
@@ -24,6 +27,14 @@ def gen_pg_introspect_jsons(name):
         main = "gen_pg_introspect_jsons.py",
         data = [
             "@pg//{v}/{os}:introspect".format(v = v, os = os)
+            for v in VERSIONS
+            for os in OPTION_SETS
+        ] + [
+            # The test-enabled build variant's introspect (tap_tests on, plus
+            # injection_points where the version supports it). The tool writes
+            # it into the `+test` introspect variant the test lane reads; the
+            # production introspect stays tap-disabled.
+            "@pg//{v}/{os}/test:introspect".format(v = v, os = os)
             for v in VERSIONS
             for os in OPTION_SETS
         ],

@@ -474,6 +474,13 @@ _INTROSPECT_JSON_NAME = "tar.json"
 _INTROSPECT_DIR_NAME = "introspect"
 # The legacy script excluded `copy_introspect` rules; keep that behavior.
 _COPY_INTROSPECT_DIR_NAME = "copy_introspect"
+# The test-enabled build variant nests its introspect under an extra `test/`
+# segment (`.../<v>/<os>/test/introspect/tar.json`). Its build flips tap_tests
+# on (plus injection_points where the version supports it), so it is written
+# into the shared `introspect/` catalog under a `+test` filename variant
+# (`postgres~<v>~<os>+test.json`) beside the tap-disabled production sibling.
+_TEST_VARIANT_DIR_NAME = "test"
+_TEST_VARIANT_SUFFIX = "+test"
 
 # Where the cleaned JSONs end up, relative to BUILD_WORKSPACE_DIRECTORY.
 # Note: `BUILD_WORKSPACE_DIRECTORY` is the directory containing MODULE.bazel
@@ -777,20 +784,30 @@ def _iter_runfiles_introspect_jsons() -> list[Path]:
     return results
 
 
-def _split_version_and_option_set(tar_json: Path) -> tuple[str, str]:
-    """Extract `(pg_version, option_set)` from a `tar.json` path.
+def _split_version_and_option_set(tar_json: Path) -> tuple[str, str, str]:
+    """Extract `(pg_version, option_set, variant)` from a `tar.json` path.
 
-    Layout: `.../<v>/<os>/introspect/tar.json`. Walk two parents up from
-    the file to get `<os>`, then one more to get `<v>`.
+    Production layout: `.../<v>/<os>/introspect/tar.json`. The test-enabled
+    build variant nests its introspect under an extra `test/` segment
+    (`.../<v>/<os>/test/introspect/tar.json`), so `variant` is `"test"` there
+    and `"prod"` otherwise; the caller encodes it as a `+test` filename suffix.
     """
-    introspect_dir = tar_json.parent  # .../<v>/<os>/introspect/
-    option_set_dir = introspect_dir.parent  # .../<v>/<os>/
+    introspect_dir = tar_json.parent  # .../<v>/<os>/introspect/ (prod)
+    option_set_dir = introspect_dir.parent  # .../<v>/<os>/ or .../<v>/<os>/test/
+    variant = "prod"
+    if option_set_dir.name == _TEST_VARIANT_DIR_NAME:
+        variant = "test"
+        option_set_dir = option_set_dir.parent  # .../<v>/<os>/
     version_dir = option_set_dir.parent  # .../<v>/
-    return version_dir.name, option_set_dir.name
+    return version_dir.name, option_set_dir.name, variant
 
 
 def _process_one(tar_json: Path, catalog_dir: Path) -> tuple[str, str | None]:
     """Worker: read one tar.json, normalize, write to `<catalog>/<…>.json`.
+
+    Both variants share the `introspect/` catalog dir; the test-enabled
+    introspect takes a `+test` filename suffix (`postgres~<v>~<os>+test.json`)
+    so it sits beside its production sibling.
 
     Top-level by necessity — `ProcessPoolExecutor` workers pickle the
     function by qualified name.
@@ -799,8 +816,9 @@ def _process_one(tar_json: Path, catalog_dir: Path) -> tuple[str, str | None]:
     raised) so a failure in one file doesn't tear down the pool, and so
     the driver can surface every failure in a single end-of-run report.
     """
-    pg_version, option_set = _split_version_and_option_set(tar_json)
-    out = catalog_dir / f"postgres~{pg_version}~{option_set}.json"
+    pg_version, option_set, variant = _split_version_and_option_set(tar_json)
+    suffix = _TEST_VARIANT_SUFFIX if variant == "test" else ""
+    out = catalog_dir / f"postgres~{pg_version}~{option_set}{suffix}.json"
     try:
         cleaned = make_comparable(
             tar_json.read_text(encoding="utf-8"),
