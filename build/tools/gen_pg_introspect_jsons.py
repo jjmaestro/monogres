@@ -478,6 +478,113 @@ _COPY_INTROSPECT_DIR_NAME = "copy_introspect"
 # (`<flavor>~<v>~<os>+test.json`) beside the tap-disabled production sibling.
 _TEST_VARIANT_DIR_NAME = "test"
 _TEST_VARIANT_SUFFIX = "+test"
+# Make-built versions synthesize their introspect JSON as a genrule output
+# named `tar.introspect.json` directly in the option-set package (there is no
+# separate `introspect/` rule directory on the make path). Layout:
+# .../external/+monoext+pg/<v>/<os>/tar.introspect.json
+_MAKE_INTROSPECT_JSON_NAME = "tar.introspect.json"
+
+# ---------------------------------------------------------------------------
+# `.control requires` enrichment
+# ---------------------------------------------------------------------------
+#
+# PostgreSQL ships each contrib extension with a `<name>.control` file at
+# `contrib/<name>/<name>.control` (sometimes also `<name>3u.control` etc.).
+# The `requires = '...'` directive declares install-time PG-extension deps
+# (e.g. `earthdistance` requires `cube`; `hstore_plperl` requires
+# `hstore,plperl`). Neither Meson's introspect output nor the make-side synth
+# captures it, so this generator walks each version's source tree (handed in
+# via `--src <v>=<runfiles path>`) and adds a top-level `contrib_requires`
+# key to every generated JSON. Layer 1 (`pg_introspect_paths_repo`) surfaces
+# it per contrib as an optional `requires` key, which `gen_contrib`
+# propagates into the per-contrib catalog `repo.json`.
+
+# Match `requires = '...'` (single-quoted) or `requires = "..."`
+# (double-quoted) or `requires = bareword`. PG's contrib `.control` files are
+# mostly single-quoted, but all forms are accepted (the GUC scanner in core
+# does too). Multi-line not needed: `requires` is always one comma-separated
+# string in upstream contribs.
+_REQUIRES_RE = re.compile(
+    r"""
+    ^\s*requires\s*=\s*       # the key
+    (?:
+        '(?P<sq>[^']*)'       # single-quoted
+        | "(?P<dq>[^"]*)"     # double-quoted
+        | (?P<bare>\S+)       # bareword (no spaces, no commas)
+    )
+    \s*(?:\#.*)?$             # optional trailing # comment
+    """,
+    re.VERBOSE | re.MULTILINE,
+)
+
+
+def parse_requires(content: str) -> list[str]:
+    """Parse the `requires` directive from a `.control` file's contents.
+
+    Returns a sorted, deduplicated list of extension names. Empty list if
+    the file has no `requires` line. If multiple `requires` lines exist
+    (none of the upstream contribs do this), the last one wins (matches
+    PG's own .control parser behavior).
+    """
+    matches = list(_REQUIRES_RE.finditer(content))
+    if not matches:
+        return []
+    last = matches[-1]
+    raw = last.group("sq") or last.group("dq") or last.group("bare") or ""
+    if not raw.strip():
+        return []
+    parts = [p.strip() for p in raw.split(",")]
+    return sorted({p for p in parts if p})
+
+
+def walk_contrib_controls(src_dir: Path) -> dict[str, list[str]]:
+    """Walk `<src_dir>/contrib/*/<*.control>` and return a contrib_requires dict.
+
+    Keys are contrib subdir names (e.g. `earthdistance`, `hstore_plperl`).
+    Values are sorted lists of `requires` extensions. Contribs with no
+    `requires` are omitted (skip-on-empty, matching the per-contrib
+    INTROSPECTION dict convention in `introspect.bzl`).
+
+    When a contrib ships multiple `.control` files (e.g. `hstore_plpython`
+    ships `hstore_plpython3u.control` only; older PGs shipped per-version
+    control files), all are parsed and their `requires` unioned.
+    """
+    contrib_dir = src_dir / "contrib"
+    if not contrib_dir.is_dir():
+        return {}
+
+    out: dict[str, list[str]] = {}
+    for sub in sorted(contrib_dir.iterdir()):
+        if not sub.is_dir():
+            continue
+        names: set[str] = set()
+        for control in sorted(sub.glob("*.control")):
+            try:
+                content = control.read_text(errors="replace")
+            except OSError:
+                continue
+            names.update(parse_requires(content))
+        if names:
+            out[sub.name] = sorted(names)
+    return out
+
+
+def enrich_with_requires(cleaned: str, src_dir: Path | None) -> str:
+    """Add a top-level `contrib_requires` key to a normalized JSON string.
+
+    Runs AFTER `make_comparable` so the re-emit preserves the normalized
+    content; `json.dumps(indent=4)` matches the formatting contract
+    documented on `normalize_structural`. Skip-on-empty: no source dir, no
+    contrib dir, or no contrib with `requires` leaves the JSON unchanged.
+    """
+    if src_dir is None or not src_dir.is_dir():
+        return cleaned
+    contrib_requires = walk_contrib_controls(src_dir)
+    if not contrib_requires:
+        return cleaned
+    data = json.loads(cleaned)
+    data["contrib_requires"] = contrib_requires
+    return json.dumps(data, indent=4) + "\n"
 
 
 # ---------------------------------------------------------------------------
@@ -795,24 +902,37 @@ def _iter_runfiles_introspect_jsons() -> list[Path]:
         if _COPY_INTROSPECT_DIR_NAME in parts:
             continue
         results.append(candidate)
+
+    # Make-built versions: `tar.introspect.json` sits directly in the
+    # option-set package (no `introspect/` rule dir to filter on).
+    for candidate in runfiles_root.rglob(_MAKE_INTROSPECT_JSON_NAME):
+        if _COPY_INTROSPECT_DIR_NAME in candidate.parts:
+            continue
+        results.append(candidate)
     return results
 
 
 def _split_version_and_option_set(tar_json: Path) -> tuple[str, str, str]:
-    """Extract `(pg_version, option_set, variant)` from a `tar.json` path.
+    """Extract `(pg_version, option_set, variant)` from an introspect JSON path.
 
-    Production layout: `.../<v>/<os>/introspect/tar.json`. The test-enabled
-    build variant nests its introspect under an extra `test/` segment
-    (`.../<v>/<os>/test/introspect/tar.json`), so `variant` is `"test"` there
-    and `"prod"` otherwise; the caller encodes it as a `+test` filename suffix.
+    Meson layout: `.../<v>/<os>/introspect/tar.json` (walk past the
+    `introspect/` rule dir). Make layout: `.../<v>/<os>/tar.introspect.json`
+    (the JSON sits directly in the option-set package).
+
+    The test-enabled build variant nests its introspect under an extra `test/`
+    segment (`.../<v>/<os>/test/introspect/tar.json` for meson,
+    `.../<v>/<os>/test/tar.introspect.json` for make), so `variant` is `"test"`
+    there and `"prod"` otherwise; the caller encodes it as a `+test` filename
+    suffix.
     """
-    introspect_dir = tar_json.parent  # .../<v>/<os>/introspect/ (prod)
-    option_set_dir = introspect_dir.parent  # .../<v>/<os>/ or .../<v>/<os>/test/
+    option_set_dir = tar_json.parent
+    if option_set_dir.name == _INTROSPECT_DIR_NAME:
+        option_set_dir = option_set_dir.parent
     variant = "prod"
     if option_set_dir.name == _TEST_VARIANT_DIR_NAME:
         variant = "test"
-        option_set_dir = option_set_dir.parent  # .../<v>/<os>/
-    version_dir = option_set_dir.parent  # .../<v>/
+        option_set_dir = option_set_dir.parent
+    version_dir = option_set_dir.parent
     return version_dir.name, option_set_dir.name, variant
 
 
@@ -821,8 +941,9 @@ def _process_one(
     catalog_dir: Path,
     hub_repo: str,
     flavor: str,
+    src_dirs: dict[str, str],
 ) -> tuple[str, str | None]:
-    """Worker: read one tar.json, normalize, write to `<catalog>/<…>.json`.
+    """Worker: read one tar.json, normalize + enrich, write to `<catalog>/<…>.json`.
 
     Both variants share the `introspect/` catalog dir; the test-enabled
     introspect takes a `+test` filename suffix (`<flavor>~<v>~<os>+test.json`)
@@ -838,6 +959,8 @@ def _process_one(
     pg_version, option_set, variant = _split_version_and_option_set(tar_json)
     suffix = _TEST_VARIANT_SUFFIX if variant == "test" else ""
     out = catalog_dir / f"{flavor}~{pg_version}~{option_set}{suffix}.json"
+    src_dir_str = src_dirs.get(pg_version)
+    src_dir = Path(src_dir_str) if src_dir_str else None
     try:
         cleaned = make_comparable(
             tar_json.read_text(encoding="utf-8"),
@@ -845,6 +968,7 @@ def _process_one(
             hub_repo,
             flavor,
         )
+        cleaned = enrich_with_requires(cleaned, src_dir)
         out.write_text(cleaned, encoding="utf-8")
         # Mark read-only to discourage hand-edits; the legacy script
         # did the same.
@@ -852,6 +976,23 @@ def _process_one(
     except Exception:  # noqa: BLE001 — broad catch is intentional here
         return (str(out), traceback.format_exc())
     return (str(out), None)
+
+
+def _parse_src_args(src_entries: list[str]) -> dict[str, str]:
+    """Resolve `--src VERSION=RUNFILES_PATH` entries to absolute source dirs.
+
+    Raises:
+        SystemExit: when an entry is not shaped `VERSION=RUNFILES_PATH`.
+    """
+    runfiles_root = _find_runfiles_root()
+    src_dirs: dict[str, str] = {}
+    for entry in src_entries:
+        version, _, rel_path = entry.partition("=")
+        if not rel_path:
+            msg = f"--src expects VERSION=RUNFILES_PATH, got {entry!r}"
+            raise SystemExit(msg)
+        src_dirs[version] = str(runfiles_root / rel_path)
+    return src_dirs
 
 
 def main() -> int:
@@ -870,9 +1011,21 @@ def main() -> int:
         default="postgres",
         help="catalog flavor (e.g. 'postgres', 'ivorysql').",
     )
+    parser.add_argument(
+        "--src",
+        action="append",
+        default=[],
+        metavar="VERSION=RUNFILES_PATH",
+        help=(
+            "Per-version source tree (runfiles-relative path of the"
+            " version's :dir alias), used to bake `.control requires` into"
+            " the generated JSONs. Repeatable."
+        ),
+    )
     args = parser.parse_args()
     hub_repo = args.hub
     flavor = args.flavor
+    src_dirs = _parse_src_args(args.src)
 
     workspace_env = os.environ.get("BUILD_WORKSPACE_DIRECTORY")
     if not workspace_env:
@@ -907,6 +1060,7 @@ def main() -> int:
             repeat(catalog_dir),
             repeat(hub_repo),
             repeat(flavor),
+            repeat(src_dirs),
         ):
             if err is None:
                 successes.append(out_path)

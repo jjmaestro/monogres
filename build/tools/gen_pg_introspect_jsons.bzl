@@ -42,11 +42,22 @@ def gen_pg_introspect_jsons(
     """
     if test_versions == None:
         test_versions = versions
+
+    # `--src <v>=<runfiles path>` hands the tool each version's source tree (the
+    # per-version `:dir` alias), used to walk `contrib/*/<*.control>` and bake
+    # per-contrib `requires` into the generated JSONs.
+    src_args = []
+    for v in versions:
+        src_args.extend([
+            "--src",
+            "{v}=$(rlocationpath @{hub}//{v}:dir)".format(hub = hub, v = v),
+        ])
+
     py_binary(
         name = name,
         srcs = ["gen_pg_introspect_jsons.py"],
         main = "gen_pg_introspect_jsons.py",
-        args = ["--hub", hub, "--flavor", flavor],
+        args = ["--hub", hub, "--flavor", flavor] + src_args,
         data = [
             "@{hub}//{v}/{os}:introspect".format(hub = hub, v = v, os = os)
             for v in versions
@@ -59,6 +70,9 @@ def gen_pg_introspect_jsons(
             "@{hub}//{v}/{os}/test:introspect".format(hub = hub, v = v, os = os)
             for v in test_versions
             for os in option_sets
+        ] + [
+            "@{hub}//{v}:dir".format(hub = hub, v = v)
+            for v in versions
         ],
         tags = ["manual"],
     )
