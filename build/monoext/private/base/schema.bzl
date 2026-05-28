@@ -106,6 +106,7 @@ def _base_target_init(
         option_set,
         source,
         version,
+        build_system = "meson",
         pg_base_version = None,
         test_build_options = {}):
     return struct(
@@ -118,6 +119,7 @@ def _base_target_init(
         option_set = option_set,
         source = source,
         version = version,
+        build_system = build_system,
         pg_base_version = pg_base_version or version,
     )
 
@@ -128,6 +130,7 @@ def _base_target_new(
         auto_features,
         build_options,
         version_deps,
+        build_system = "meson",
         pg_base_version = None,
         test_build_options = {}):
     """Constructs a `BaseTarget`.
@@ -143,6 +146,10 @@ def _base_target_new(
             `"disabled"`).
         build_options: Dict of Meson build options.
         version_deps: `VersionDeps` for this version, or `None`.
+        build_system: `"meson"` or `"make"` — selects the per-(version,
+            option_set) BUILD-file template (Meson `pg_build` vs. autoconf
+            `pg_build_make`). Sourced from
+            `FLAVORS[<flavor>].build_system(version)`.
         pg_base_version: Upstream PostgreSQL major.minor this flavor version is
             built on (for the `postgres` flavor, the version itself). Sourced
             from `FLAVORS[<flavor>].pg_base_version(version)`; defaults to
@@ -172,6 +179,7 @@ def _base_target_new(
             version = version,
         ),
         version = version,
+        build_system = build_system,
         pg_base_version = pg_base_version,
     )
 
@@ -187,6 +195,7 @@ def _base_target_from_dict(d):
         option_set = d["option_set"],
         source = _base_source_from_dict(d["source"]),
         version = d["version"],
+        build_system = d.get("build_system", "meson"),
         pg_base_version = d.get("pg_base_version", d["version"]),
     )
 

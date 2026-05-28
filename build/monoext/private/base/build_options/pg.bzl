@@ -11,6 +11,7 @@ For the full list of available options, see [PostgreSQL Features] and
 [`meson_options.txt`]: https://github.com/postgres/postgres/blob/master/meson_options.txt
 """
 
+load("//monoext/private/base:compat.bzl", "is_compatible_with")
 load(":helpers.bzl", _Helpers = "helpers")
 
 # NOTE:
@@ -145,6 +146,15 @@ def build_options(
     options["prefix_distro"] = "%s/%s" % (prefix_distro, version)
 
     return options, auto_features
+
+def build_system(version):
+    """Per-version build-system selector for the `postgres` flavor.
+
+    PG <= 15.x predates the Meson build (introduced in PG 16) and is only
+    buildable via autoconf+make. Route those versions through `pg_build_make`;
+    everything else stays on Meson `pg_build`.
+    """
+    return "make" if is_compatible_with(version, "<16.0") else "meson"
 
 def pg_base_version(version):
     """The upstream PostgreSQL major.minor a flavor is built on.

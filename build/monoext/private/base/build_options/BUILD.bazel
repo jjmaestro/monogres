@@ -2,10 +2,12 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 
 package(default_visibility = [
     "//monoext/private:__pkg__",
+    "//monoext/private/base:__pkg__",
     "//tests/monoext:__subpackages__",
 ])
 
 exports_files([
+    "configure_args.bzl",
     "flavors.bzl",
     "helpers.bzl",
     "pg.bzl",
@@ -24,7 +26,13 @@ bzl_library(
     srcs = ["pg.bzl"],
     deps = [
         ":helpers",
+        "//monoext/private/base:compat",
     ],
+)
+
+bzl_library(
+    name = "configure_args",
+    srcs = ["configure_args.bzl"],
 )
 
 bzl_library(

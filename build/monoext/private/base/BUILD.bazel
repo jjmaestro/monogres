@@ -1,8 +1,8 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 
-# pg_build.bzl + toolchain.bzl are loaded from generated `@pg//...` BUILD files,
-# so their files must be publicly visible. The other .bzl files here are
-# internal to monoext.
+# pg_build.bzl, pg_build_make.bzl + toolchain.bzl are loaded from generated
+# `@pg//...` BUILD files, so their files must be publicly visible. The other
+# .bzl files here are internal to monoext.
 package(default_visibility = [
     "//monoext/private:__pkg__",
     "//monoext/private/base/build_options:__pkg__",
@@ -14,6 +14,7 @@ exports_files(
         "Config_overrides.pm",
         "exec_sysroot_setup.sh",
         "pg_build.bzl",
+        "pg_build_make.bzl",
         "sysroot_lib.sh",
         "sysroot_setup.sh",
         "toolchain.bzl",
@@ -53,5 +54,15 @@ bzl_library(
         ":toolchain",
         "@protobuf//bazel:cc_proto_library_bzl",
         "@rules_foreign_cc//foreign_cc:meson",
+    ],
+)
+
+bzl_library(
+    name = "pg_build_make",
+    srcs = ["pg_build_make.bzl"],
+    deps = [
+        ":toolchain",
+        "//monoext/private/base/build_options:configure_args",
+        "@bazel_lib//lib:copy_directory",
     ],
 )

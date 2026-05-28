@@ -167,6 +167,11 @@ def _build_entries(base_data, versions_deps, hub_name):
     for version in sorted(base_data.versions):
         vd = versions_deps.get(version) or _PkgsSchema.VersionDeps.new()
 
+        # Per-version build system selector. The `postgres` flavor splits per
+        # version (PG <= 15.x → make, PG 16.0+ → meson); other flavors return a
+        # constant.
+        build_system = flavor_mod.build_system(version)
+
         # Upstream PostgreSQL base for this flavor version (postgres: the
         # version itself; forks: the PG release they track). Lets the build
         # wrapper gate PG-version-specific tooling on the real PG version, not
@@ -209,6 +214,7 @@ def _build_entries(base_data, versions_deps, hub_name):
                 build_options = options,
                 test_build_options = test_build_options,
                 version_deps = vd,
+                build_system = build_system,
                 pg_base_version = pg_base_version,
             ))
 

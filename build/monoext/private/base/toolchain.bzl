@@ -18,6 +18,14 @@ def _pg_get_name(path, _):
     return path.split("/bin/")[-1].upper()
 
 def _pg_other_template_vars(context, _):
+    # Make-built PG targets (`pg_build_make`) expose no `<target>/bin/*` paths
+    # in their DefaultInfo (it carries the install tar + build log), so no PG_*
+    # variables map and there is no PG_CONFIG to derive PG_INSTALL_DIR from.
+    # Return no extra vars instead of failing analysis: consumers that expand
+    # `$(PG_CONFIG)` against such a toolchain target then fail at THEIR site
+    # with a clear "PG_CONFIG not defined" message.
+    if "PG_CONFIG" not in context:
+        return {}
     return {
         "PG_INSTALL_DIR": context["PG_CONFIG"].split("/bin/pg_config")[0],
     }

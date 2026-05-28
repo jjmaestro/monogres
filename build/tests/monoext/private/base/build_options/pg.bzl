@@ -12,12 +12,19 @@ Covers:
 - `_ENABLED_UNLESS_EXPLICITLY_DISABLED` options (spinlocks, atomics) get
   applied when `all` is absent (i.e. not "full")
 - `build_options_metadata` version-gates can disable an option
+- `build_system` routes PG < 16 to make and PG >= 16 to meson
 """
 
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
 
 # buildifier: disable=bzl-visibility
-load("//monoext/private/base/build_options:pg.bzl", "DEFAULT_OPTION_SET", "OPTION_SETS", "build_options")
+load(
+    "//monoext/private/base/build_options:pg.bzl",
+    "DEFAULT_OPTION_SET",
+    "OPTION_SETS",
+    "build_options",
+    "build_system",
+)
 load("//tests:suite.bzl", _test_suite = "test_suite")
 
 _EMPTY_METADATA = {}
@@ -197,10 +204,27 @@ prefix_distro_per_version_test = unittest.make(
     _prefix_distro_per_version_test_impl,
 )
 
+# --- build_system version split ---------------------------------------------
+
+def _build_system_test_impl(ctx):
+    """PG < 16 routes to make (no Meson upstream); PG >= 16 stays on Meson."""
+    env = unittest.begin(ctx)
+
+    for version in ("15.0", "15.8", "14.5"):
+        asserts.equals(env, "make", build_system(version))
+
+    for version in ("16.0", "16.11", "17.7", "18.1"):
+        asserts.equals(env, "meson", build_system(version))
+
+    return unittest.end(env)
+
+build_system_test = unittest.make(_build_system_test_impl)
+
 TEST_SUITE_NAME = "build_options"
 
 TEST_SUITE_TESTS = dict(
     barebones_set = barebones_set_test,
+    build_system = build_system_test,
     full_set_auto_features_enabled = full_set_auto_features_enabled_test,
     full_set_contrib_true = full_set_contrib_true_test,
     minimal_set = minimal_set_test,
