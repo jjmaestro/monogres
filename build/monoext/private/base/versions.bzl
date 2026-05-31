@@ -105,7 +105,7 @@ def _option_set_build(
             _pg_build_make(
                 name = "tar",
                 pg_src = f("@{src}//{v}:dir"),
-                build_options = target.build_options,
+                build_options = bopts,
                 sysroot_tar = target.deps.buildtime.sysroot_tar,
                 exec_sysroot_tar = target.deps.buildtime.exec_sysroot_tar,
             ),
@@ -113,6 +113,10 @@ def _option_set_build(
         ]
         if not is_test:
             parts.append(Star.alias(name = "tar.dev", actual = ":tar"))
+            parts.append(Star.alias(
+                name = "tar.test",
+                actual = "//%s/%s/test:tar" % (version, option_set),
+            ))
         return Star.file(header = _HEADER, *parts)
 
     # Meson-based path. The build args are shared between the production and
