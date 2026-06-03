@@ -23,6 +23,16 @@ def template_variable_info_rule(is_mapped, get_name, other_template_vars = None)
     def template_variable_info_impl(ctx):
         target = ctx.attr.target
 
+        # Fast path: if the target already exposes a TemplateVariableInfo (e.g.
+        # `pg_build_make`'s `_install_tree` rule, which provides one directly
+        # because its install root is a single tree artifact, not individual
+        # File outputs that `is_mapped` could walk), forward it unchanged. The
+        # make path produces the same variable names as the `is_mapped` /
+        # `get_name` scan would on the Meson side, just sourced from the rule
+        # itself rather than reverse-engineered from filenames.
+        if platform_common.TemplateVariableInfo in target:
+            return [target[platform_common.TemplateVariableInfo]]
+
         files = target[DefaultInfo].files.to_list()
 
         if not files:

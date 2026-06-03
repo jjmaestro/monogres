@@ -104,6 +104,117 @@ _SYSROOT_CLANG_WRAPPER = "@monogres//toolchains/libc_sysroot:active_clang_wrappe
 _PYTHON_BIN = "@python_3_11//:python3"
 _PYTHON_FILES = "@python_3_11//:files"
 
+# ---------------------------------------------------------------------------
+# install_tree rule: extracts pg_build_make's tar output into a tree artifact
+# that downstream consumers (`//utils:declare_outputs.bzl`) read via
+# `OutputGroupInfo.gen_dir`. Mirrors the shape `rules_foreign_cc.meson` provides
+# for its `:tar` target so the same contrib / extension-packaging code path
+# works regardless of build system.
+# ---------------------------------------------------------------------------
+
+# Strip-components count for tar extraction. `pg_build_make`'s tar entries are
+# shaped `./<distro>/<version>/<...>` (autoconf's `--prefix=/<distro>/
+# <version>` baked into the install layout via `make install DESTDIR=...`). The
+# three leading components to strip are `.`, `<distro>`, `<version>`, leaving
+# `bin/`, `lib/`, `share/`, etc. at the install-dir root — the same no-prefix
+# layout `rules_foreign_cc.meson` exposes.
+_INSTALL_TREE_STRIP_COMPONENTS = 3
+
+def _install_tree_impl(ctx):
+    # Single-output strategy: the install root is one tree artifact under the
+    # *target's own name* (`<target>/`), populated with `bin/`, `lib/`,
+    # `include/`, `share/`. This matches `rules_foreign_cc.meson`'s layout
+    # closely enough that `//utils:declare_outputs.bzl` (which reads
+    # `OutputGroupInfo.gen_dir`) works unchanged, and — critically — `pg_config`
+    # at runtime self-resolves its prefix from `$0/../..` to `<target>/`, so
+    # `pg_config --pgxs` returns `<target>/lib/pgxs/...`, a path that actually
+    # exists in PGXS extension sandboxes (it's the tree artifact Bazel
+    # materializes for every consumer).
+    #
+    # We cannot also `declare_file("<target>/bin/<binary>")` because that path
+    # overlaps the directory artifact. Instead we expose the binaries via a
+    # `TemplateVariableInfo` provider built right here from the known binary
+    # names — `pg_template_variable_info` forwards an existing provider instead
+    # of scanning `DefaultInfo.files` (which for a tree artifact yields one File
+    # for the whole directory, with no per-file paths visible at analysis time).
+    install_dir = ctx.actions.declare_directory(ctx.label.name)
+
+    # The hermetic sandbox has no `tar` (busybox mount manifest); use the
+    # resolved bsdtar from `@bsd_tar_toolchains` — same binary family that wrote
+    # the archive in the genrule, so the pax-format entries round-trip.
+    bsdtar_info = ctx.attr._bsdtar[platform_common.TemplateVariableInfo]
+    bsdtar_bin = bsdtar_info.variables["BSDTAR_BIN"]
+
+    extract_cmd = (
+        'rm -rf "{dst}"\n' +
+        'mkdir -p "{dst}"\n' +
+        '"{bsdtar}" -xf "{src}" --strip-components={strip} -C "{dst}"'
+    ).format(
+        bsdtar = bsdtar_bin,
+        src = ctx.file.tar.path,
+        strip = _INSTALL_TREE_STRIP_COMPONENTS,
+        dst = install_dir.path,
+    )
+    ctx.actions.run_shell(
+        inputs = depset(
+            [ctx.file.tar],
+            transitive = [ctx.attr._bsdtar[DefaultInfo].files],
+        ),
+        outputs = [install_dir],
+        command = "set -euo pipefail\n" + extract_cmd,
+        mnemonic = "PgInstallTreeExtract",
+        progress_message = "Extracting PG install tree from %{input}",
+    )
+
+    # Template variables matching what `pg_template_variable_info` derives on
+    # the Meson side. Paths are `<install_dir>/bin/<binary>`; each binary name
+    # uppercases to a template variable (e.g. `pg_config` -> `PG_CONFIG`).
+    # `PG_INSTALL_DIR` is the install root itself.
+    template_vars = {
+        b.upper().replace("-", "_"): "%s/bin/%s" % (install_dir.path, b)
+        for b in ctx.attr.binaries
+    }
+    template_vars["PG_INSTALL_DIR"] = install_dir.path
+
+    return [
+        DefaultInfo(files = depset([install_dir])),
+        OutputGroupInfo(gen_dir = depset([install_dir])),
+        platform_common.TemplateVariableInfo(template_vars),
+    ]
+
+_install_tree = rule(
+    implementation = _install_tree_impl,
+    attrs = {
+        "binaries": attr.string_list(
+            mandatory = True,
+            doc = (
+                "PG binaries to expose as `TemplateVariableInfo` entries" +
+                " (e.g. `pg_config` -> `PG_CONFIG=<install_dir>/bin/pg_config`)." +
+                " Pass the same set the Meson path declares via `out_binaries`."
+            ),
+        ),
+        "tar": attr.label(
+            mandatory = True,
+            allow_single_file = [".tar"],
+            doc = "Genrule-produced tar file containing the install tree.",
+        ),
+        "_bsdtar": attr.label(
+            default = "@bsd_tar_toolchains//:resolved_toolchain",
+            doc = "Hermetic bsdtar used to extract the install tree.",
+        ),
+    },
+    doc = """Adapter for pg_build_make's tar output.
+
+Extracts the tar into a tree artifact at `<target>/` (with
+`{bin,lib,include,share}/` directly inside, matching
+`rules_foreign_cc.meson`'s layout). Exposes the install dir via
+`OutputGroupInfo.gen_dir` for `//utils:declare_outputs.bzl`, and synthesizes
+a `TemplateVariableInfo` with one entry per PG binary (plus
+`PG_INSTALL_DIR`) — `pg_template_variable_info` forwards this if present, so
+downstream `:toolchain` consumers see the same template vars they get on the
+Meson path.""",
+)
+
 def _shell_array(values):
     """Render a Starlark list of strings as a bash array literal."""
     if not values:
@@ -112,6 +223,9 @@ def _shell_array(values):
 
 def _pg_build_make_genrule(
         name,
+        tar_file,
+        log_file,
+        introspect_json_file,
         pg_src,
         configure_args,
         extra_libs,
@@ -122,10 +236,6 @@ def _pg_build_make_genrule(
         prefix,
         introspect_synth_script,
         debug):
-    tar_file = "%s.tar" % name
-    log_file = "%s.log" % name
-    introspect_json_file = "%s.introspect.json" % name
-
     srcs = [
         pg_src,
         # TARGET-config inputs: the per-PG sysroot tar (arch-select resolves to
@@ -410,7 +520,7 @@ PY_SHIM_EOF
             # closure carries libc6-dev and libstdc++-12-dev, so libc + C++
             # stdlib headers and crt objects all resolve inside the tree.
             local cc="$$SYSROOT_DIR/usr/lib/llvm-$$LLVM_MAJOR/bin/clang"
-            local cxx="$$EXEC_SYSROOT_DIR/usr/lib/llvm-$$LLVM_MAJOR/bin/clang++ --sysroot=$$SYSROOT_DIR"
+            local cxx="$$SYSROOT_DIR/usr/lib/llvm-$$LLVM_MAJOR/bin/clang++ --sysroot=$$SYSROOT_DIR"
 
             # `-O2` first: PG's configure only applies its default
             # optimization level when CFLAGS is unset; a CFLAGS env that
@@ -450,13 +560,18 @@ PY_SHIM_EOF
                 "-Wl,-rpath-link=$$SYSROOT_DIR/usr/lib/llvm-$$LLVM_MAJOR/lib"
             )
 
-            # llvm tooling for `--with-llvm`: llvm-config (queried by
-            # configure for version/flags/libs) runs on the build host, so it
-            # resolves from the EXEC tree; CLANG is the planted wrapper, used
-            # at make time to emit JIT bitcode (`.bc`) — the wrapper bakes
-            # `--sysroot=<libc_sysroot>` exactly like the Meson-built
-            # `Makefile.global`'s CLANG does.
-            local llvm_config="$$EXEC_SYSROOT_DIR/usr/lib/llvm-$$LLVM_MAJOR/bin/llvm-config"
+            # llvm tooling for `--with-llvm`: CLANG is the planted wrapper,
+            # used at make time to emit JIT bitcode (`.bc`) — the wrapper
+            # bakes `--sysroot=<libc_sysroot>` exactly like the Meson-built
+            # `Makefile.global`'s CLANG does. llvm-config + clang++ use the
+            # TARGET tree's `$$SYSROOT_DIR/usr/lib/llvm-<N>/bin/` paths (not
+            # the EXEC aliases, which are the same files for native builds):
+            # configure bakes these strings into the installed
+            # `lib/pgxs/src/Makefile.global`, and `scrub_install_tree` rewrites
+            # exactly the `/sysroot/usr/lib/llvm-<N>/bin` shape to the
+            # persistent @llvm_sysroot path that PGXS extension sandboxes can
+            # resolve after this action's sandbox is gone.
+            local llvm_config="$$SYSROOT_DIR/usr/lib/llvm-$$LLVM_MAJOR/bin/llvm-config"
 
             # plpython libpython facts: PG's `python.m4` discovers the
             # libpython link/include paths by querying the RUNNING python's
@@ -582,6 +697,37 @@ PY_SHIM_EOF
                 echo "  underlying failure." >&2
                 return 1
             fi
+        }}
+
+        scrub_install_tree() {{
+            # Post-install rewrite of `lib/pgxs/src/Makefile.global`, the
+            # autoconf-side twin of `pg_build.bzl`'s
+            # `_STRIP_SANDBOX_PATHS_POSTFIX` (see the rationale there).
+            # configure captured CC/CLANG/CXX/LLVM_CONFIG and CFLAGS/LDFLAGS
+            # verbatim from this action's environment; once the sandbox is
+            # torn down those paths are dead and downstream PGXS extension
+            # builds would fail to invoke `$$(CLANG)` for JIT bitcode.
+            #
+            # Step 1 strips the sandbox prefix so absolute paths under sandbox
+            # execroots collapse to `/<install_base>/...`.
+            # Step 2 redirects the planted `/sysroot/usr/lib/llvm-<N>/bin/
+            # clang` wrapper symlink (word-anchored) to the persistent
+            # @libc_sysroot wrapper via `$(LIBC_SYSROOT_DIR)`.
+            # Step 3 rewrites the remaining action-time
+            # `/sysroot/usr/lib/llvm-<N>/bin` tool paths (llvm-config,
+            # clang++) to the persistent @llvm_sysroot bin dir via
+            # `$(LLVM_SYSROOT_DIR)` (same Debian llvm-14 binaries, same APT
+            # snapshot).
+            local installdir="$$1"
+
+            echo "# $$(date) - scrub_install_tree"
+
+            find "$$installdir" -name 'Makefile.global' -print0 \\
+                | xargs -0 --no-run-if-empty \\
+                    sed -i -E \\
+                        -e 's|/sandbox/linux-sandbox/[0-9]+/execroot/[^/]+/|/|g' \\
+                        -e "s|/sysroot/usr/lib/llvm-$$LLVM_MAJOR/bin/clang\\b|/$(LIBC_SYSROOT_DIR)/usr/lib/llvm-$$LLVM_MAJOR/bin/clang|g" \\
+                        -e "s|/sysroot/usr/lib/llvm-$$LLVM_MAJOR/bin|/$(LLVM_SYSROOT_DIR)/usr/lib/llvm-$$LLVM_MAJOR/bin|g"
         }}
 
         emit_introspect_json() {{
@@ -734,6 +880,8 @@ PY_SHIM_EOF
             # fast on layout drift.
             verify_install "$$INSTALLDIR" "$$INSTALL_PREFIX"
 
+            scrub_install_tree "$$INSTALLDIR"
+
             # The introspect synth wants prefix-relative paths
             # (`bin/postgres`, `share/postgresql/extension/*.control`, ...),
             # the same convention meson emits. `make install
@@ -803,6 +951,12 @@ PY_SHIM_EOF
             # chroot), so the wrapper's exec target and --sysroot tree must be
             # declared inputs to exist there.
             "@bazel_tools//tools/cpp:current_cc_toolchain",
+            # `$(LIBC_SYSROOT_DIR)` / `$(LLVM_SYSROOT_DIR)` make variables for
+            # `scrub_install_tree`'s Makefile.global rewrite (persistent bzlmod
+            # repo paths resolved at analysis time; never appearing in
+            # human-authored source).
+            "@monogres//toolchains/libc_sysroot:libc_sysroot_dir",
+            "@monogres//toolchains/llvm_sysroot:llvm_sysroot_dir",
         ],
         visibility = ["//visibility:public"],
     )
@@ -844,7 +998,9 @@ def pg_build_make(
       level (`all` vs `world-bin`).
 
     Args:
-        name (str): Bazel target name. Emits `<name>.tar` and `<name>.log`.
+        name (str): Bazel target name. `:<name>` is the extracted install tree
+            (`_install_tree`); the underlying genrule is `:<name>.genrule` with
+            `<name>.tar`, `<name>.log`, `<name>.introspect.json` outputs.
         pg_src (str): Label of the per-version `:dir` on the source repo (e.g.
             `"@pg_src//15.0:dir"`), a tree artifact keyed on the archive and the
             patches it was made from.
@@ -888,8 +1044,21 @@ def pg_build_make(
     # Fall back to autoconf's default prefix when unset.
     prefix = build_options.get("prefix_distro", "/usr/local/pgsql")
 
+    # The genrule produces the raw tar + log + introspect JSON outputs. The
+    # public `:<name>` target below is the `_install_tree` wrapper that consumes
+    # the genrule's tar and exposes `OutputGroupInfo.gen_dir` for downstream
+    # `declare_outputs` consumers (contrib extension packaging). The genrule's
+    # own name is `:<name>.genrule` (private); its output filenames stay
+    # `<name>.tar` / `<name>.log` / `<name>.introspect.json` so file-label
+    # consumers (the `:logs` alias, the `:introspect` filegroup) keep resolving.
+    tar_file = "%s.tar" % name
+    log_file = "%s.log" % name
+    introspect_json_file = "%s.introspect.json" % name
     _pg_build_make_genrule(
-        name = name,
+        name = "%s.genrule" % name,
+        tar_file = tar_file,
+        log_file = log_file,
+        introspect_json_file = introspect_json_file,
         pg_src = pg_src,
         configure_args = configure_args,
         extra_libs = extra_libs,
@@ -900,6 +1069,29 @@ def pg_build_make(
         prefix = prefix,
         introspect_synth_script = introspect_synth_script,
         debug = debug,
+    )
+
+    # Binaries exposed as template variables by `_install_tree` so the
+    # `:toolchain` target maps each `<install_dir>/bin/<binary>` to an uppercase
+    # variable (e.g. `pg_config` -> `PG_CONFIG`). Matches the set the Meson path
+    # declares via `out_binaries`, including the contrib-gated extras only when
+    # contrib is enabled in this option set.
+    contrib_value = build_options.get("contrib")
+    contrib_enabled = (
+        contrib_value == True or
+        (type(
+            contrib_value,
+        ) == "string" and contrib_value.lower() in ("enabled", "true"))
+    )
+    pg_binaries = ["initdb", "postgres", "pg_config", "pg_isready"]
+    if contrib_enabled:
+        pg_binaries += ["oid2name", "vacuumlo"]
+
+    _install_tree(
+        name = name,
+        tar = tar_file,
+        binaries = pg_binaries,
+        visibility = ["//visibility:public"],
     )
 
     pg_template_variable_info(
@@ -916,7 +1108,7 @@ def pg_build_make(
     # generator), same as the meson `:introspect`.
     native.filegroup(
         name = "introspect",
-        srcs = ["%s.introspect.json" % name],
+        srcs = [introspect_json_file],
         tags = ["manual"],
         visibility = ["//visibility:public"],
     )
@@ -925,6 +1117,6 @@ def pg_build_make(
     # same across build systems.
     native.alias(
         name = "logs",
-        actual = "%s.log" % name,
+        actual = log_file,
         visibility = ["//visibility:public"],
     )
