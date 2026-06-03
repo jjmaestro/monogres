@@ -15,9 +15,10 @@ per-PG `sysroot_tar` / `exec_sysroot_tar` pair, extracts them at action time via
 the same `sysroot_setup.sh` / `exec_sysroot_setup.sh` scripts (which sed-patch
 perl's Config files, plant the @libc_sysroot clang wrapper, and symlink the
 sysroot's multiarch lib dirs into the chroot's standard ld.so search paths), and
-emits a `:tar` artifact plus `:toolchain` and `:logs`. A placeholder
-`:introspect` filegroup keeps `cfg.<target>.introspect` label references
-resolvable; make-built versions have no Meson introspect to run.
+emits a `:tar` artifact plus `:toolchain`, `:logs`, and `:introspect` (a
+meson-shape introspect JSON synthesized from the install tree after `make
+install`; the meson side gets the same data from a separate
+`meson(targets=["introspect"])` run).
 
 The Meson option vocabulary is shared with `pg_build`; this macro translates the
 values to autoconf flags via
@@ -119,9 +120,11 @@ def _pg_build_make_genrule(
         sysroot_tar,
         exec_sysroot_tar,
         prefix,
+        introspect_synth_script,
         debug):
     tar_file = "%s.tar" % name
     log_file = "%s.log" % name
+    introspect_json_file = "%s.introspect.json" % name
 
     srcs = [
         pg_src,
@@ -140,11 +143,16 @@ def _pg_build_make_genrule(
     # `lib/python3.X/` must materialize NEXT TO the binary as plain inputs (with
     # only the `:python3` binary staged, startup dies with `init_fs_encoding:
     # ... No module named 'encodings'`).
+    #
+    # `introspect_synth_script` walks the post-`make install` tree and the
+    # source tree to produce a meson-shape introspect JSON consumable by Layer 2
+    # + gen_contrib; it runs under the same hermetic interpreter.
     tools = [
         _SYSROOT_SETUP_SCRIPT,
         _EXEC_SYSROOT_SETUP_SCRIPT,
         _PYTHON_BIN,
         _PYTHON_FILES,
+        introspect_synth_script,
     ]
 
     # `configure_args` rendered as a bash array.
@@ -576,6 +584,28 @@ PY_SHIM_EOF
             fi
         }}
 
+        emit_introspect_json() {{
+            # Walk the source tree + post-install tree and synthesize a
+            # meson-shape introspect JSON. Mirrors what `meson introspect`
+            # emits for the meson build path so Layer 2
+            # (`pg_introspect_version_repo`) consumes both flavors uniformly.
+            # Runs under the hermetic rules_python interpreter (the chroot has
+            # no system python3).
+            local synth_script="$$1"; shift
+            local workdir="$$1"; shift
+            local installdir="$$1"; shift
+            local prefix="$$1"; shift
+            local out="$$1"; shift
+
+            echo "# $$(date) - emit_introspect_json"
+
+            "$$PYTHON_BIN" "$$synth_script" \\
+                --workdir "$$workdir" \\
+                --installdir "$$installdir" \\
+                --prefix "$$prefix" \\
+                --out "$$out"
+        }}
+
         tar_install() {{
             local tar_file="$$1"; shift
             local installdir="$$1"; shift
@@ -628,6 +658,8 @@ PY_SHIM_EOF
 
         TAR_FILE="$$EXT_BUILD_ROOT/{tar_file}"
         LOG_FILE="$$EXT_BUILD_ROOT/{log_file}"
+        INTROSPECT_JSON="$$EXT_BUILD_ROOT/{introspect_json_file}"
+        INTROSPECT_SYNTH_SCRIPT="$$EXT_BUILD_ROOT/{synth_script}"
         PG_SRC="$$EXT_BUILD_ROOT/{pg_src}"
         SYSROOT_TAR="$$EXT_BUILD_ROOT/{sysroot_tar}"
         EXEC_SYSROOT_TAR="$$EXT_BUILD_ROOT/{exec_sysroot_tar}"
@@ -698,8 +730,23 @@ PY_SHIM_EOF
                 "$${{MAKE_INSTALL_TARGETS[@]}}"
 
             # Sanity-check the install tree (pg_config in expected location)
-            # before tarring. Fails fast on layout drift.
+            # before downstream consumers (introspect synth) use it. Fails
+            # fast on layout drift.
             verify_install "$$INSTALLDIR" "$$INSTALL_PREFIX"
+
+            # The introspect synth wants prefix-relative paths
+            # (`bin/postgres`, `share/postgresql/extension/*.control`, ...),
+            # the same convention meson emits. `make install
+            # DESTDIR=$$INSTALLDIR` + `--prefix=$$INSTALL_PREFIX` puts files
+            # at `$$INSTALLDIR$$INSTALL_PREFIX/...`, so point the synth at
+            # that subdir. The tar itself keeps the prefix in its entries
+            # (downstream tar consumers expect that).
+            emit_introspect_json \\
+                "$$INTROSPECT_SYNTH_SCRIPT" \\
+                "$$WORKDIR" \\
+                "$$INSTALLDIR$$INSTALL_PREFIX" \\
+                "$$INSTALL_PREFIX" \\
+                "$$INTROSPECT_JSON"
 
             tar_install "$$TAR_FILE" "$$INSTALLDIR"
         }} 2>&1 | tee "$$LOG_FILE"
@@ -713,6 +760,8 @@ PY_SHIM_EOF
     cmd = cmd_template.format(
         tar_file = "$(execpath %s)" % tar_file,
         log_file = "$(execpath %s)" % log_file,
+        introspect_json_file = "$(execpath %s)" % introspect_json_file,
+        synth_script = "$(execpath %s)" % introspect_synth_script,
         pg_src = "$(execpath %s)" % pg_src,
         sysroot_tar = "$(execpath %s)" % sysroot_tar,
         exec_sysroot_tar = "$(execpath %s)" % exec_sysroot_tar,
@@ -734,7 +783,7 @@ PY_SHIM_EOF
     native.genrule(
         name = name,
         srcs = srcs,
-        outs = [tar_file, log_file],
+        outs = [tar_file, log_file, introspect_json_file],
         cmd = cmd,
         tools = tools,
         target_compatible_with = select({
@@ -762,6 +811,7 @@ def pg_build_make(
         name,
         pg_src,
         build_options,
+        introspect_synth_script,
         sysroot_tar,
         exec_sysroot_tar,
         debug = False):
@@ -776,10 +826,10 @@ def pg_build_make(
     contrib, no docs).
 
     The macro emits a `:tar` artifact (the install dir, tarred), a `:logs`
-    alias, and a `:toolchain` template-variable target. The `:introspect` target
-    is a placeholder empty filegroup: make-built versions have no Meson
-    introspect target to run, and the committed-JSON introspect layers simply
-    skip versions without catalog introspect entries.
+    alias, a `:toolchain` template-variable target, and an `:introspect`
+    filegroup pointing at the meson-shape introspect JSON synthesized by
+    `introspect_synth_script` after `make install` (the make-side counterpart of
+    the meson path's separate `meson(targets=["introspect"])` run).
 
     Patch equivalences vs. the Meson PG patches:
     - `prefix_distro` (Meson option) → translated to `--prefix` (autoconf
@@ -802,6 +852,12 @@ def pg_build_make(
             `flavors.FLAVORS[<flavor>].build_options(...)`. Translated to
             autoconf flags by `to_configure_args`. The `contrib` option (if
             present and truthy) selects the `world-bin` make targets.
+        introspect_synth_script (str): Label of the
+            `pg_build_make_introspect.py` script (e.g.
+            `"@monogres//tools:pg_build_make_introspect.py"`). The genrule
+            invokes it post-`make install` (under the hermetic python
+            interpreter) to synthesize the meson-shape introspect JSON consumed
+            by Layer 2 + gen_contrib.
         sysroot_tar (str): The per-PG `:sysroot_tar` alias label (rendered
             per-version by `versions.bzl`, arch-selected). Extracted at action
             time by `sysroot_setup.sh` into `$EXT_BUILD_ROOT/sysroot`; provides
@@ -842,6 +898,7 @@ def pg_build_make(
         sysroot_tar = sysroot_tar,
         exec_sysroot_tar = exec_sysroot_tar,
         prefix = prefix,
+        introspect_synth_script = introspect_synth_script,
         debug = debug,
     )
 
@@ -851,13 +908,15 @@ def pg_build_make(
         visibility = ["//visibility:public"],
     )
 
-    # Placeholder `:introspect` filegroup so `cfg.<target>.introspect` label
-    # references resolve. Make-built versions have no Meson introspect target;
-    # the committed-JSON introspect layers skip versions without catalog
-    # introspect entries.
+    # `:introspect` filegroup points at the meson-shape introspect JSON
+    # synthesized by `introspect_synth_script` as the third output of the
+    # genrule above. Mirrors the meson side's `:introspect` (where it's a
+    # separate `meson(targets=["introspect"])` invocation). Tagged `manual` so
+    # it only builds when explicitly requested (e.g. by the introspect JSON
+    # generator), same as the meson `:introspect`.
     native.filegroup(
         name = "introspect",
-        srcs = [],
+        srcs = ["%s.introspect.json" % name],
         tags = ["manual"],
         visibility = ["//visibility:public"],
     )

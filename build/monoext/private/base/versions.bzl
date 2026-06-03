@@ -106,6 +106,12 @@ def _option_set_build(
                 name = "tar",
                 pg_src = f("@{src}//{v}:dir"),
                 build_options = bopts,
+                # Absolute label so the resolved path lives in build_repo (where
+                # the script actually sits), not in the per-version repo where
+                # the rendered BUILD file lives.
+                introspect_synth_script = f(
+                    "@{build}//tools:pg_build_make_introspect.py",
+                ),
                 sysroot_tar = target.deps.buildtime.sysroot_tar,
                 exec_sysroot_tar = target.deps.buildtime.exec_sysroot_tar,
             ),

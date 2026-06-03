@@ -19,6 +19,13 @@ bzl_library(
     srcs = ["gen_pg_introspect_jsons.bzl"],
 )
 
+# Standalone script invoked from `pg_build_make`'s genrule shell action to
+# synthesize a meson-shape introspect JSON from the post-`make install` tree +
+# the build-time source tree.
+exports_files([
+    "pg_build_make_introspect.py",
+])
+
 # `test_versions` selects which versions also feed the test-enabled `+test`
 # introspect variant: each selected version's tap_tests/injection_points-enabled
 # build is introspected into `introspect/<flavor>~<v>~<os>+test.json` beside its
