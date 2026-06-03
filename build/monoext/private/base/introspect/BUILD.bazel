@@ -6,7 +6,7 @@ package(default_visibility = [
 ])
 
 exports_files([
-    "meson.bzl",
+    "build_introspect.bzl",
     "metadata.bzl",
 ])
 
@@ -16,8 +16,8 @@ bzl_library(
 )
 
 bzl_library(
-    name = "meson",
-    srcs = ["meson.bzl"],
+    name = "build_introspect",
+    srcs = ["build_introspect.bzl"],
     deps = [
         ":metadata",
         "//platforms:targets",

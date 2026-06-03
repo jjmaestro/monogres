@@ -1,9 +1,12 @@
-"""Tests for monoext/private/base/introspect/meson.bzl"""
+"""Tests for monoext/private/base/introspect/build_introspect.bzl"""
 
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
 
 # buildifier: disable=bzl-visibility
-load("//monoext/private/base/introspect:meson.bzl", MesonIntrospect = "meson")
+load(
+    "//monoext/private/base/introspect:build_introspect.bzl",
+    BuildIntrospect = "build_introspect",
+)
 load("//tests:mock.bzl", "mock")
 load("//tests:suite.bzl", _test_suite = "test_suite")
 
@@ -22,7 +25,7 @@ _MOCK_INSTALLED_PATHS = {
     "src/backend/postgres": "bin/postgres",
 }
 
-# multiarch variant: Debian-style lib/{arch}-linux-gnu/ paths.
+# multiarch variant: Debian-style lib/{cpu}-linux-gnu/ paths.
 _MOCK_INSTALLED_PATHS_MULTIARCH = {
     "contrib/example/example.so": "lib/x86_64-linux-gnu/example.so",
     "src/backend/postgres": "bin/postgres",
@@ -105,7 +108,7 @@ def _get_contrib_names_test_impl(ctx):
     """Extracts sorted contrib names from buildsystem_files."""
     env = unittest.begin(ctx)
 
-    names = MesonIntrospect.get_contrib_names(_MOCK_INTROSPECT_JSON)
+    names = BuildIntrospect.get_contrib_names(_MOCK_INTROSPECT_JSON)
 
     asserts.equals(env, ["amcheck", "hstore", "pgcrypto"], names)
 
@@ -120,7 +123,7 @@ def _get_contrib_names_filters_root_meson_build_test_impl(ctx):
     json = {"buildsystem_files": [
         "/src/contrib/meson.build",
     ]}
-    names = MesonIntrospect.get_contrib_names(json)
+    names = BuildIntrospect.get_contrib_names(json)
 
     asserts.equals(env, [], names)
 
@@ -137,7 +140,7 @@ def _get_contrib_names_filters_deep_paths_test_impl(ctx):
     json = {"buildsystem_files": [
         "/src/contrib/pgcrypto/subdir/meson.build",
     ]}
-    names = MesonIntrospect.get_contrib_names(json)
+    names = BuildIntrospect.get_contrib_names(json)
 
     asserts.equals(env, [], names)
 
@@ -152,7 +155,7 @@ def _get_contrib_names_empty_test_impl(ctx):
     env = unittest.begin(ctx)
 
     json = {"buildsystem_files": []}
-    names = MesonIntrospect.get_contrib_names(json)
+    names = BuildIntrospect.get_contrib_names(json)
 
     asserts.equals(env, [], names)
 
@@ -172,7 +175,7 @@ if zlib.found()
 endif
 """
 
-    result = MesonIntrospect.get_contrib_features(
+    result = BuildIntrospect.get_contrib_features(
         "basebackup_to_shell",
         meson_build,
     )
@@ -195,7 +198,7 @@ if zlib.found()
   pgcrypto_deps += zlib
 endif
 """
-    result = MesonIntrospect.get_contrib_features("pgcrypto", meson_build)
+    result = BuildIntrospect.get_contrib_features("pgcrypto", meson_build)
 
     asserts.equals(env, "zlib", result)
 
@@ -214,7 +217,7 @@ if perl_dep.found()
   do_stuff
 endif
 """
-    result = MesonIntrospect.get_contrib_features("bool_plperl", meson_build)
+    result = BuildIntrospect.get_contrib_features("bool_plperl", meson_build)
 
     asserts.equals(env, "plperl", result)
 
@@ -236,7 +239,7 @@ if lz4.found()
   deps += lz4
 endif
 """
-    result = MesonIntrospect.get_contrib_features("test_ext", meson_build)
+    result = BuildIntrospect.get_contrib_features("test_ext", meson_build)
 
     asserts.equals(env, ["zlib", "lz4"], result)
 
@@ -251,7 +254,7 @@ def _get_contrib_features_no_deps_test_impl(ctx):
     env = unittest.begin(ctx)
 
     meson_build = "sources = files('foo.c')\n"
-    result = MesonIntrospect.get_contrib_features("simple_ext", meson_build)
+    result = BuildIntrospect.get_contrib_features("simple_ext", meson_build)
 
     asserts.equals(env, None, result)
 
@@ -270,7 +273,7 @@ if some_new_lib.found()
   deps += it
 endif
 """
-    result = MesonIntrospect.get_contrib_features("test_ext", meson_build)
+    result = BuildIntrospect.get_contrib_features("test_ext", meson_build)
 
     asserts.equals(env, "some_new_lib", result)
 
@@ -289,7 +292,7 @@ if zlib.found() and lz4.found()
   deps += both
 endif
 """
-    result = MesonIntrospect.get_contrib_features(
+    result = BuildIntrospect.get_contrib_features(
         "test_ext",
         meson_build,
         _fail = mock.fail,
@@ -311,7 +314,7 @@ def _validate_contrib_features_known_test_impl(ctx):
     env = unittest.begin(ctx)
 
     features = {"hstore": None, "pgcrypto": "zlib", "xml2": "libxml"}
-    result = MesonIntrospect.validate_contrib_features(features, True)
+    result = BuildIntrospect.validate_contrib_features(features, True)
 
     asserts.equals(env, None, result)
 
@@ -326,7 +329,7 @@ def _validate_contrib_features_unknown_no_fail_test_impl(ctx):
     env = unittest.begin(ctx)
 
     features = {"test": "totally_unknown_feature"}
-    result = MesonIntrospect.validate_contrib_features(features, False)
+    result = BuildIntrospect.validate_contrib_features(features, False)
 
     asserts.equals(env, None, result)
 
@@ -341,7 +344,7 @@ def _validate_contrib_features_unknown_fails_test_impl(ctx):
     env = unittest.begin(ctx)
 
     features = {"test": "totally_unknown_feature"}
-    result = MesonIntrospect.validate_contrib_features(
+    result = BuildIntrospect.validate_contrib_features(
         features,
         True,
         _fail = mock.fail,
@@ -361,7 +364,7 @@ def _validate_contrib_features_list_unknown_fails_test_impl(ctx):
     env = unittest.begin(ctx)
 
     features = {"test": ["zlib", "nonexistent_pkg"]}
-    result = MesonIntrospect.validate_contrib_features(
+    result = BuildIntrospect.validate_contrib_features(
         features,
         True,
         _fail = mock.fail,
@@ -382,7 +385,7 @@ def _get_installed_paths_test_impl(ctx):
     """Integration test: parse mock introspect JSON → relativized paths."""
     env = unittest.begin(ctx)
 
-    result = MesonIntrospect.get_installed_paths(_MOCK_INTROSPECT_JSON)
+    result = BuildIntrospect.get_installed_paths(_MOCK_INTROSPECT_JSON)
 
     # build paths are relativized (stripped of /build/ prefix)
     asserts.true(env, "src/backend/postgres" in result)
@@ -407,10 +410,10 @@ def _get_installed_paths_test_impl(ctx):
 get_installed_paths_test = unittest.make(_get_installed_paths_test_impl)
 
 def _get_installed_paths_multiarch_normalization_test_impl(ctx):
-    """Debian multiarch libdir (lib/{arch}-linux-gnu/) normalized to lib/"""
+    """Debian multiarch libdir (lib/{cpu}-linux-gnu/) normalized to lib/"""
     env = unittest.begin(ctx)
 
-    result = MesonIntrospect.get_installed_paths(_MOCK_INTROSPECT_MULTIARCH)
+    result = BuildIntrospect.get_installed_paths(_MOCK_INTROSPECT_MULTIARCH)
 
     asserts.equals(env, "lib/example.so", result["contrib/example/example.so"])
 
@@ -426,7 +429,7 @@ def _get_contrib_installed_paths_test_impl(ctx):
     """Contrib installed paths for a known extension."""
     env = unittest.begin(ctx)
 
-    paths = MesonIntrospect.get_contrib_installed_paths(
+    paths = BuildIntrospect.get_contrib_installed_paths(
         _MOCK_INSTALLED_PATHS,
         "pgcrypto",
         "18.1",
@@ -448,7 +451,7 @@ def _get_contrib_installed_paths_nonexistent_test_impl(ctx):
     """Non-existent contrib → empty list."""
     env = unittest.begin(ctx)
 
-    paths = MesonIntrospect.get_contrib_installed_paths(
+    paths = BuildIntrospect.get_contrib_installed_paths(
         _MOCK_INSTALLED_PATHS,
         "nonexistent",
         "18.1",
@@ -479,7 +482,7 @@ def _get_contrib_installed_paths_prefix_boundary_test_impl(ctx):
         "contrib/hstore_plpython/hstore_plpython3.so": "lib/hstore_plpython3.so",
     }
 
-    hstore = MesonIntrospect.get_contrib_installed_paths(
+    hstore = BuildIntrospect.get_contrib_installed_paths(
         installed,
         "hstore",
         "18.1",
@@ -489,7 +492,7 @@ def _get_contrib_installed_paths_prefix_boundary_test_impl(ctx):
         "share/extension/hstore.control",
     ], hstore)
 
-    hstore_plperl = MesonIntrospect.get_contrib_installed_paths(
+    hstore_plperl = BuildIntrospect.get_contrib_installed_paths(
         installed,
         "hstore_plperl",
         "18.1",
@@ -510,7 +513,7 @@ def _get_contrib_installed_paths_override_test_impl(ctx):
     env = unittest.begin(ctx)
 
     # sepgsql < 16.7 has different paths than >= 16.7
-    paths_old = MesonIntrospect.get_contrib_installed_paths(
+    paths_old = BuildIntrospect.get_contrib_installed_paths(
         _MOCK_INSTALLED_PATHS,
         "sepgsql",
         "16.6",
@@ -521,7 +524,7 @@ def _get_contrib_installed_paths_override_test_impl(ctx):
         "share/extension/sepgsql.sql",
     ], paths_old)
 
-    paths_new = MesonIntrospect.get_contrib_installed_paths(
+    paths_new = BuildIntrospect.get_contrib_installed_paths(
         _MOCK_INSTALLED_PATHS,
         "sepgsql",
         "16.8",
@@ -542,7 +545,7 @@ def _get_postgres_installed_paths_test_impl(ctx):
     """Postgres installed paths exclude contrib entries."""
     env = unittest.begin(ctx)
 
-    paths = MesonIntrospect.get_postgres_installed_paths(_MOCK_INSTALLED_PATHS)
+    paths = BuildIntrospect.get_postgres_installed_paths(_MOCK_INSTALLED_PATHS)
 
     asserts.equals(env, ["bin/postgres", "lib/libpq.so.5"], paths)
 
@@ -556,14 +559,14 @@ def _paths_no_overlap_test_impl(ctx):
     """Contrib and postgres paths partition the full set (no overlap)."""
     env = unittest.begin(ctx)
 
-    postgres_paths = MesonIntrospect.get_postgres_installed_paths(
+    postgres_paths = BuildIntrospect.get_postgres_installed_paths(
         _MOCK_INSTALLED_PATHS,
     )
 
     all_contrib_paths = []
     for name in ["pgcrypto", "hstore", "amcheck"]:
         all_contrib_paths.extend(
-            MesonIntrospect.get_contrib_installed_paths(
+            BuildIntrospect.get_contrib_installed_paths(
                 _MOCK_INSTALLED_PATHS,
                 name,
                 "18.1",
@@ -585,7 +588,7 @@ def _validate_contrib_paths_ok_test_impl(ctx):
     env = unittest.begin(ctx)
 
     paths = {"hstore": ["lib/hstore.so"], "pgcrypto": ["lib/pgcrypto.so"]}
-    result = MesonIntrospect.validate_contrib_paths(
+    result = BuildIntrospect.validate_contrib_paths(
         paths,
         ["pgcrypto", "hstore"],
         True,
@@ -604,7 +607,7 @@ def _validate_contrib_paths_empty_no_fail_test_impl(ctx):
     env = unittest.begin(ctx)
 
     paths = {"hstore": ["lib/hstore.so"], "pgcrypto": []}
-    result = MesonIntrospect.validate_contrib_paths(
+    result = BuildIntrospect.validate_contrib_paths(
         paths,
         ["pgcrypto", "hstore"],
         False,
@@ -623,7 +626,7 @@ def _validate_contrib_paths_missing_fails_test_impl(ctx):
     env = unittest.begin(ctx)
 
     paths = {"pgcrypto": ["lib/pgcrypto.so"]}
-    result = MesonIntrospect.validate_contrib_paths(
+    result = BuildIntrospect.validate_contrib_paths(
         paths,
         ["pgcrypto", "hstore"],
         False,
@@ -644,7 +647,7 @@ def _validate_contrib_paths_empty_fails_test_impl(ctx):
     env = unittest.begin(ctx)
 
     paths = {"hstore": ["lib/hstore.so"], "pgcrypto": []}
-    result = MesonIntrospect.validate_contrib_paths(
+    result = BuildIntrospect.validate_contrib_paths(
         paths,
         ["pgcrypto", "hstore"],
         True,
@@ -666,7 +669,7 @@ def _meson_options_bzl_test_impl(ctx):
     """Generated meson_options.bzl has correct structure and transformations."""
     env = unittest.begin(ctx)
 
-    result = MesonIntrospect.meson_options_bzl(MESON_OPTIONS_TXT)
+    result = BuildIntrospect.meson_options_bzl(MESON_OPTIONS_TXT)
 
     # contains the generated docstring header
     asserts.true(
@@ -694,7 +697,7 @@ def _meson_options_bzl_test_impl(ctx):
 
 meson_options_bzl_test = unittest.make(_meson_options_bzl_test_impl)
 
-TEST_SUITE_NAME = "meson"
+TEST_SUITE_NAME = "build_introspect"
 
 TEST_SUITE_TESTS = dict(
     # get_contrib_names

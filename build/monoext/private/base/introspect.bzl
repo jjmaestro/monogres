@@ -26,7 +26,10 @@ triggered when a consumer loads the corresponding stub from `@pg`.
 load("@download_archives//lib:index.bzl", Index = "index")
 load("@starlark_utils//starlark:starlark.bzl", Star = "starlark")
 load("//monoext/private:repo_names.bzl", "bind")
-load("//monoext/private/base/introspect:meson.bzl", MesonIntrospect = "meson")
+load(
+    "//monoext/private/base/introspect:build_introspect.bzl",
+    BuildIntrospect = "build_introspect",
+)
 load("//monoext/private/base/introspect:metadata.bzl", "FEATURES_TO_DEB_PKGS")
 
 # ---------------------------------------------------------------------------
@@ -127,11 +130,11 @@ def _root_build():
 
 def _installed_paths(introspect_json, version):
     """Compute contrib names and installed paths from a decoded introspect JSON."""
-    contrib_names = MesonIntrospect.get_contrib_names(introspect_json)
-    installed_paths = MesonIntrospect.get_installed_paths(introspect_json)
+    contrib_names = BuildIntrospect.get_contrib_names(introspect_json)
+    installed_paths = BuildIntrospect.get_installed_paths(introspect_json)
 
     contrib_paths = {
-        name: MesonIntrospect.get_contrib_installed_paths(
+        name: BuildIntrospect.get_contrib_installed_paths(
             installed_paths,
             name,
             version,
@@ -139,7 +142,7 @@ def _installed_paths(introspect_json, version):
         for name in contrib_names
     }
 
-    postgres_paths = MesonIntrospect.get_postgres_installed_paths(
+    postgres_paths = BuildIntrospect.get_postgres_installed_paths(
         installed_paths,
     )
 
@@ -253,7 +256,7 @@ def _pg_introspect_version_impl(rctx):
         paths = _installed_paths(introspect_json, version)
 
         contrib_features = {
-            name: MesonIntrospect.get_contrib_features(
+            name: BuildIntrospect.get_contrib_features(
                 name,
                 src_read("contrib/%s/meson.build" % name),
             )
@@ -262,12 +265,12 @@ def _pg_introspect_version_impl(rctx):
 
         fail_on_unknown_or_empty = option_set == "full"
 
-        MesonIntrospect.validate_contrib_features(
+        BuildIntrospect.validate_contrib_features(
             contrib_features,
             fail_on_unknown_or_empty,
         )
 
-        MesonIntrospect.validate_contrib_paths(
+        BuildIntrospect.validate_contrib_paths(
             paths.contrib_paths,
             paths.contrib_names,
             fail_on_unknown_or_empty,
@@ -284,7 +287,7 @@ def _pg_introspect_version_impl(rctx):
             "postgres": {"paths": paths.postgres_paths},
         }
 
-        meson_options_bzl = MesonIntrospect.meson_options_bzl(
+        meson_options_bzl = BuildIntrospect.meson_options_bzl(
             src_read("meson_options.txt"),
         )
 

@@ -1,6 +1,11 @@
 """
-Functions to parse and manipulate Meson's meson_option.txt files and JSON
-introspect files
+Functions to parse and manipulate Meson-shape introspect JSON and
+meson_options.txt files.
+
+The JSON shape is build-system-neutral data about an installed PG tree
+(installed paths, contrib targets, build options); Meson's introspect command is
+one producer of it, not the only possible one. The exported struct is named
+`build_introspect` to reflect that it describes the data, not the producer.
 """
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
@@ -263,7 +268,7 @@ def _normalize_libdir(path):
     Normalize library paths from Debian's multiarch libdir to simple lib/.
 
     The introspect JSONs were generated with Debian's default libdir =
-    "lib/{arch}-linux-gnu", but the actual meson builds use libdir = "lib"
+    "lib/{cpu}-linux-gnu", but the actual meson builds use libdir = "lib"
     (configured in build_options.bzl). This function normalizes the paths to
     match the actual build output.
     """
@@ -364,7 +369,7 @@ def _validate_contrib_paths(
 
     return None
 
-meson = struct(
+build_introspect = struct(
     get_installed_paths = _get_installed_paths,
     get_contrib_names = _get_contrib_names,
     get_contrib_features = _get_contrib_features,
