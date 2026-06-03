@@ -94,6 +94,8 @@ def create_base_src(ctx, hub_name, base_label):
     introspect_repos = {}
     introspect_paths_repos = {}
 
+    flavor_mod = FLAVORS[flavor]
+
     for v, repos in index.repos.items():
         if not repos:
             continue
@@ -108,6 +110,14 @@ def create_base_src(ctx, hub_name, base_label):
             if label
         }
 
+        # Per-version build system (the postgres flavor splits on version:
+        # PG <= 15.x -> make, PG 16.0+ -> meson). Threaded into Layer 2 so the
+        # introspect repo knows whether to read `meson_options.txt` and
+        # `contrib/<name>/meson.build` (Meson) or skip those reads (make sources
+        # have no equivalent; their introspect JSONs already encode the
+        # installed paths without the source-side metadata).
+        build_system = flavor_mod.build_system(v)
+
         introspect_repo_name = repo_names.pg_introspect(hub_name, v)
         base_src_ver = repo_names.base_src_version(hub_name, v)
         f = bind(src = base_src_ver, v = v, source = repos[0].source)
@@ -116,6 +126,7 @@ def create_base_src(ctx, hub_name, base_label):
             version = v,
             pg_src_version_dir = f("@{src}//{v}/{source}:BUILD.bazel"),
             introspect_jsons = jsons_by_label,
+            build_system = build_system,
         )
         introspect_repos[v] = introspect_repo_name
 

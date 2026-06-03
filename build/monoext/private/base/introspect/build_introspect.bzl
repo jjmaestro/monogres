@@ -141,9 +141,12 @@ def _get_contrib_names(introspect_json):
 
         chunks = path[contrib + 1:].split("/", 3)
 
-        if len(chunks) != 3 or chunks[-1] != "meson.build":
-            # we ignore the contrib/meson.build and anything that's not
-            # contrib/<SUBDIR>/meson.build
+        # Accept both `meson.build` (meson flavors) and `Makefile`
+        # (autoconf+make flavors, whose post-install scan synthesizes
+        # `contrib/<name>/Makefile` entries to enumerate contrib names).
+        if len(chunks) != 3 or chunks[-1] not in ("meson.build", "Makefile"):
+            # ignore contrib/meson.build, contrib/Makefile (root), and anything
+            # deeper than contrib/<SUBDIR>/{meson.build,Makefile}
             continue
 
         contrib_names.append(chunks[1])
