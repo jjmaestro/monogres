@@ -129,7 +129,16 @@ def _root_build():
 # ---------------------------------------------------------------------------
 
 def _installed_paths(introspect_json, version):
-    """Compute contrib names and installed paths from a decoded introspect JSON."""
+    """Compute contrib names, installed paths, and `.control` requires.
+
+    `contrib_requires` is an optional top-level key added at JSON-generation
+    time by `tools/gen_pg_introspect_jsons.py`. It maps each contrib name to its
+    `.control requires` list (install-time PG-extension deps, e.g.
+    `{"earthdistance": ["cube"], "hstore_plperl": ["hstore", "plperl"]}`).
+    Contribs with no `requires` are absent from the dict. A missing key
+    altogether (JSONs not yet regenerated) is OK: `None` is surfaced per contrib
+    and the per-contrib INTROSPECTION dicts skip the `requires` key on `None`.
+    """
     contrib_names = BuildIntrospect.get_contrib_names(introspect_json)
     installed_paths = BuildIntrospect.get_installed_paths(introspect_json)
 
@@ -146,9 +155,15 @@ def _installed_paths(introspect_json, version):
         installed_paths,
     )
 
+    contrib_requires_meta = introspect_json.get("contrib_requires", {})
+
     return struct(
         contrib_names = contrib_names,
         contrib_paths = contrib_paths,
+        contrib_requires = {
+            name: contrib_requires_meta.get(name)
+            for name in contrib_names
+        },
         postgres_paths = postgres_paths,
     )
 
@@ -297,6 +312,9 @@ def _pg_introspect_version_impl(rctx):
             entry = {"paths": paths.contrib_paths[name]}
             if contrib_features != None:
                 entry["features"] = contrib_features[name]
+            requires = paths.contrib_requires.get(name)
+            if requires:
+                entry["requires"] = requires
             return entry
 
         introspection = {
@@ -420,9 +438,16 @@ def _pg_introspect_paths_impl(rctx):
         introspect_json = json.decode(rctx.read(label))
         paths = _installed_paths(introspect_json, version)
 
+        def _contrib_entry(name):
+            entry = {"paths": paths.contrib_paths[name]}
+            requires = paths.contrib_requires.get(name)
+            if requires:
+                entry["requires"] = requires
+            return entry
+
         introspection = {
             "contrib": {
-                name: {"paths": paths.contrib_paths[name]}
+                name: _contrib_entry(name)
                 for name in paths.contrib_names
             },
             "flavor": rctx.attr.flavor,
