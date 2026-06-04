@@ -97,6 +97,10 @@
     "16.0": {
       "tag": "REL_16_0",
       "sha256": "f3ffaa5cbeefd3a6d426423e1001d01e543841946e5b13d4c8ebcad4434f2be8"
+    },
+    "15.0": {
+      "tag": "REL_15_0",
+      "sha256": "b4937daad68d46fb7fe355e588fad1dd8815d157fed22988403502061a103d90"
     }
   },
   "metadata": {
@@ -271,6 +275,12 @@
         "minimal": "//catalog/postgres/introspect:postgres~16.0~minimal.json",
         "regular": "//catalog/postgres/introspect:postgres~16.0~regular.json",
         "full": "//catalog/postgres/introspect:postgres~16.0~full.json"
+      },
+      "15.0": {
+        "barebones": "//catalog/postgres/introspect:postgres~15.0~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~15.0~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~15.0~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~15.0~full.json"
       }
     },
     "patches": [
@@ -284,19 +294,19 @@
       },
       {
         "label": "//catalog/postgres/patches:0002-16.0-fix-pgflex-propagate-environment-to-flex-subprocess.patch",
-        "spec": "*"
+        "spec": ">=16.0/*"
       },
       {
         "label": "//catalog/postgres/patches:0003-16.0-fix-pgflex-suppress-line-directives.patch",
-        "spec": "*"
+        "spec": ">=16.0/*"
       },
       {
         "label": "//catalog/postgres/patches:0004-16.0-fix-pgflex-flex-2.6.4-noline-bugs.patch",
-        "spec": "<17.*/*"
+        "spec": ">=16.0,<17.0/*"
       },
       {
         "label": "//catalog/postgres/patches:0005-16.0-feat-prefix_distro-option.patch",
-        "spec": "*"
+        "spec": ">=16.0/*"
       },
       {
         "label": "//catalog/postgres/patches:0006-16.0-hack-remove-execroot-from-CC.patch",
@@ -416,6 +426,9 @@
         "debian": {
           "12": {
             "*": [
+              "bison",
+              "clang-14",
+              "flex",
               "gettext",
               "libavahi-compat-libdnssd-dev",
               "libcurl4-openssl-dev",
@@ -438,6 +451,8 @@
               "libxslt1-dev",
               "libzstd-dev",
               "llvm-14-dev",
+              "m4",
+              "make",
               "tcl-dev",
               "uuid-dev",
               "zlib1g-dev"
