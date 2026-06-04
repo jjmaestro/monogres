@@ -69,6 +69,25 @@ load("//toolchains/llvm_sysroot:llvm_version.bzl", "LLVM_MAJOR")
 load("//toolchains/perl:perl_toolchain.bzl", _PERL_VERSION = "PERL_VERSION")
 load("//toolchains/python:python_toolchain.bzl", _PYTHON_VERSION = "PYTHON_VERSION")
 
+# Perl interpreter from the @perl_sysroot toolchain, identical to `pg_build.bzl`
+# (Meson): one perl toolchain across both build systems. `_PERL_BIN` is the
+# per-arch alias to the Debian perl-base 5.36 interpreter; its `DefaultInfo` is
+# the perl binary plus the full @perl_sysroot tree as runfiles (perl-base,
+# perl/<V>, share/perl/<V>, and share/perl5 -- the last carrying IPC::Run for
+# the `configure --enable-tap-tests` gate). The interpreter is ABI-reconciled
+# with the per-PG sysroot's libperl-dev / libperl5.36 via the
+# `Config_overrides.pm` shim (loaded through PERL5OPT), exactly as Meson does,
+# so plperl links the per-PG libperl while everything runs on a single perl 5.36
+# ABI track.
+_PERL_BIN = "@monogres//toolchains/perl:perl"
+
+# Full @perl_sysroot tree (arch-selecting alias). A native genrule's `tools`
+# does not stage _PERL_BIN's runfiles the way Meson's `build_data` does, so the
+# tree (perl-modules incl. ExtUtils::Embed, which autoconf's `ldopts` needs)
+# must be a declared input in its own right.
+_PERL_SYSROOT = "@monogres//toolchains/perl:sysroot"
+_PERL_CONFIG_OVERRIDES = "@monogres//monoext/private/base:Config_overrides.pm"
+
 # Action-time setup scripts shared with `pg_build` (Meson). See the docstrings
 # in the scripts themselves; the contract here:
 # - `sysroot_setup.sh <tar> <wrapper> <bsdtar> <llvm-major>` extracts the TARGET
@@ -85,6 +104,7 @@ load("//toolchains/python:python_toolchain.bzl", _PYTHON_VERSION = "PYTHON_VERSI
 # in genrule context `$(execpath ...)` is execroot-relative, so the build script
 # prepends `$EXT_BUILD_ROOT/` itself (rules_foreign_cc does this implicitly for
 # the Meson path).
+_SYSROOT_LIB = "@monogres//monoext/private/base:sysroot_lib.sh"
 _SYSROOT_SETUP_SCRIPT = "@monogres//monoext/private/base:sysroot_setup.sh"
 _EXEC_SYSROOT_SETUP_SCRIPT = "@monogres//monoext/private/base:exec_sysroot_setup.sh"
 
@@ -234,6 +254,7 @@ def _pg_build_make_genrule(
         sysroot_tar,
         exec_sysroot_tar,
         prefix,
+        tap_tests_enabled,
         introspect_synth_script,
         debug):
     srcs = [
@@ -258,11 +279,23 @@ def _pg_build_make_genrule(
     # source tree to produce a meson-shape introspect JSON consumable by Layer 2
     # + gen_contrib; it runs under the same hermetic interpreter.
     tools = [
+        _SYSROOT_LIB,
         _SYSROOT_SETUP_SCRIPT,
         _EXEC_SYSROOT_SETUP_SCRIPT,
         _PYTHON_BIN,
         _PYTHON_FILES,
         introspect_synth_script,
+        # Perl toolchain (exec config: the interpreter runs on the build
+        # machine), mirroring the Meson path. `_PERL_BIN` gives the interpreter
+        # ($(execpath) -> PERL_SYSROOT_DIR); `_PERL_SYSROOT` materializes the
+        # full @perl_sysroot tree (perl-base, perl/<V>, share/perl/<V>,
+        # share/perl5 incl. IPC::Run, and ExtUtils::Embed for autoconf's ldopts)
+        # -- the native genrule does not stage _PERL_BIN's runfiles the way
+        # Meson's `build_data` does, so the tree is a declared input.
+        # `_PERL_CONFIG_OVERRIDES` is the %Config archlibexp/privlibexp shim.
+        _PERL_BIN,
+        _PERL_SYSROOT,
+        _PERL_CONFIG_OVERRIDES,
     ]
 
     # `configure_args` rendered as a bash array.
@@ -309,7 +342,23 @@ def _pg_build_make_genrule(
             TARGET_MULTIARCH="$$(ls "$$SYSROOT_DIR/usr/lib" \\
                 | grep -E '^(x86_64|aarch64)-linux-gnu$$' | head -1)"
 
-            export SYSROOT_DIR EXEC_SYSROOT_DIR TARGET_MULTIARCH
+            # @perl_sysroot tree root: 3x dirname of the perl binary's execroot
+            # path (.../usr/bin/perl -> .../usr/bin -> .../usr -> root). Same
+            # interpreter + ABI-reconciliation the Meson path uses; see _PERL_BIN.
+            PERL_SYSROOT_DIR="$$(dirname $$(dirname $$(dirname "$$EXT_BUILD_ROOT/{perl_bin}")))"
+
+            # `prove` (from @perl_sysroot, found on PATH by `configure
+            # --enable-tap-tests`) is a perl script with a `#!/usr/bin/perl`
+            # shebang; the hermetic chroot has no /usr/bin/perl, so anything that
+            # execs it by shebang fails ("not found", the missing interpreter).
+            # Point /usr/bin/perl at the @perl_sysroot interpreter. Harmless for
+            # non-TAP builds, which invoke perl via $$PERL. IPC::Run needs no
+            # bridge: it rides @perl_sysroot's usr/share/perl5 on PERL5LIB (set
+            # below), exactly as in pg_build.bzl.
+            mkdir -p /usr/bin 2>/dev/null || true
+            ln -sf "$$PERL_SYSROOT_DIR/usr/bin/perl" /usr/bin/perl
+
+            export SYSROOT_DIR EXEC_SYSROOT_DIR TARGET_MULTIARCH PERL_SYSROOT_DIR
         }}
 
         set_up_build_env() {{
@@ -320,7 +369,11 @@ def _pg_build_make_genrule(
             # carry llvm-config plus the planted clang wrapper; `find`-style
             # probes with no env-var override (msgfmt for nls, tclsh for tcl,
             # pkg-config) resolve via PATH.
+            # @perl_sysroot's usr/bin FIRST so `perl` / `prove` resolve to the
+            # perl toolchain (ABI-locked with the per-PG libperl-dev), mirroring
+            # pg_build.bzl's PATH ordering. Then the EXEC per-PG sysroot bins.
             local path=(
+                "$$PERL_SYSROOT_DIR/usr/bin"
                 "$$EXEC_SYSROOT_DIR/usr/bin"
                 "$$EXEC_SYSROOT_DIR/usr/lib/llvm-$$LLVM_MAJOR/bin"
                 "$$SYSROOT_DIR/usr/bin"
@@ -370,23 +423,38 @@ def _pg_build_make_genrule(
             export FLEX="$$EXEC_SYSROOT_DIR/usr/bin/flex"
             export M4="$$EXEC_SYSROOT_DIR/usr/bin/m4"
 
-            # perl from the sysroot. `sysroot_setup.sh` sed-patched this
-            # perl's `Config.pm` / `Config_heavy.pl` to sysroot-rooted paths
-            # (archlib, libpth), and planted the multiarch `libperl.so` into
-            # the `perl/<V>/CORE/` dir — so `ExtUtils::Embed::ldopts` (plperl)
-            # emits `-L` flags that resolve inside the extracted tree.
-            # PERL5LIB makes the interpreter's module tree resolvable under
-            # the hermetic chroot: the compiled-in @INC paths under
-            # `/usr/lib/<arch>/` are covered by the chroot symlinks, but
-            # `/usr/share/perl/<V>` (perl-modules: strict.pm, ExtUtils, ...)
-            # is not, so list the sysroot copies explicitly.
-            export PERL="$$EXEC_SYSROOT_DIR/usr/bin/perl"
+            # Perl from the @perl_sysroot toolchain (PERL_SYSROOT_DIR), identical
+            # to pg_build.bzl: one perl across both build systems. PERL5LIB lists
+            # the Config_overrides.pm dir first, then @perl_sysroot's module dirs
+            # under the sysroot multiarch, then the vendor `usr/share/perl5`
+            # carrying IPC::Run for the `configure --enable-tap-tests` gate.
+            # PERL5OPT loads the shim so plperl's `ExtUtils::Embed::ldopts` emits
+            # `-L<per-PG sysroot>/usr/lib/<target-arch>/perl/<V>/CORE -lperl`
+            # (PERL_DEBIAN_ARCHLIB) instead of @perl_sysroot's compiled-in HOST
+            # path; the per-PG libperl-dev / libperl5.36 keep the plperl lifecycle
+            # on a single perl 5.36 ABI.
+            export PERL="$$PERL_SYSROOT_DIR/usr/bin/perl"
             local perl5lib=(
-                "$$EXEC_SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/perl-base"
-                "$$EXEC_SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/perl/$$PERL_VERSION"
-                "$$EXEC_SYSROOT_DIR/usr/share/perl/$$PERL_VERSION"
+                "$$(dirname "$$EXT_BUILD_ROOT/{perl_config_overrides}")"
+                "$$PERL_SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/perl-base"
+                "$$PERL_SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/perl/$$PERL_VERSION"
+                "$$PERL_SYSROOT_DIR/usr/share/perl/$$PERL_VERSION"
+                "$$PERL_SYSROOT_DIR/usr/share/perl5"
             )
             export PERL5LIB="$$(IFS=:; echo "$${{perl5lib[*]}}")"
+            export PERL5OPT="-MConfig_overrides"
+            export PERL_DEBIAN_ARCHLIB="$$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/perl/$$PERL_VERSION"
+
+            # tcl from the sysroot. The exec `tclsh`'s compiled-in TCL_LIBRARY is
+            # the host path `/usr/share/tcltk/tcl8.6`, absent in the sandbox, so
+            # without an override tclsh cannot find `init.tcl` and configure's
+            # `--with-tcl` probe ("checking for tclConfig.sh") fails before the
+            # interpreter even initializes. Point TCL_LIBRARY at the EXEC
+            # sysroot's tcl script library (Debian installs `init.tcl` + the
+            # `tcl8/` module dir, incl. msgcat, here) so tclsh initializes and
+            # configure resolves tclConfig.sh (`usr/lib/tcl8.6/`). The runtime
+            # harness sets the same var against the runtime closure for pltcl.
+            export TCL_LIBRARY="$$EXEC_SYSROOT_DIR/usr/share/tcltk/tcl8.6"
 
             # GNU make from the sysroot (see module docstring: RFCC's
             # bootstrapped make cannot run inside the hermetic chroot).
@@ -511,6 +579,22 @@ PY_SHIM_EOF
             local python_shim_dir="$$1"; shift
             local configure_args=("$$@");
 
+            # Debian's `/usr/lib/tclConfig.sh` is a redirector that sources
+            # `/usr/lib/$$(dpkg-architecture -qDEB_HOST_MULTIARCH)/tcl8.6/tclConfig.sh`
+            # by host-absolute path; `dpkg-architecture` is absent in the
+            # sandbox, so configure's `--with-tcl` probe finds the redirector
+            # but sourcing it fails ("No such file or directory"). When tcl is
+            # enabled, point `--with-tclconfig` at the REAL multiarch
+            # tclConfig.sh so configure reads it directly; its
+            # `-I/usr/include/...` / `-L/usr/lib/...` specs then resolve through
+            # the compiler's `--sysroot`.
+            for arg in "$${{configure_args[@]}}"; do
+                if [ "$$arg" = "--with-tcl" ]; then
+                    configure_args+=("--with-tclconfig=$$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/tcl8.6")
+                    break
+                fi
+            done
+
             echo "# $$(date) - run_configure"
 
             # The C compiler is the planted @libc_sysroot clang wrapper (see
@@ -537,6 +621,13 @@ PY_SHIM_EOF
                 "-idirafter $$SYSROOT_DIR/usr/include"
                 "-idirafter $$SYSROOT_DIR/usr/include/$$TARGET_MULTIARCH"
                 "-idirafter $$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/perl/$$PERL_VERSION/CORE"
+                # pltcl needs `<tcl.h>`. tclConfig.sh's TCL_INCLUDE_SPEC is the
+                # host-absolute `-I/usr/include/tcl8.6`, which clang does NOT
+                # rewrite through `--sysroot` (only default search paths +
+                # `-idirafter` are sysroot-relative), so the configure `<tcl.h>`
+                # probe and the pltcl compile both need the sysroot tcl include
+                # dir added explicitly.
+                "-idirafter $$SYSROOT_DIR/usr/include/tcl8.6"
             )
 
             # Debian's sysroot splits libraries between `/usr/lib/<arch>/`
@@ -752,6 +843,85 @@ PY_SHIM_EOF
                 --out "$$out"
         }}
 
+        stage_test_libs() {{
+            # Capture the regression support modules (regress.so, plus
+            # refint.so/autoinc.so) into pkglibdir so core pg_regress finds them
+            # on --dlpath with no build tree. PG's autoconf install never ships
+            # regress.so (only the never-default `install-tests` target), and
+            # refint/autoinc reach lib/postgresql only under install-world-bin;
+            # all three are always BUILT into $$WORKDIR/src/test/regress/ by
+            # `make all`, so copy them from there. Mirrors the meson postfix.
+            local workdir="$$1"; shift
+            local installdir="$$1"; shift
+            local prefix="$$1"; shift
+
+            echo "# $$(date) - stage_test_libs"
+
+            local src_dir="$$workdir/src/test/regress"
+            local dst_dir="$$installdir$$prefix/lib/postgresql"
+            mkdir -p "$$dst_dir"
+            local mod
+            for mod in regress refint autoinc; do
+                local found="$$src_dir/$$mod.so"
+                if [ -f "$$found" ]; then
+                    cp -f "$$found" "$$dst_dir/"
+                fi
+            done
+        }}
+
+        stage_test_bin() {{
+            # The libpq TAP suites (interfaces/libpq/tap) run libpq_uri_regress +
+            # libpq_testclient by bare name, and the pg_bsd_indent TAP suite runs
+            # pg_bsd_indent. PG's `world-bin` builds neither
+            # src/interfaces/libpq/test nor src/tools/pg_bsd_indent (both
+            # `install: false` developer/test helpers), so build them here and
+            # stage the programs into test_bin/, which the harness puts on the TAP
+            # PATH. Mirrors the meson _TEST_MODULES_CAPTURE, scoped to the
+            # test-helper dirs the make introspect renders: src/test/modules suites are
+            # not installed by make, so they are never enumerated.
+            local workdir="$$1"; shift
+            local installdir="$$1"; shift
+            local prefix="$$1"; shift
+
+            echo "# $$(date) - stage_test_bin"
+
+            local dst_dir="$$installdir$$prefix/test_bin"
+            mkdir -p "$$dst_dir"
+
+            # libpq test helpers.
+            local libpq_test_dir="$$workdir/src/interfaces/libpq/test"
+            if [ -d "$$libpq_test_dir" ]; then
+                "$$MAKE_BIN" -C "$$libpq_test_dir" -j"$$JOBS" FLEXFLAGS=-noline all \\
+                    || return $$?
+                local prog
+                for prog in libpq_uri_regress libpq_testclient; do
+                    if [ -x "$$libpq_test_dir/$$prog" ]; then
+                        cp -f "$$libpq_test_dir/$$prog" "$$dst_dir/"
+                    fi
+                done
+            fi
+
+            # pg_bsd_indent: a standalone source-formatting tool whose
+            # t/001_pg_bsd_indent.pl runs it by bare name on PATH. world-bin
+            # does not build it (install: false upstream), so build it here.
+            # Built serially: it is seven source files, so -j buys nothing and
+            # avoids racing its order-only submake-generated-headers /
+            # submake-libpgport prerequisites under recursive make. A missing
+            # binary after a clean make is a staging bug, not a no-op, so fail
+            # loudly rather than silently shipping a test_bin/ without it.
+            local indent_dir="$$workdir/src/tools/pg_bsd_indent"
+            if [ -d "$$indent_dir" ]; then
+                "$$MAKE_BIN" -C "$$indent_dir" FLEXFLAGS=-noline all
+                if [ -x "$$indent_dir/pg_bsd_indent" ]; then
+                    cp -f "$$indent_dir/pg_bsd_indent" "$$dst_dir/"
+                else
+                    echo "stage_test_bin: pg_bsd_indent not produced by make" >&2
+                    ls -la "$$indent_dir" >&2 || true
+                    exit 1
+                fi
+            fi
+        }}
+
         tar_install() {{
             local tar_file="$$1"; shift
             local installdir="$$1"; shift
@@ -829,6 +999,7 @@ PY_SHIM_EOF
 {make_install_targets_array}
         )
         INSTALL_PREFIX="{install_prefix}"
+        TAP_TESTS_ENABLED="{tap_tests_enabled}"
 
         WORKDIR="$$EXT_BUILD_ROOT/build_tmp"
         INSTALLDIR="$$EXT_BUILD_ROOT/install_tmp"
@@ -882,6 +1053,20 @@ PY_SHIM_EOF
 
             scrub_install_tree "$$INSTALLDIR"
 
+            # Stage regress.so/refint.so/autoinc.so from the build tree into the
+            # install tree (PG's autoconf install never ships regress.so; see
+            # stage_test_libs). Runs before tar_install so the libs ride in the
+            # `:tar` artifact `_install_tree` extracts; the harness reads them
+            # from the unpacked `lib/postgresql/` on --dlpath.
+            stage_test_libs "$$WORKDIR" "$$INSTALLDIR" "$$INSTALL_PREFIX"
+
+            # Build + stage the libpq TAP helper programs into test_bin/ for the
+            # test variant only (tap_tests=enabled); production builds skip the
+            # extra make + ship no test_bin/.
+            if [ "$$TAP_TESTS_ENABLED" = "True" ]; then
+                stage_test_bin "$$WORKDIR" "$$INSTALLDIR" "$$INSTALL_PREFIX"
+            fi
+
             # The introspect synth wants prefix-relative paths
             # (`bin/postgres`, `share/postgresql/extension/*.control`, ...),
             # the same convention meson emits. `make install
@@ -910,6 +1095,7 @@ PY_SHIM_EOF
         log_file = "$(execpath %s)" % log_file,
         introspect_json_file = "$(execpath %s)" % introspect_json_file,
         synth_script = "$(execpath %s)" % introspect_synth_script,
+        tap_tests_enabled = "%s" % tap_tests_enabled,
         pg_src = "$(execpath %s)" % pg_src,
         sysroot_tar = "$(execpath %s)" % sysroot_tar,
         exec_sysroot_tar = "$(execpath %s)" % exec_sysroot_tar,
@@ -917,6 +1103,8 @@ PY_SHIM_EOF
         sysroot_setup = "$(execpath %s)" % _SYSROOT_SETUP_SCRIPT,
         exec_sysroot_setup = "$(execpath %s)" % _EXEC_SYSROOT_SETUP_SCRIPT,
         python_bin = "$(execpath %s)" % _PYTHON_BIN,
+        perl_bin = "$(execpath %s)" % _PERL_BIN,
+        perl_config_overrides = "$(execpath %s)" % _PERL_CONFIG_OVERRIDES,
         llvm_major = LLVM_MAJOR,
         perl_version = _PERL_VERSION,
         python_version = _PYTHON_VERSION,
@@ -1051,6 +1239,10 @@ def pg_build_make(
     # own name is `:<name>.genrule` (private); its output filenames stay
     # `<name>.tar` / `<name>.log` / `<name>.introspect.json` so file-label
     # consumers (the `:logs` alias, the `:introspect` filegroup) keep resolving.
+    # The test-enabled build variant flips tap_tests=enabled; gate the libpq TAP
+    # helper build + test_bin/ staging on it (production builds keep neither).
+    tap_tests_enabled = build_options.get("tap_tests") == "enabled"
+
     tar_file = "%s.tar" % name
     log_file = "%s.log" % name
     introspect_json_file = "%s.introspect.json" % name
@@ -1067,6 +1259,7 @@ def pg_build_make(
         sysroot_tar = sysroot_tar,
         exec_sysroot_tar = exec_sysroot_tar,
         prefix = prefix,
+        tap_tests_enabled = tap_tests_enabled,
         introspect_synth_script = introspect_synth_script,
         debug = debug,
     )
@@ -1075,7 +1268,11 @@ def pg_build_make(
     # `:toolchain` target maps each `<install_dir>/bin/<binary>` to an uppercase
     # variable (e.g. `pg_config` -> `PG_CONFIG`). Matches the set the Meson path
     # declares via `out_binaries`, including the contrib-gated extras only when
-    # contrib is enabled in this option set.
+    # contrib is enabled in this option set. psql drives pg_regress (it shells
+    # out to psql per test); pg_ctl stops the --temp-instance postmaster.
+    # Matches the meson out_binaries set so `$(PSQL)`/`$(PG_CTL)` resolve on
+    # both paths; both are already in the install `bin/`, so this only adds the
+    # `:toolchain` template-vars (no tar change).
     contrib_value = build_options.get("contrib")
     contrib_enabled = (
         contrib_value == True or
@@ -1083,7 +1280,7 @@ def pg_build_make(
             contrib_value,
         ) == "string" and contrib_value.lower() in ("enabled", "true"))
     )
-    pg_binaries = ["initdb", "postgres", "pg_config", "pg_isready"]
+    pg_binaries = ["initdb", "postgres", "pg_config", "pg_isready", "psql", "pg_ctl"]
     if contrib_enabled:
         pg_binaries += ["oid2name", "vacuumlo"]
 
