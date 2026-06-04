@@ -25,6 +25,8 @@ gen_contrib consume:
   the binary or renames it (extremely unlikely upstream), this hardcoded
   fallback would drift — re-check after any major PG version bump that
   changes the binary location.
+- `test_suites`: version-exact, option-set-gated regression/isolation suite
+  introspect (the make analog of meson's `.tests`); see `_synth_test_suites`.
 
 Pure-Python stdlib; runs inside the `pg_build_make` genrule's shell with the
 hermetic rules_python interpreter.
@@ -56,6 +58,7 @@ hermetic rules_python interpreter.
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -135,6 +138,338 @@ def _walk_install(installdir: Path) -> list[str]:
         for f in installdir.rglob("*")
         if f.is_file() or f.is_symlink()
     )
+
+
+# ---------------------------------------------------------------------------
+# Test-suites: version-exact, option-set-gated
+# ---------------------------------------------------------------------------
+#
+# `meson introspect` emits a `.tests` array describing every regression /
+# isolation suite the configured build can run, gated by the enabled options
+# (a PL or contrib that was not built contributes no tests). The make path has
+# no such array, so we synthesize an equivalent `test_suites` introspect by reading
+# the SAME truth the build itself uses:
+#
+#   - core regress:   src/test/regress/parallel_schedule  (the runnable order)
+#   - core isolation: src/test/isolation/isolation_schedule
+#   - each PL built:  src/pl/<dir>/{Makefile,GNUmakefile}  REGRESS / ISOLATION
+#   - each contrib built: contrib/<name>/Makefile          REGRESS / ISOLATION
+#
+# Option-set gating is automatic: PLs/contribs that configure did not build are
+# absent from the install tree, so they are never enumerated. The introspect is
+# therefore version-exact AND option-set-exact, mirroring meson.
+#
+# Confirmed (PG15 contrib/PL Makefiles): REGRESS / ISOLATION are single static
+# assignments (line-continued); there is no `REGRESS +=` and no Linux-relevant
+# conditional append, so a literal read is faithful. From REGRESS_OPTS /
+# ISOLATION_OPTS only the `--temp-config <conf>` overlay is parsed (into
+# `temp_config_srcrel`, so a make suite rides its OWN source .conf via
+# `--temp-config-srcrel`, the same as meson, with no checked-in copy); the other
+# OPTS (e.g. postgres_fdw's --load-extension) remain per-suite harness config
+# carried by the catalog's `metadata.test_overrides`.
+#
+# src/test/modules/* suites that meson runs are intentionally omitted: `make
+# install` does not install them, so the make harness cannot run them anyway.
+
+# PL slug -> (source makefile relpath, installed .control basename that proves
+# the PL was built). plpython's control basename is python-major dependent
+# (plpython3u.control on PG >= 11), so it is matched by prefix in
+# `_pl_installed` rather than a fixed basename.
+_PL_SOURCES = (
+    ("plpgsql", "src/pl/plpgsql/src/Makefile", "plpgsql.control"),
+    ("plperl", "src/pl/plperl/GNUmakefile", "plperl.control"),
+    ("pltcl", "src/pl/tcl/Makefile", "pltcl.control"),
+    ("plpython", "src/pl/plpython/Makefile", None),
+)
+
+
+def _makefile_raw_var(makefile: Path, var: str) -> str:
+    """Raw RHS of the first `var [:+]?= ...` assignment, or '' if absent.
+
+    Joins backslash line-continuations and strips `#` comments, but does NOT
+    tokenize or filter, so `$(...)`-bearing values survive (needed to read
+    `REGRESS_OPTS` / `ISOLATION_OPTS`, whose `--temp-config` argument is a
+    `$(top_srcdir)/...` path). PG contrib/PL Makefiles assign these once (no
+    `+=`), so the first assignment is faithful. '' if absent or unreadable.
+    """
+    try:
+        lines = makefile.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return ""
+    start = re.compile(r"^\s*" + re.escape(var) + r"\s*[:+]?=\s*(.*)$")
+    i, n = 0, len(lines)
+    while i < n:
+        m = start.match(lines[i])
+        if not m:
+            i += 1
+            continue
+        frag = m.group(1)
+        chunk: list[str] = []
+        while True:
+            frag = frag.split("#", 1)[0].rstrip()
+            if frag.endswith("\\"):
+                chunk.append(frag[:-1])
+                i += 1
+                if i >= n:
+                    break
+                frag = lines[i]
+            else:
+                chunk.append(frag)
+                break
+        return " ".join(chunk)
+    return ""
+
+
+def _makefile_list_var(makefile: Path, var: str) -> list[str]:
+    """Read a make list variable (e.g. `REGRESS`, `ISOLATION`) as tokens.
+
+    Drops tokens that are make variable references (containing `$`) or `k=v`
+    assignments. Returns [] if the var is absent or unreadable.
+    """
+    return [
+        tok
+        for tok in _makefile_raw_var(makefile, var).split()
+        if "$" not in tok and "=" not in tok
+    ]
+
+
+def _makefile_temp_config(makefile: Path, var: str, subtree: str) -> str:
+    """Source-root-relative path of a `--temp-config` .conf in `<var>_OPTS`, or ''.
+
+    PG contrib Makefiles pass the temp-config overlay through
+    `REGRESS_OPTS` / `ISOLATION_OPTS` (e.g. test_decoding's
+    `--temp-config $(top_srcdir)/contrib/test_decoding/logical.conf`). Resolve
+    the argument to a path relative to the source root so the harness rides the
+    suite's OWN source .conf via `--temp-config-srcrel` (no checked-in copy),
+    matching the meson path: `$(top_srcdir)/X` -> `X`, `$(srcdir)/X` ->
+    `<subtree>/X`, bare -> `<subtree>/<basename>`.
+    """
+    toks = _makefile_raw_var(makefile, var + "_OPTS").split()
+    for i, tok in enumerate(toks):
+        if tok == "--temp-config" and i + 1 < len(toks):
+            arg = toks[i + 1]
+            for prefix in ("$(top_srcdir)/", "$(top_builddir)/"):
+                if arg.startswith(prefix):
+                    return arg[len(prefix) :]
+            srcdir = "$(srcdir)/"
+            if arg.startswith(srcdir):
+                return f"{subtree}/{arg[len(srcdir) :]}"
+            base = arg.rsplit("/", 1)[-1]
+            return f"{subtree}/{base}"
+    return ""
+
+
+def _schedule_tests(schedule: Path) -> list[str]:
+    """Ordered test names from a pg_regress schedule file (`test: a b c`)."""
+    out: list[str] = []
+    try:
+        content = schedule.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return out
+    for raw in content.splitlines():
+        line = raw.strip()
+        if line.startswith("test:"):
+            out.extend(line[len("test:") :].split())
+    return out
+
+
+def _pl_installed(slug: str, install_basenames: set[str]) -> bool:
+    """True if PL `slug` shipped a `.control` into the install tree."""
+    if slug == "plpython":
+        return any(
+            b.startswith("plpython") and b.endswith(".control")
+            for b in install_basenames
+        )
+    control = {s: c for s, _, c in _PL_SOURCES}[slug]
+    return control in install_basenames
+
+
+def _contribs_installed(
+    install_paths: list[str],
+    owner_index: dict[str, str],
+    contrib_names: list[str],
+) -> set[str]:
+    """Contribs that shipped a real, testable artifact: a `.control` (an
+    extension) or a `.so` (a loadable module).
+
+    Each such installed file is attributed to its owning contrib via the same
+    `_owner_for` logic used for `installed`, so variant control names
+    (hstore_plpython3u.control) AND built module names (test_decoding.so,
+    passwordcheck.so, basic_archive.so -- output plugins / preload modules that
+    have a REGRESS test but no `.control`) all map. Reduced option sets (contrib
+    off) install neither, so a CORE header whose basename prefix-collides with a
+    contrib name (core `executor/tablefunc.h` vs the `tablefunc` contrib) does
+    NOT make that contrib look installed.
+    """
+    out: set[str] = set()
+    for install_rel in install_paths:
+        if install_rel.endswith((".control", ".so")):
+            owner = _owner_for(install_rel, owner_index, contrib_names)
+            if owner:
+                out.add(owner)
+    return out
+
+
+def _makefile_suites(slug: str, makefile: Path, subtree: str) -> list[dict]:
+    """The regress/isolation suite decls a contrib/PL Makefile defines.
+
+    `REGRESS` -> a regress suite, `ISOLATION` -> an isolation suite (a slug may
+    yield both). `subtree` is the suite's source subtree (the Makefile's
+    directory relative to the source root), carried so the codegen mirrors the
+    source tree like the meson path. Empty list when the Makefile sets neither.
+    """
+    out: list[dict] = []
+    for kind, var in (("regress", "REGRESS"), ("isolation", "ISOLATION")):
+        names = _makefile_list_var(makefile, var)
+        if names:
+            decl = {"slug": slug, "kind": kind, "subtree": subtree, "tests": names}
+            srcrel = _makefile_temp_config(makefile, var, subtree)
+            if srcrel:
+                decl["temp_config_srcrel"] = srcrel
+            out.append(decl)
+    return out
+
+
+_BUILD_CFG_RE = re.compile(r"^(with_[a-z0-9_]+|enable_[a-z0-9_]+)\s*=\s*(.*)$")
+
+
+def _build_config_env(workdir: Path) -> dict[str, str]:
+    """Build-config gates (with_*/enable_*) from the configured Makefile.global.
+
+    TAP scripts branch on these: 002_api.pl checks `$ENV{with_ssl} eq 'openssl'`,
+    ssl/ldap/gssapi suites `skip unless $ENV{with_*}`. meson's testwrap exports
+    them from its build config (they ride each `.tests[].env`); the make analog
+    is `src/Makefile.global`, which configure populates with the resolved values
+    (`with_ssl = openssl`, `with_ldap = yes`, an empty value when not built). We
+    surface them so each synthesized TAP suite carries the same gates as meson.
+
+    Only short scalar tokens are kept: values carrying a path/make-ref/line
+    continuation (`with_temp_install`, `with_system_tzdata`, ...) are dropped, as
+    they are build internals no `.pl` reads as a feature gate.
+    """
+    mg = workdir / "src" / "Makefile.global"
+    out: dict[str, str] = {}
+    try:
+        text = mg.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return out
+    for line in text.splitlines():
+        m = _BUILD_CFG_RE.match(line)
+        if not m:
+            continue
+        key, val = m.group(1), m.group(2).strip()
+        if any(c in val for c in ("\\", "$", "/")):
+            continue
+        out[key] = val
+    return out
+
+
+def _synth_tap_suites(workdir: Path, install_paths: list[str]) -> list[dict]:
+    """Synthesize the TAP suites by walking the source tree.
+
+    Every `src/**/t/` directory holding `*.pl` files is one TAP suite, carrying
+    its source subtree, the `.pl` basenames it runs, and the build-config gates
+    (`tap_env`) the scripts branch on (the meson path gets all of this from its
+    `.tests` array). src/test/modules/* is excluded: `make install` does not
+    install those modules, so the harness cannot run them.
+
+    Gated on the build having installed the PostgreSQL::Test driver: only a
+    `--enable-tap-tests` (test-variant) build ships it, so a production build
+    contributes no TAP suites, mirroring meson's tap_tests-gated registration.
+    """
+    out: list[dict] = []
+    if not any("PostgreSQL/Test/Cluster.pm" in p for p in install_paths):
+        return out
+    src = workdir / "src"
+    if not src.is_dir():
+        return out
+    tap_env = _build_config_env(workdir)
+    for t_dir in sorted(src.rglob("t")):
+        if not t_dir.is_dir():
+            continue
+        suite_dir = t_dir.parent
+        subtree = str(suite_dir.relative_to(workdir))
+        if subtree.startswith("src/test/modules"):
+            continue
+        pls = sorted(p.stem for p in t_dir.glob("*.pl"))
+        if pls:
+            entry = {
+                "slug": suite_dir.name,
+                "kind": "tap",
+                "subtree": subtree,
+                "tests": pls,
+            }
+            if tap_env:
+                entry["tap_env"] = tap_env
+            out.append(entry)
+    return out
+
+
+def _synth_test_suites(
+    workdir: Path,
+    contrib_names: list[str],
+    install_paths: list[str],
+    owner_index: dict[str, str],
+) -> list[dict]:
+    """Build the version-exact, option-set-gated `test_suites` introspect.
+
+    One entry per (slug, kind): a slug that defines both `REGRESS` and
+    `ISOLATION` (e.g. test_decoding, postgres_fdw) yields two entries. Core
+    regress/isolation carry their `schedule` basename (the harness drives off
+    the schedule file in the source tree); contrib/PL suites carry an inline
+    `tests` list (no schedule file). `tests` is order-preserving (schedule /
+    REGRESS order is load-bearing for pg_regress). Gating is by install-tree
+    presence: a PL/contrib that did not install is never enumerated; a contrib is
+    enumerated only when it installed a real artifact, a .control or .so (see
+    `_contribs_installed`).
+    """
+    install_basenames = {Path(p).name for p in install_paths}
+    installed_contribs = _contribs_installed(install_paths, owner_index, contrib_names)
+    suites: list[dict] = []
+
+    core_regress = workdir / "src/test/regress/parallel_schedule"
+    if core_regress.is_file():
+        suites.append({
+            "slug": "regress",
+            "kind": "regress",
+            "subtree": "src/test/regress",
+            "schedule": "parallel_schedule",
+            # the main schedule runs with up to 20 concurrent backends, the
+            # same fan-out meson tags with --max-concurrent-tests=20.
+            "max_conc": 20,
+            "tests": _schedule_tests(core_regress),
+        })
+
+    core_isolation = workdir / "src/test/isolation/isolation_schedule"
+    if core_isolation.is_file():
+        suites.append({
+            "slug": "isolation",
+            "kind": "isolation",
+            "subtree": "src/test/isolation",
+            "schedule": "isolation_schedule",
+            "tests": _schedule_tests(core_isolation),
+        })
+
+    for slug, mk_rel, _control in _PL_SOURCES:
+        if _pl_installed(slug, install_basenames):
+            # The Makefile's directory is the suite's source subtree (plpgsql's
+            # sql/expected live beside its Makefile under src/pl/plpgsql/src),
+            # matching what meson's --inputdir yields.
+            subtree = str(Path(mk_rel).parent)
+            suites.extend(_makefile_suites(slug, workdir / mk_rel, subtree))
+
+    # Skip a contrib whose name only a core header prefix-collided with (it
+    # installed neither a .control nor a .so, so it is not really built here).
+    for name in contrib_names:
+        if name in installed_contribs:
+            makefile = workdir / "contrib" / name / "Makefile"
+            suites.extend(_makefile_suites(name, makefile, "contrib/" + name))
+
+    # TAP suites are walked from the source tree (not the Makefile introspect),
+    # mirroring meson's per-.pl registration; gated on the TAP driver install.
+    suites.extend(_synth_tap_suites(workdir, install_paths))
+
+    return suites
 
 
 def synth(workdir: Path, installdir: Path, prefix: str) -> dict:
@@ -226,6 +561,12 @@ def synth(workdir: Path, installdir: Path, prefix: str) -> dict:
         "buildsystem_files": buildsystem_files,
         "installed": installed,
         "targets": targets,
+        "test_suites": _synth_test_suites(
+            workdir,
+            contrib_names,
+            install_paths,
+            owner_index,
+        ),
     }
 
 
