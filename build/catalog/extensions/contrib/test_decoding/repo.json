@@ -3,6 +3,11 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/bitcode/test_decoding.index.bc",
+          "lib/bitcode/test_decoding/test_decoding.bc",
+          "lib/test_decoding.so"
+        ],
         "16.0": [
           "lib/test_decoding.so"
         ],
@@ -75,6 +80,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

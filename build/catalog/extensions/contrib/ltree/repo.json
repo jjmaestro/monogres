@@ -3,6 +3,24 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "include/server/extension/ltree/ltree.h",
+          "lib/bitcode/ltree.index.bc",
+          "lib/bitcode/ltree/_ltree_gist.bc",
+          "lib/bitcode/ltree/_ltree_op.bc",
+          "lib/bitcode/ltree/crc32.bc",
+          "lib/bitcode/ltree/lquery_op.bc",
+          "lib/bitcode/ltree/ltree_gist.bc",
+          "lib/bitcode/ltree/ltree_io.bc",
+          "lib/bitcode/ltree/ltree_op.bc",
+          "lib/bitcode/ltree/ltxtquery_io.bc",
+          "lib/bitcode/ltree/ltxtquery_op.bc",
+          "lib/ltree.so",
+          "share/extension/ltree--1.0--1.1.sql",
+          "share/extension/ltree--1.1--1.2.sql",
+          "share/extension/ltree--1.1.sql",
+          "share/extension/ltree.control"
+        ],
         "16.0": [
           "include/server/extension/ltree/ltree.h",
           "lib/ltree.so",
@@ -195,6 +213,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

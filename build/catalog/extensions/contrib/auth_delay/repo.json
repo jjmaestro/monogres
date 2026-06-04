@@ -3,6 +3,11 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/auth_delay.so",
+          "lib/bitcode/auth_delay.index.bc",
+          "lib/bitcode/auth_delay/auth_delay.bc"
+        ],
         "16.0": [
           "lib/auth_delay.so"
         ],
@@ -75,6 +80,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

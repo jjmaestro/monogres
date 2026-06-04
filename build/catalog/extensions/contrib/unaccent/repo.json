@@ -3,6 +3,15 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/bitcode/unaccent.index.bc",
+          "lib/bitcode/unaccent/unaccent.bc",
+          "lib/unaccent.so",
+          "share/extension/unaccent--1.0--1.1.sql",
+          "share/extension/unaccent--1.1.sql",
+          "share/extension/unaccent.control",
+          "share/tsearch_data/unaccent.rules"
+        ],
         "16.0": [
           "lib/unaccent.so",
           "share/extension/unaccent--1.0--1.1.sql",
@@ -163,6 +172,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

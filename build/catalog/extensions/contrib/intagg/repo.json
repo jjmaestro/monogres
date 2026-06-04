@@ -3,6 +3,11 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "share/extension/intagg--1.0--1.1.sql",
+          "share/extension/intagg--1.1.sql",
+          "share/extension/intagg.control"
+        ],
         "16.0": [
           "share/extension/intagg--1.0--1.1.sql",
           "share/extension/intagg--1.1.sql",
@@ -119,6 +124,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

@@ -3,6 +3,22 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/bitcode/pg_trgm.index.bc",
+          "lib/bitcode/pg_trgm/trgm_gin.bc",
+          "lib/bitcode/pg_trgm/trgm_gist.bc",
+          "lib/bitcode/pg_trgm/trgm_op.bc",
+          "lib/bitcode/pg_trgm/trgm_regexp.bc",
+          "lib/pg_trgm.so",
+          "share/extension/pg_trgm--1.0--1.1.sql",
+          "share/extension/pg_trgm--1.1--1.2.sql",
+          "share/extension/pg_trgm--1.2--1.3.sql",
+          "share/extension/pg_trgm--1.3--1.4.sql",
+          "share/extension/pg_trgm--1.3.sql",
+          "share/extension/pg_trgm--1.4--1.5.sql",
+          "share/extension/pg_trgm--1.5--1.6.sql",
+          "share/extension/pg_trgm.control"
+        ],
         "16.0": [
           "lib/pg_trgm.so",
           "share/extension/pg_trgm--1.0--1.1.sql",
@@ -251,6 +267,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

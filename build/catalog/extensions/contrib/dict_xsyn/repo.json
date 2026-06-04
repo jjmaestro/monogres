@@ -3,6 +3,14 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/bitcode/dict_xsyn.index.bc",
+          "lib/bitcode/dict_xsyn/dict_xsyn.bc",
+          "lib/dict_xsyn.so",
+          "share/extension/dict_xsyn--1.0.sql",
+          "share/extension/dict_xsyn.control",
+          "share/tsearch_data/xsyn_sample.rules"
+        ],
         "16.0": [
           "lib/dict_xsyn.so",
           "share/extension/dict_xsyn--1.0.sql",
@@ -141,6 +149,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

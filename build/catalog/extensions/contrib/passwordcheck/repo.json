@@ -3,6 +3,11 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/bitcode/passwordcheck.index.bc",
+          "lib/bitcode/passwordcheck/passwordcheck.bc",
+          "lib/passwordcheck.so"
+        ],
         "16.0": [
           "lib/passwordcheck.so"
         ],
@@ -75,6 +80,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

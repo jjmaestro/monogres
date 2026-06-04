@@ -3,6 +3,13 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/bitcode/pg_walinspect.index.bc",
+          "lib/bitcode/pg_walinspect/pg_walinspect.bc",
+          "lib/pg_walinspect.so",
+          "share/extension/pg_walinspect--1.0.sql",
+          "share/extension/pg_walinspect.control"
+        ],
         "16.0": [
           "lib/pg_walinspect.so",
           "share/extension/pg_walinspect--1.0--1.1.sql",
@@ -141,6 +148,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

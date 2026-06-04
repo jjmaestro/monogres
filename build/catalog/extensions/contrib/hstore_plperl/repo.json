@@ -158,6 +158,15 @@
           "share/extension/hstore_plperlu.control"
         ]
       }
+    },
+    "requires": {
+      "postgres": {
+        "*": [
+          "hstore",
+          "plperl",
+          "plperlu"
+        ]
+      }
     }
   },
   "version": 1,

@@ -3,6 +3,15 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/bitcode/pgrowlocks.index.bc",
+          "lib/bitcode/pgrowlocks/pgrowlocks.bc",
+          "lib/pgrowlocks.so",
+          "share/extension/pgrowlocks--1.0--1.1.sql",
+          "share/extension/pgrowlocks--1.1--1.2.sql",
+          "share/extension/pgrowlocks--1.2.sql",
+          "share/extension/pgrowlocks.control"
+        ],
         "16.0": [
           "lib/pgrowlocks.so",
           "share/extension/pgrowlocks--1.0--1.1.sql",
@@ -163,6 +172,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

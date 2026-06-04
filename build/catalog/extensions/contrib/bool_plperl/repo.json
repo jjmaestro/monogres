@@ -158,6 +158,14 @@
           "share/extension/bool_plperlu.control"
         ]
       }
+    },
+    "requires": {
+      "postgres": {
+        "*": [
+          "plperl",
+          "plperlu"
+        ]
+      }
     }
   },
   "version": 1,

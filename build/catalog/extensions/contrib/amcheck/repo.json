@@ -3,6 +3,17 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/amcheck.so",
+          "lib/bitcode/amcheck.index.bc",
+          "lib/bitcode/amcheck/verify_heapam.bc",
+          "lib/bitcode/amcheck/verify_nbtree.bc",
+          "share/extension/amcheck--1.0--1.1.sql",
+          "share/extension/amcheck--1.0.sql",
+          "share/extension/amcheck--1.1--1.2.sql",
+          "share/extension/amcheck--1.2--1.3.sql",
+          "share/extension/amcheck.control"
+        ],
         "16.0": [
           "lib/amcheck.so",
           "share/extension/amcheck--1.0--1.1.sql",
@@ -197,6 +208,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

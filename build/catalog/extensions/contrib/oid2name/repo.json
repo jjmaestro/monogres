@@ -3,6 +3,9 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "bin/oid2name"
+        ],
         "16.0": [
           "bin/oid2name"
         ],
@@ -75,6 +78,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

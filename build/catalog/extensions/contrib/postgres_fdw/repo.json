@@ -3,6 +3,18 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/bitcode/postgres_fdw.index.bc",
+          "lib/bitcode/postgres_fdw/connection.bc",
+          "lib/bitcode/postgres_fdw/deparse.bc",
+          "lib/bitcode/postgres_fdw/option.bc",
+          "lib/bitcode/postgres_fdw/postgres_fdw.bc",
+          "lib/bitcode/postgres_fdw/shippable.bc",
+          "lib/postgres_fdw.so",
+          "share/extension/postgres_fdw--1.0--1.1.sql",
+          "share/extension/postgres_fdw--1.0.sql",
+          "share/extension/postgres_fdw.control"
+        ],
         "16.0": [
           "lib/postgres_fdw.so",
           "share/extension/postgres_fdw--1.0--1.1.sql",
@@ -143,6 +155,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

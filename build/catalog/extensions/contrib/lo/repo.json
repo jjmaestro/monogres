@@ -3,6 +3,14 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/bitcode/lo.index.bc",
+          "lib/bitcode/lo/lo.bc",
+          "lib/lo.so",
+          "share/extension/lo--1.0--1.1.sql",
+          "share/extension/lo--1.1.sql",
+          "share/extension/lo.control"
+        ],
         "16.0": [
           "lib/lo.so",
           "share/extension/lo--1.0--1.1.sql",
@@ -143,6 +151,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

@@ -3,6 +3,14 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "include/server/utils/old_snapshot.h",
+          "lib/bitcode/old_snapshot.index.bc",
+          "lib/bitcode/old_snapshot/time_mapping.bc",
+          "lib/old_snapshot.so",
+          "share/extension/old_snapshot--1.0.sql",
+          "share/extension/old_snapshot.control"
+        ],
         "16.0": [
           "lib/old_snapshot.so",
           "share/extension/old_snapshot--1.0.sql",
@@ -69,6 +77,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

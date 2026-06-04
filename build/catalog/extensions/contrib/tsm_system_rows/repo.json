@@ -3,6 +3,13 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/bitcode/tsm_system_rows.index.bc",
+          "lib/bitcode/tsm_system_rows/tsm_system_rows.bc",
+          "lib/tsm_system_rows.so",
+          "share/extension/tsm_system_rows--1.0.sql",
+          "share/extension/tsm_system_rows.control"
+        ],
         "16.0": [
           "lib/tsm_system_rows.so",
           "share/extension/tsm_system_rows--1.0.sql",
@@ -119,6 +126,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

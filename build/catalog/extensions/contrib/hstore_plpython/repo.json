@@ -3,6 +3,12 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/bitcode/hstore_plpython3/hstore_plpython.bc",
+          "lib/hstore_plpython3.so",
+          "share/extension/hstore_plpython3u--1.0.sql",
+          "share/extension/hstore_plpython3u.control"
+        ],
         "16.0": [
           "lib/hstore_plpython3.so",
           "share/extension/hstore_plpython3u--1.0.sql",
@@ -114,11 +120,20 @@
           "share/extension/hstore_plpython3u.control"
         ]
       }
+    },
+    "requires": {
+      "postgres": {
+        "*": [
+          "hstore",
+          "plpython3u"
+        ]
+      }
     }
   },
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

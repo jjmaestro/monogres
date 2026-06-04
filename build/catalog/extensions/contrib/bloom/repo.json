@@ -3,6 +3,18 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/bitcode/bloom.index.bc",
+          "lib/bitcode/bloom/blcost.bc",
+          "lib/bitcode/bloom/blinsert.bc",
+          "lib/bitcode/bloom/blscan.bc",
+          "lib/bitcode/bloom/blutils.bc",
+          "lib/bitcode/bloom/blvacuum.bc",
+          "lib/bitcode/bloom/blvalidate.bc",
+          "lib/bloom.so",
+          "share/extension/bloom--1.0.sql",
+          "share/extension/bloom.control"
+        ],
         "16.0": [
           "lib/bloom.so",
           "share/extension/bloom--1.0.sql",
@@ -119,6 +131,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

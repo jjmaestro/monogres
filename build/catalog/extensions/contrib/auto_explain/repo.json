@@ -3,6 +3,11 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/auto_explain.so",
+          "lib/bitcode/auto_explain.index.bc",
+          "lib/bitcode/auto_explain/auto_explain.bc"
+        ],
         "16.0": [
           "lib/auto_explain.so"
         ],
@@ -75,6 +80,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

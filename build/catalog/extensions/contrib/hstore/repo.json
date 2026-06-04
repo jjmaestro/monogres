@@ -3,6 +3,26 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "include/server/extension/hstore/hstore.h",
+          "lib/bitcode/hstore.index.bc",
+          "lib/bitcode/hstore/hstore_compat.bc",
+          "lib/bitcode/hstore/hstore_gin.bc",
+          "lib/bitcode/hstore/hstore_gist.bc",
+          "lib/bitcode/hstore/hstore_io.bc",
+          "lib/bitcode/hstore/hstore_op.bc",
+          "lib/bitcode/hstore/hstore_subs.bc",
+          "lib/hstore.so",
+          "share/extension/hstore--1.1--1.2.sql",
+          "share/extension/hstore--1.2--1.3.sql",
+          "share/extension/hstore--1.3--1.4.sql",
+          "share/extension/hstore--1.4--1.5.sql",
+          "share/extension/hstore--1.4.sql",
+          "share/extension/hstore--1.5--1.6.sql",
+          "share/extension/hstore--1.6--1.7.sql",
+          "share/extension/hstore--1.7--1.8.sql",
+          "share/extension/hstore.control"
+        ],
         "16.0": [
           "include/server/extension/hstore/hstore.h",
           "lib/hstore.so",
@@ -295,6 +315,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

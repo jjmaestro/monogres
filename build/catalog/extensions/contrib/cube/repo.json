@@ -3,6 +3,20 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "include/server/extension/cube/cubedata.h",
+          "lib/bitcode/cube.index.bc",
+          "lib/bitcode/cube/cube.bc",
+          "lib/bitcode/cube/cubeparse.bc",
+          "lib/cube.so",
+          "share/extension/cube--1.0--1.1.sql",
+          "share/extension/cube--1.1--1.2.sql",
+          "share/extension/cube--1.2--1.3.sql",
+          "share/extension/cube--1.2.sql",
+          "share/extension/cube--1.3--1.4.sql",
+          "share/extension/cube--1.4--1.5.sql",
+          "share/extension/cube.control"
+        ],
         "16.0": [
           "include/server/extension/cube/cubedata.h",
           "lib/cube.so",
@@ -251,6 +265,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

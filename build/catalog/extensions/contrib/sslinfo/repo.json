@@ -3,6 +3,15 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/bitcode/sslinfo.index.bc",
+          "lib/bitcode/sslinfo/sslinfo.bc",
+          "lib/sslinfo.so",
+          "share/extension/sslinfo--1.0--1.1.sql",
+          "share/extension/sslinfo--1.1--1.2.sql",
+          "share/extension/sslinfo--1.2.sql",
+          "share/extension/sslinfo.control"
+        ],
         "16.0": [
           "lib/sslinfo.so",
           "share/extension/sslinfo--1.0--1.1.sql",
@@ -163,6 +172,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

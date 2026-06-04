@@ -3,6 +3,11 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/basic_archive.so",
+          "lib/bitcode/basic_archive.index.bc",
+          "lib/bitcode/basic_archive/basic_archive.bc"
+        ],
         "16.0": [
           "lib/basic_archive.so"
         ],
@@ -75,6 +80,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

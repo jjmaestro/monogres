@@ -3,6 +3,30 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/bitcode/pageinspect.index.bc",
+          "lib/bitcode/pageinspect/brinfuncs.bc",
+          "lib/bitcode/pageinspect/btreefuncs.bc",
+          "lib/bitcode/pageinspect/fsmfuncs.bc",
+          "lib/bitcode/pageinspect/ginfuncs.bc",
+          "lib/bitcode/pageinspect/gistfuncs.bc",
+          "lib/bitcode/pageinspect/hashfuncs.bc",
+          "lib/bitcode/pageinspect/heapfuncs.bc",
+          "lib/bitcode/pageinspect/rawpage.bc",
+          "lib/pageinspect.so",
+          "share/extension/pageinspect--1.0--1.1.sql",
+          "share/extension/pageinspect--1.1--1.2.sql",
+          "share/extension/pageinspect--1.2--1.3.sql",
+          "share/extension/pageinspect--1.3--1.4.sql",
+          "share/extension/pageinspect--1.4--1.5.sql",
+          "share/extension/pageinspect--1.5--1.6.sql",
+          "share/extension/pageinspect--1.5.sql",
+          "share/extension/pageinspect--1.6--1.7.sql",
+          "share/extension/pageinspect--1.7--1.8.sql",
+          "share/extension/pageinspect--1.8--1.9.sql",
+          "share/extension/pageinspect--1.9--1.10.sql",
+          "share/extension/pageinspect.control"
+        ],
         "16.0": [
           "lib/pageinspect.so",
           "share/extension/pageinspect--1.0--1.1.sql",
@@ -385,6 +409,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

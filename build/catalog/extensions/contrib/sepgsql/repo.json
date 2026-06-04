@@ -3,6 +3,10 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/sepgsql.so",
+          "share/extension/sepgsql.sql"
+        ],
         "16.0": [
           "lib/sepgsql.so",
           "share/extension/sepgsql.sql"
@@ -97,6 +101,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

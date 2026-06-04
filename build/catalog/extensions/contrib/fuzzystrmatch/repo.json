@@ -3,6 +3,15 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/bitcode/fuzzystrmatch.index.bc",
+          "lib/bitcode/fuzzystrmatch/dmetaphone.bc",
+          "lib/bitcode/fuzzystrmatch/fuzzystrmatch.bc",
+          "lib/fuzzystrmatch.so",
+          "share/extension/fuzzystrmatch--1.0--1.1.sql",
+          "share/extension/fuzzystrmatch--1.1.sql",
+          "share/extension/fuzzystrmatch.control"
+        ],
         "16.0": [
           "lib/fuzzystrmatch.so",
           "share/extension/fuzzystrmatch--1.0--1.1.sql",
@@ -163,6 +172,7 @@
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

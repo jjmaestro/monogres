@@ -3,6 +3,14 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/bitcode/earthdistance.index.bc",
+          "lib/bitcode/earthdistance/earthdistance.bc",
+          "lib/earthdistance.so",
+          "share/extension/earthdistance--1.0--1.1.sql",
+          "share/extension/earthdistance--1.1.sql",
+          "share/extension/earthdistance.control"
+        ],
         "16.0": [
           "lib/earthdistance.so",
           "share/extension/earthdistance--1.0--1.1.sql",
@@ -148,11 +156,19 @@
           "share/extension/earthdistance.control"
         ]
       }
+    },
+    "requires": {
+      "postgres": {
+        "*": [
+          "cube"
+        ]
+      }
     }
   },
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",

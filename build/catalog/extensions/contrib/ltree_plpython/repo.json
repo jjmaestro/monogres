@@ -3,6 +3,12 @@
   "metadata": {
     "files": {
       "postgres": {
+        "15.0": [
+          "lib/bitcode/ltree_plpython3/ltree_plpython.bc",
+          "lib/ltree_plpython3.so",
+          "share/extension/ltree_plpython3u--1.0.sql",
+          "share/extension/ltree_plpython3u.control"
+        ],
         "16.0": [
           "lib/ltree_plpython3.so",
           "share/extension/ltree_plpython3u--1.0.sql",
@@ -114,11 +120,20 @@
           "share/extension/ltree_plpython3u.control"
         ]
       }
+    },
+    "requires": {
+      "postgres": {
+        "*": [
+          "ltree",
+          "plpython3u"
+        ]
+      }
     }
   },
   "version": 1,
   "versions": {
     "postgres": [
+      "15.0",
       "16.0",
       "16.1",
       "16.10",
