@@ -10,6 +10,7 @@ exports_files([
     "configure_args.bzl",
     "flavors.bzl",
     "helpers.bzl",
+    "ivory.bzl",
     "pg.bzl",
 ])
 
@@ -36,9 +37,18 @@ bzl_library(
 )
 
 bzl_library(
+    name = "ivory",
+    srcs = ["ivory.bzl"],
+    deps = [
+        ":pg",
+    ],
+)
+
+bzl_library(
     name = "flavors",
     srcs = ["flavors.bzl"],
     deps = [
+        ":ivory",
         ":pg",
     ],
 )

@@ -1,29 +1,28 @@
 """
-Unit tests for monoext/private/base/build_options/pg.bzl.
+Unit tests for monoext/private/base/build_options/ivory.bzl.
 
 Covers:
 - each of the four predefined option sets produces the expected key options
 - `auto_features = "enabled"` only for "full" (the set that includes "all")
 - `auto_features = "disabled"` for the other three
 - `_DEFAULT_OPTIONS` (libdir, rpath, system_tzdata) land in every set
-- `prefix_distro` is injected into every output
+- `prefix_distro` is injected as `/ivorysql/<version>` in every set
 - `_DISABLED_UNLESS_EXPLICITLY_ENABLED` options get applied when `all` is
   present (i.e. "full")
 - `_ENABLED_UNLESS_EXPLICITLY_DISABLED` options (spinlocks, atomics) get
   applied when `all` is absent (i.e. not "full")
-- `build_options_metadata` version-gates can disable an option
-- `build_system` routes PG < 16 to make and PG >= 16 to meson
+- `build_options_metadata` version-gates can disable an option (e.g.
+  `injection_points` skipped on 3.0)
 """
 
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
 
 # buildifier: disable=bzl-visibility
 load(
-    "//monoext/private/base/build_options:pg.bzl",
+    "//monoext/private/base/build_options:ivory.bzl",
     "DEFAULT_OPTION_SET",
     "OPTION_SETS",
     "build_options",
-    "build_system",
 )
 load("//tests:suite.bzl", _test_suite = "test_suite")
 
@@ -32,10 +31,10 @@ _EMPTY_METADATA = {}
 # --- option-set coverage ---------------------------------------------------
 
 def _barebones_set_test_impl(ctx):
-    """`barebones` is minimal: only defaults + extra_version + prefix_distro."""
+    """`barebones` is minimal: only defaults + extra_version."""
     env = unittest.begin(ctx)
 
-    options, auto_features = build_options("18.1", "barebones", _EMPTY_METADATA)
+    options, auto_features = build_options("5.0", "barebones", _EMPTY_METADATA)
 
     asserts.equals(env, "disabled", auto_features)
 
@@ -48,12 +47,10 @@ def _barebones_set_test_impl(ctx):
     asserts.equals(env, "barebones", options["extra_version"])
 
     # prefix_distro is injected
-    asserts.equals(env, "/postgres/18.1", options["prefix_distro"])
+    asserts.equals(env, "/ivorysql/5.0", options["prefix_distro"])
 
-    # auto-enabled options still apply (spinlocks, atomics)
-    asserts.equals(env, "true", options["spinlocks"])
-    asserts.equals(env, "true", options["atomics"])
-
+    # auto-enabled options apply on <5.0 (gated). On 5.0 they're skipped because
+    # PG 18 dropped them — see _spinlocks_atomics_gated_on_5_0_test.
     return unittest.end(env)
 
 barebones_set_test = unittest.make(_barebones_set_test_impl)
@@ -62,7 +59,7 @@ def _minimal_set_test_impl(ctx):
     """`minimal` adds nls, readline, ssl=openssl, uuid=e2fs, zlib."""
     env = unittest.begin(ctx)
 
-    options, auto_features = build_options("18.1", "minimal", _EMPTY_METADATA)
+    options, auto_features = build_options("5.0", "minimal", _EMPTY_METADATA)
 
     asserts.equals(env, "disabled", auto_features)
     asserts.equals(env, "minimal", options["extra_version"])
@@ -80,7 +77,7 @@ def _regular_set_test_impl(ctx):
     """`regular` extends `minimal` with icu/llvm/lz4/plpython/systemd/zstd + contrib=true."""
     env = unittest.begin(ctx)
 
-    options, auto_features = build_options("18.1", "regular", _EMPTY_METADATA)
+    options, auto_features = build_options("5.0", "regular", _EMPTY_METADATA)
 
     asserts.equals(env, "disabled", auto_features)
     asserts.equals(env, "regular", options["extra_version"])
@@ -100,7 +97,7 @@ def _full_set_auto_features_enabled_test_impl(ctx):
     """`full` expands `all` → auto_features=enabled + DISABLED_UNLESS_EXPLICITLY_ENABLED."""
     env = unittest.begin(ctx)
 
-    options, auto_features = build_options("18.1", "full", _EMPTY_METADATA)
+    options, auto_features = build_options("5.0", "full", _EMPTY_METADATA)
 
     asserts.equals(env, "enabled", auto_features)
     asserts.equals(env, "full", options["extra_version"])
@@ -134,7 +131,7 @@ def _full_set_contrib_true_test_impl(ctx):
     """`full` inherits `regular`'s contrib=true (not overridden to "false")."""
     env = unittest.begin(ctx)
 
-    options, _ = build_options("18.1", "full", _EMPTY_METADATA)
+    options, _ = build_options("5.0", "full", _EMPTY_METADATA)
 
     # contrib is DISABLED_UNLESS_EXPLICITLY_ENABLED, but full already set it to
     # "true" via the regular inheritance, so the default-disabled pass must not
@@ -145,6 +142,59 @@ def _full_set_contrib_true_test_impl(ctx):
 
 full_set_contrib_true_test = unittest.make(_full_set_contrib_true_test_impl)
 
+# --- IvorySQL-specific invariants ------------------------------------------
+
+def _spinlocks_atomics_gated_on_5_0_test_impl(ctx):
+    """spinlocks/atomics are gated `<5.0` in repo.json (PG 18 dropped them)."""
+    env = unittest.begin(ctx)
+
+    metadata = {
+        "atomics": {"compatible": "<5.0"},
+        "spinlocks": {"compatible": "<5.0"},
+    }
+
+    # On 4.0 (PG 17 base) the auto-enabled pass adds them.
+    options, _ = build_options("4.0", "barebones", metadata)
+    asserts.equals(env, "true", options["spinlocks"])
+    asserts.equals(env, "true", options["atomics"])
+
+    # On 5.0 (PG 18 base) the metadata gates them out.
+    options, _ = build_options("5.0", "barebones", metadata)
+    asserts.true(env, "spinlocks" not in options)
+    asserts.true(env, "atomics" not in options)
+
+    return unittest.end(env)
+
+spinlocks_atomics_gated_on_5_0_test = unittest.make(
+    _spinlocks_atomics_gated_on_5_0_test_impl,
+)
+
+def _injection_points_gated_on_3_0_test_impl(ctx):
+    """injection_points is gated `>=4.0` in repo.json (added in PG 17)."""
+    env = unittest.begin(ctx)
+
+    metadata = {
+        "injection_points": {"compatible": ">=4.0"},
+    }
+
+    # On 3.0 (PG 16 base) the metadata gates it out — never makes it into
+    # `full`.
+    options, _ = build_options("3.0", "full", metadata)
+    asserts.true(env, "injection_points" not in options)
+
+    # On 4.0+ it's applied by the disabled-unless-enabled pass.
+    options, _ = build_options("4.0", "full", metadata)
+    asserts.equals(env, "false", options["injection_points"])
+
+    options, _ = build_options("5.0", "full", metadata)
+    asserts.equals(env, "false", options["injection_points"])
+
+    return unittest.end(env)
+
+injection_points_gated_on_3_0_test = unittest.make(
+    _injection_points_gated_on_3_0_test_impl,
+)
+
 # --- metadata version-gating -----------------------------------------------
 
 def _version_incompatible_option_is_dropped_test_impl(ctx):
@@ -152,17 +202,17 @@ def _version_incompatible_option_is_dropped_test_impl(ctx):
     env = unittest.begin(ctx)
 
     # "bonjour" is only applied by the default-apply passes if
-    # `is_compatible("bonjour", version, metadata) == True`. Pin it to <14 on
-    # 18.1 and it disappears from the non-"full" default-apply.
+    # `is_compatible("bonjour", version, metadata) == True`. Pin it to <2 on 5.0
+    # and it disappears from the non-"full" default-apply.
     metadata = {
-        "bonjour": {"compatible": "<14"},
+        "bonjour": {"compatible": "<2"},
     }
 
-    options, _ = build_options("18.1", "regular", metadata)
+    options, _ = build_options("5.0", "regular", metadata)
 
     # not in the regular set explicitly, so since `all` is absent and bonjour is
-    # in DISABLED_UNLESS_EXPLICITLY_ENABLED but disabled by metadata on 18.1,
-    # the default-disabled pass does not add it.
+    # in DISABLED_UNLESS_EXPLICITLY_ENABLED but disabled by metadata on 5.0, the
+    # default-disabled pass does not add it.
     asserts.true(env, "bonjour" not in options)
 
     return unittest.end(env)
@@ -191,12 +241,12 @@ option_sets_constants_test = unittest.make(_option_sets_constants_test_impl)
 # --- prefix_distro invariant -----------------------------------------------
 
 def _prefix_distro_per_version_test_impl(ctx):
-    """`prefix_distro` is `/postgres/<version>`."""
+    """`prefix_distro` is `/ivorysql/<version>`."""
     env = unittest.begin(ctx)
 
-    for version in ("17.0", "18.1", "16.5"):
+    for version in ("3.0", "4.0", "5.0"):
         options, _ = build_options(version, "barebones", _EMPTY_METADATA)
-        asserts.equals(env, "/postgres/%s" % version, options["prefix_distro"])
+        asserts.equals(env, "/ivorysql/%s" % version, options["prefix_distro"])
 
     return unittest.end(env)
 
@@ -204,33 +254,18 @@ prefix_distro_per_version_test = unittest.make(
     _prefix_distro_per_version_test_impl,
 )
 
-# --- build_system version split ---------------------------------------------
-
-def _build_system_test_impl(ctx):
-    """PG < 16 routes to make (no Meson upstream); PG >= 16 stays on Meson."""
-    env = unittest.begin(ctx)
-
-    for version in ("15.0", "15.8", "14.5"):
-        asserts.equals(env, "make", build_system(version))
-
-    for version in ("16.0", "16.11", "17.7", "18.1"):
-        asserts.equals(env, "meson", build_system(version))
-
-    return unittest.end(env)
-
-build_system_test = unittest.make(_build_system_test_impl)
-
-TEST_SUITE_NAME = "pg"
+TEST_SUITE_NAME = "ivory"
 
 TEST_SUITE_TESTS = dict(
     barebones_set = barebones_set_test,
-    build_system = build_system_test,
     full_set_auto_features_enabled = full_set_auto_features_enabled_test,
     full_set_contrib_true = full_set_contrib_true_test,
+    injection_points_gated_on_3_0 = injection_points_gated_on_3_0_test,
     minimal_set = minimal_set_test,
     option_sets_constants = option_sets_constants_test,
     prefix_distro_per_version = prefix_distro_per_version_test,
     regular_set = regular_set_test,
+    spinlocks_atomics_gated_on_5_0 = spinlocks_atomics_gated_on_5_0_test,
     version_incompatible_option_is_dropped = version_incompatible_option_is_dropped_test,
 )
 
