@@ -12,7 +12,7 @@ exclude: >-
   (?x)^(
     .*\.(patch|diff)$
     |.*\.lock$
-    |.*/postgres/introspect/.*\.json$
+    |.*/introspect/.*\.json$
     |rbe/auth/.*\.json$
   )$
 repos:
