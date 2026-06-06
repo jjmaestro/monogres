@@ -1,5 +1,13 @@
-"""Private e2e tests for @pg."""
+"""Private e2e tests for @pg and @ivory."""
 
+load(
+    "@ivory//:all.bzl",
+    ivory_CFG = "CFG",
+    ivory_DEFAULT_VERSION = "DEFAULT_VERSION",
+    ivory_OPTION_SETS = "OPTION_SETS",
+    ivory_VERSIONS = "VERSIONS",
+)
+load("@ivory//:introspect.bzl", ivory_INTROSPECTIONS = "INTROSPECTIONS")
 load("@pg//:all.bzl", "CFG", "DEFAULT_VERSION", "OPTION_SETS", "VERSIONS")
 load("@pg//:introspect.bzl", "INTROSPECTIONS")
 load(":test.bzl", "e2e_tests")
@@ -8,7 +16,18 @@ e2e_tests(
     name = "pg",
     cfg = CFG,
     default_version = DEFAULT_VERSION,
+    expected_flavor = "postgres",
     introspections = INTROSPECTIONS,
     option_sets = OPTION_SETS,
     versions = VERSIONS,
+)
+
+e2e_tests(
+    name = "ivory",
+    cfg = ivory_CFG,
+    default_version = ivory_DEFAULT_VERSION,
+    expected_flavor = "ivorysql",
+    introspections = ivory_INTROSPECTIONS,
+    option_sets = ivory_OPTION_SETS,
+    versions = ivory_VERSIONS,
 )

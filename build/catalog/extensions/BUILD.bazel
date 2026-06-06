@@ -1,3 +1,4 @@
+load("@ivory//:introspect.bzl", IVORY_INTROSPECTIONS = "INTROSPECTIONS")
 load("@pg//:introspect.bzl", PG_INTROSPECTIONS = "INTROSPECTIONS")
 load("//tools:gen_contrib.bzl", "gen_contrib", "update_contrib")
 load("//tools:gen_index.bzl", "gen_index", "update_index")
@@ -13,6 +14,7 @@ _CONTRIB_REPO_JSONS = glob(["contrib/*/repo.json"])
 gen_contrib(
     name = "gen_contrib",
     introspections = [
+        IVORY_INTROSPECTIONS,
         PG_INTROSPECTIONS,
     ],
 )

@@ -14,7 +14,7 @@ load("@bazel_skylib//rules:build_test.bzl", "build_test")
 def _invariants_test_impl(ctx):
     env = unittest.begin(ctx)
 
-    asserts.equals(env, "postgres", ctx.attr.cfg_name)
+    asserts.equals(env, ctx.attr.expected_flavor, ctx.attr.cfg_name)
     asserts.equals(env, ctx.attr.default_version, ctx.attr.cfg_default_version)
     asserts.equals(
         env,
@@ -49,6 +49,7 @@ _invariants_test = unittest.make(
         cfg_default_version = attr.string(mandatory = True),
         cfg_default_option_set = attr.string(mandatory = True),
         default_version = attr.string(mandatory = True),
+        expected_flavor = attr.string(mandatory = True),
         last_option_set = attr.string(mandatory = True),
         versions = attr.string_list(mandatory = True),
         option_sets = attr.string_list(mandatory = True),
@@ -57,16 +58,24 @@ _invariants_test = unittest.make(
     ),
 )
 
-def e2e_tests(name, cfg, versions, option_sets, default_version, introspections):
-    """Phase 2 + Phase 3 targets for @pg.
+def e2e_tests(
+        name,
+        cfg,
+        versions,
+        option_sets,
+        default_version,
+        introspections,
+        expected_flavor):
+    """Phase 2 + Phase 3 targets for a monoext base hub.
 
     Args:
         name: test-suite name.
-        cfg: `CFG` struct from `@pg//:all.bzl`.
-        versions: `VERSIONS` list from `@pg//:all.bzl`.
-        option_sets: `OPTION_SETS` list from `@pg//:all.bzl`.
-        default_version: `DEFAULT_VERSION` from `@pg//:all.bzl`.
-        introspections: `INTROSPECTIONS` dict from `@pg//:introspect.bzl`.
+        cfg: `CFG` struct from `@{name}//:all.bzl`.
+        versions: `VERSIONS` list from `@{name}//:all.bzl`.
+        option_sets: `OPTION_SETS` list from `@{name}//:all.bzl`.
+        default_version: `DEFAULT_VERSION` from `@{name}//:all.bzl`.
+        introspections: `INTROSPECTIONS` dict from `@{name}//:introspect.bzl`.
+        expected_flavor: expected `cfg.name` (e.g. `"postgres"`, `"ivorysql"`).
     """
 
     targets = [
@@ -85,6 +94,7 @@ def e2e_tests(name, cfg, versions, option_sets, default_version, introspections)
         cfg_default_version = cfg.default.version,
         cfg_default_option_set = cfg.default.option_set,
         default_version = default_version,
+        expected_flavor = expected_flavor,
         last_option_set = option_sets[-1],
         versions = versions,
         option_sets = option_sets,

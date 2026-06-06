@@ -21,6 +21,14 @@ monoext.monogres(
 )
 use_repo(monoext, "pg", "pg_ext", "pg_pkgs")
 
+monoext.monogres(
+    name = "ivory",
+    base = "@monogres//catalog/ivorysql:repo.json",
+    deb_lock = "@monogres//catalog/locks:ivory_pkgs.lock",
+    extensions = "@monogres//catalog/extensions:index.json",
+)
+use_repo(monoext, "ivory", "ivory_ext", "ivory_pkgs")
+
 local_path_override(
     module_name = "monogres",
     path = "..",
