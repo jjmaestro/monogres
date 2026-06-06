@@ -2,6 +2,20 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "ivorysql": {
+        "3.0": [
+          "lib/sepgsql.so",
+          "share/extension/sepgsql.sql"
+        ],
+        "4.0": [
+          "lib/sepgsql.so",
+          "share/extension/sepgsql.sql"
+        ],
+        "5.0": [
+          "lib/sepgsql.so",
+          "share/extension/sepgsql.sql"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/sepgsql.so",
@@ -100,6 +114,11 @@
   },
   "version": 1,
   "versions": {
+    "ivorysql": [
+      "3.0",
+      "4.0",
+      "5.0"
+    ],
     "postgres": [
       "15.0",
       "16.0",

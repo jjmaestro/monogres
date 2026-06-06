@@ -2,6 +2,23 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "ivorysql": {
+        "3.0": [
+          "lib/jsonb_plpython3.so",
+          "share/extension/jsonb_plpython3u--1.0.sql",
+          "share/extension/jsonb_plpython3u.control"
+        ],
+        "4.0": [
+          "lib/jsonb_plpython3.so",
+          "share/extension/jsonb_plpython3u--1.0.sql",
+          "share/extension/jsonb_plpython3u.control"
+        ],
+        "5.0": [
+          "lib/jsonb_plpython3.so",
+          "share/extension/jsonb_plpython3u--1.0.sql",
+          "share/extension/jsonb_plpython3u.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/jsonb_plpython3/jsonb_plpython.bc",
@@ -131,6 +148,11 @@
   },
   "version": 1,
   "versions": {
+    "ivorysql": [
+      "3.0",
+      "4.0",
+      "5.0"
+    ],
     "postgres": [
       "15.0",
       "16.0",

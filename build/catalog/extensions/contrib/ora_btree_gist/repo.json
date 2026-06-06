@@ -1,0 +1,32 @@
+{
+  "kind": "contrib",
+  "metadata": {
+    "files": {
+      "ivorysql": {
+        "3.0": [
+          "lib/ora_btree_gist.so",
+          "share/extension/ora_btree_gist--1.0.sql",
+          "share/extension/ora_btree_gist.control"
+        ],
+        "4.0": [
+          "lib/ora_btree_gist.so",
+          "share/extension/ora_btree_gist--1.0.sql",
+          "share/extension/ora_btree_gist.control"
+        ],
+        "5.0": [
+          "lib/ora_btree_gist.so",
+          "share/extension/ora_btree_gist--1.0.sql",
+          "share/extension/ora_btree_gist.control"
+        ]
+      }
+    }
+  },
+  "version": 1,
+  "versions": {
+    "ivorysql": [
+      "3.0",
+      "4.0",
+      "5.0"
+    ]
+  }
+}

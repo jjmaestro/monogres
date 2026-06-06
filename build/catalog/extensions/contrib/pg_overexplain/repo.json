@@ -2,6 +2,11 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "ivorysql": {
+        "5.0": [
+          "lib/pg_overexplain.so"
+        ]
+      },
       "postgres": {
         "18.0": [
           "lib/pg_overexplain.so"
@@ -14,6 +19,9 @@
   },
   "version": 1,
   "versions": {
+    "ivorysql": [
+      "5.0"
+    ],
     "postgres": [
       "18.0",
       "18.1"

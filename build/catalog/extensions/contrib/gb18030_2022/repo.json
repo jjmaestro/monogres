@@ -1,0 +1,21 @@
+{
+  "kind": "contrib",
+  "metadata": {
+    "files": {
+      "ivorysql": {
+        "5.0": [
+          "lib/gb18030_2022.so",
+          "share/extension/gb18030_2022--1.0.sql",
+          "share/extension/gb18030_2022.control",
+          "share/extension/utf8_and_gb18030_2022.bc"
+        ]
+      }
+    }
+  },
+  "version": 1,
+  "versions": {
+    "ivorysql": [
+      "5.0"
+    ]
+  }
+}

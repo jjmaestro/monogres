@@ -2,6 +2,29 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "ivorysql": {
+        "3.0": [
+          "lib/unaccent.so",
+          "share/extension/unaccent--1.0--1.1.sql",
+          "share/extension/unaccent--1.1.sql",
+          "share/extension/unaccent.control",
+          "share/tsearch_data/unaccent.rules"
+        ],
+        "4.0": [
+          "lib/unaccent.so",
+          "share/extension/unaccent--1.0--1.1.sql",
+          "share/extension/unaccent--1.1.sql",
+          "share/extension/unaccent.control",
+          "share/tsearch_data/unaccent.rules"
+        ],
+        "5.0": [
+          "lib/unaccent.so",
+          "share/extension/unaccent--1.0--1.1.sql",
+          "share/extension/unaccent--1.1.sql",
+          "share/extension/unaccent.control",
+          "share/tsearch_data/unaccent.rules"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/unaccent.index.bc",
@@ -171,6 +194,11 @@
   },
   "version": 1,
   "versions": {
+    "ivorysql": [
+      "3.0",
+      "4.0",
+      "5.0"
+    ],
     "postgres": [
       "15.0",
       "16.0",

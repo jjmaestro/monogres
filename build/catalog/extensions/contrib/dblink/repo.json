@@ -2,6 +2,29 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "ivorysql": {
+        "3.0": [
+          "lib/dblink.so",
+          "share/extension/dblink--1.0--1.1.sql",
+          "share/extension/dblink--1.1--1.2.sql",
+          "share/extension/dblink--1.2.sql",
+          "share/extension/dblink.control"
+        ],
+        "4.0": [
+          "lib/dblink.so",
+          "share/extension/dblink--1.0--1.1.sql",
+          "share/extension/dblink--1.1--1.2.sql",
+          "share/extension/dblink--1.2.sql",
+          "share/extension/dblink.control"
+        ],
+        "5.0": [
+          "lib/dblink.so",
+          "share/extension/dblink--1.0--1.1.sql",
+          "share/extension/dblink--1.1--1.2.sql",
+          "share/extension/dblink--1.2.sql",
+          "share/extension/dblink.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/dblink.index.bc",
@@ -171,6 +194,11 @@
   },
   "version": 1,
   "versions": {
+    "ivorysql": [
+      "3.0",
+      "4.0",
+      "5.0"
+    ],
     "postgres": [
       "15.0",
       "16.0",

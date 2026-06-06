@@ -2,6 +2,13 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "ivorysql": {
+        "3.0": [
+          "lib/old_snapshot.so",
+          "share/extension/old_snapshot--1.0.sql",
+          "share/extension/old_snapshot.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "include/server/utils/old_snapshot.h",
@@ -76,6 +83,9 @@
   },
   "version": 1,
   "versions": {
+    "ivorysql": [
+      "3.0"
+    ],
     "postgres": [
       "15.0",
       "16.0",

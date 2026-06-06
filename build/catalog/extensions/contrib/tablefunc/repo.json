@@ -2,6 +2,23 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "ivorysql": {
+        "3.0": [
+          "lib/tablefunc.so",
+          "share/extension/tablefunc--1.0.sql",
+          "share/extension/tablefunc.control"
+        ],
+        "4.0": [
+          "lib/tablefunc.so",
+          "share/extension/tablefunc--1.0.sql",
+          "share/extension/tablefunc.control"
+        ],
+        "5.0": [
+          "lib/tablefunc.so",
+          "share/extension/tablefunc--1.0.sql",
+          "share/extension/tablefunc.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "include/server/executor/tablefunc.h",
@@ -126,6 +143,11 @@
   },
   "version": 1,
   "versions": {
+    "ivorysql": [
+      "3.0",
+      "4.0",
+      "5.0"
+    ],
     "postgres": [
       "15.0",
       "16.0",

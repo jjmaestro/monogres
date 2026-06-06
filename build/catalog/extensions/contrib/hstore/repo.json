@@ -2,6 +2,47 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "ivorysql": {
+        "3.0": [
+          "include/server/extension/hstore/hstore.h",
+          "lib/hstore.so",
+          "share/extension/hstore--1.1--1.2.sql",
+          "share/extension/hstore--1.2--1.3.sql",
+          "share/extension/hstore--1.3--1.4.sql",
+          "share/extension/hstore--1.4--1.5.sql",
+          "share/extension/hstore--1.4.sql",
+          "share/extension/hstore--1.5--1.6.sql",
+          "share/extension/hstore--1.6--1.7.sql",
+          "share/extension/hstore--1.7--1.8.sql",
+          "share/extension/hstore.control"
+        ],
+        "4.0": [
+          "include/server/extension/hstore/hstore.h",
+          "lib/hstore.so",
+          "share/extension/hstore--1.1--1.2.sql",
+          "share/extension/hstore--1.2--1.3.sql",
+          "share/extension/hstore--1.3--1.4.sql",
+          "share/extension/hstore--1.4--1.5.sql",
+          "share/extension/hstore--1.4.sql",
+          "share/extension/hstore--1.5--1.6.sql",
+          "share/extension/hstore--1.6--1.7.sql",
+          "share/extension/hstore--1.7--1.8.sql",
+          "share/extension/hstore.control"
+        ],
+        "5.0": [
+          "include/server/extension/hstore/hstore.h",
+          "lib/hstore.so",
+          "share/extension/hstore--1.1--1.2.sql",
+          "share/extension/hstore--1.2--1.3.sql",
+          "share/extension/hstore--1.3--1.4.sql",
+          "share/extension/hstore--1.4--1.5.sql",
+          "share/extension/hstore--1.4.sql",
+          "share/extension/hstore--1.5--1.6.sql",
+          "share/extension/hstore--1.6--1.7.sql",
+          "share/extension/hstore--1.7--1.8.sql",
+          "share/extension/hstore.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "include/server/extension/hstore/hstore.h",
@@ -314,6 +355,11 @@
   },
   "version": 1,
   "versions": {
+    "ivorysql": [
+      "3.0",
+      "4.0",
+      "5.0"
+    ],
     "postgres": [
       "15.0",
       "16.0",

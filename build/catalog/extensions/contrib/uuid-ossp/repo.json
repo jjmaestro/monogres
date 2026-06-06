@@ -2,6 +2,26 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "ivorysql": {
+        "3.0": [
+          "lib/uuid-ossp.so",
+          "share/extension/uuid-ossp--1.0--1.1.sql",
+          "share/extension/uuid-ossp--1.1.sql",
+          "share/extension/uuid-ossp.control"
+        ],
+        "4.0": [
+          "lib/uuid-ossp.so",
+          "share/extension/uuid-ossp--1.0--1.1.sql",
+          "share/extension/uuid-ossp--1.1.sql",
+          "share/extension/uuid-ossp.control"
+        ],
+        "5.0": [
+          "lib/uuid-ossp.so",
+          "share/extension/uuid-ossp--1.0--1.1.sql",
+          "share/extension/uuid-ossp--1.1.sql",
+          "share/extension/uuid-ossp.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/uuid-ossp.index.bc",
@@ -148,6 +168,11 @@
   },
   "version": 1,
   "versions": {
+    "ivorysql": [
+      "3.0",
+      "4.0",
+      "5.0"
+    ],
     "postgres": [
       "15.0",
       "16.0",

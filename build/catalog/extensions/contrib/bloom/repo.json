@@ -2,6 +2,23 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "ivorysql": {
+        "3.0": [
+          "lib/bloom.so",
+          "share/extension/bloom--1.0.sql",
+          "share/extension/bloom.control"
+        ],
+        "4.0": [
+          "lib/bloom.so",
+          "share/extension/bloom--1.0.sql",
+          "share/extension/bloom.control"
+        ],
+        "5.0": [
+          "lib/bloom.so",
+          "share/extension/bloom--1.0.sql",
+          "share/extension/bloom.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/bloom.index.bc",
@@ -130,6 +147,11 @@
   },
   "version": 1,
   "versions": {
+    "ivorysql": [
+      "3.0",
+      "4.0",
+      "5.0"
+    ],
     "postgres": [
       "15.0",
       "16.0",

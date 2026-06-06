@@ -2,6 +2,26 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "ivorysql": {
+        "3.0": [
+          "lib/pg_walinspect.so",
+          "share/extension/pg_walinspect--1.0--1.1.sql",
+          "share/extension/pg_walinspect--1.0.sql",
+          "share/extension/pg_walinspect.control"
+        ],
+        "4.0": [
+          "lib/pg_walinspect.so",
+          "share/extension/pg_walinspect--1.0--1.1.sql",
+          "share/extension/pg_walinspect--1.0.sql",
+          "share/extension/pg_walinspect.control"
+        ],
+        "5.0": [
+          "lib/pg_walinspect.so",
+          "share/extension/pg_walinspect--1.0--1.1.sql",
+          "share/extension/pg_walinspect--1.0.sql",
+          "share/extension/pg_walinspect.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/pg_walinspect.index.bc",
@@ -147,6 +167,11 @@
   },
   "version": 1,
   "versions": {
+    "ivorysql": [
+      "3.0",
+      "4.0",
+      "5.0"
+    ],
     "postgres": [
       "15.0",
       "16.0",

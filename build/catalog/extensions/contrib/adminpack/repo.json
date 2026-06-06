@@ -2,6 +2,16 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "ivorysql": {
+        "3.0": [
+          "lib/adminpack.so",
+          "share/extension/adminpack--1.0--1.1.sql",
+          "share/extension/adminpack--1.0.sql",
+          "share/extension/adminpack--1.1--2.0.sql",
+          "share/extension/adminpack--2.0--2.1.sql",
+          "share/extension/adminpack.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/adminpack.so",
@@ -114,6 +124,9 @@
   },
   "version": 1,
   "versions": {
+    "ivorysql": [
+      "3.0"
+    ],
     "postgres": [
       "15.0",
       "16.0",

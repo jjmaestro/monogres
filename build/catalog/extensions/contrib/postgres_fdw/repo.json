@@ -2,6 +2,27 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "ivorysql": {
+        "3.0": [
+          "lib/postgres_fdw.so",
+          "share/extension/postgres_fdw--1.0--1.1.sql",
+          "share/extension/postgres_fdw--1.0.sql",
+          "share/extension/postgres_fdw.control"
+        ],
+        "4.0": [
+          "lib/postgres_fdw.so",
+          "share/extension/postgres_fdw--1.0--1.1.sql",
+          "share/extension/postgres_fdw--1.0.sql",
+          "share/extension/postgres_fdw.control"
+        ],
+        "5.0": [
+          "lib/postgres_fdw.so",
+          "share/extension/postgres_fdw--1.0--1.1.sql",
+          "share/extension/postgres_fdw--1.0.sql",
+          "share/extension/postgres_fdw--1.1--1.2.sql",
+          "share/extension/postgres_fdw.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/postgres_fdw.index.bc",
@@ -154,6 +175,11 @@
   },
   "version": 1,
   "versions": {
+    "ivorysql": [
+      "3.0",
+      "4.0",
+      "5.0"
+    ],
     "postgres": [
       "15.0",
       "16.0",

@@ -2,6 +2,29 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "ivorysql": {
+        "3.0": [
+          "lib/hstore_plperl.so",
+          "share/extension/hstore_plperl--1.0.sql",
+          "share/extension/hstore_plperl.control",
+          "share/extension/hstore_plperlu--1.0.sql",
+          "share/extension/hstore_plperlu.control"
+        ],
+        "4.0": [
+          "lib/hstore_plperl.so",
+          "share/extension/hstore_plperl--1.0.sql",
+          "share/extension/hstore_plperl.control",
+          "share/extension/hstore_plperlu--1.0.sql",
+          "share/extension/hstore_plperlu.control"
+        ],
+        "5.0": [
+          "lib/hstore_plperl.so",
+          "share/extension/hstore_plperl--1.0.sql",
+          "share/extension/hstore_plperl.control",
+          "share/extension/hstore_plperlu--1.0.sql",
+          "share/extension/hstore_plperlu.control"
+        ]
+      },
       "postgres": {
         "16.0": [
           "lib/hstore_plperl.so",
@@ -171,6 +194,11 @@
   },
   "version": 1,
   "versions": {
+    "ivorysql": [
+      "3.0",
+      "4.0",
+      "5.0"
+    ],
     "postgres": [
       "16.0",
       "16.1",

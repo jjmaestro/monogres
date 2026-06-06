@@ -2,6 +2,29 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "ivorysql": {
+        "3.0": [
+          "lib/sslinfo.so",
+          "share/extension/sslinfo--1.0--1.1.sql",
+          "share/extension/sslinfo--1.1--1.2.sql",
+          "share/extension/sslinfo--1.2.sql",
+          "share/extension/sslinfo.control"
+        ],
+        "4.0": [
+          "lib/sslinfo.so",
+          "share/extension/sslinfo--1.0--1.1.sql",
+          "share/extension/sslinfo--1.1--1.2.sql",
+          "share/extension/sslinfo--1.2.sql",
+          "share/extension/sslinfo.control"
+        ],
+        "5.0": [
+          "lib/sslinfo.so",
+          "share/extension/sslinfo--1.0--1.1.sql",
+          "share/extension/sslinfo--1.1--1.2.sql",
+          "share/extension/sslinfo--1.2.sql",
+          "share/extension/sslinfo.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/sslinfo.index.bc",
@@ -171,6 +194,11 @@
   },
   "version": 1,
   "versions": {
+    "ivorysql": [
+      "3.0",
+      "4.0",
+      "5.0"
+    ],
     "postgres": [
       "15.0",
       "16.0",

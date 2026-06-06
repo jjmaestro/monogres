@@ -2,6 +2,41 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "ivorysql": {
+        "3.0": [
+          "lib/pg_trgm.so",
+          "share/extension/pg_trgm--1.0--1.1.sql",
+          "share/extension/pg_trgm--1.1--1.2.sql",
+          "share/extension/pg_trgm--1.2--1.3.sql",
+          "share/extension/pg_trgm--1.3--1.4.sql",
+          "share/extension/pg_trgm--1.3.sql",
+          "share/extension/pg_trgm--1.4--1.5.sql",
+          "share/extension/pg_trgm--1.5--1.6.sql",
+          "share/extension/pg_trgm.control"
+        ],
+        "4.0": [
+          "lib/pg_trgm.so",
+          "share/extension/pg_trgm--1.0--1.1.sql",
+          "share/extension/pg_trgm--1.1--1.2.sql",
+          "share/extension/pg_trgm--1.2--1.3.sql",
+          "share/extension/pg_trgm--1.3--1.4.sql",
+          "share/extension/pg_trgm--1.3.sql",
+          "share/extension/pg_trgm--1.4--1.5.sql",
+          "share/extension/pg_trgm--1.5--1.6.sql",
+          "share/extension/pg_trgm.control"
+        ],
+        "5.0": [
+          "lib/pg_trgm.so",
+          "share/extension/pg_trgm--1.0--1.1.sql",
+          "share/extension/pg_trgm--1.1--1.2.sql",
+          "share/extension/pg_trgm--1.2--1.3.sql",
+          "share/extension/pg_trgm--1.3--1.4.sql",
+          "share/extension/pg_trgm--1.3.sql",
+          "share/extension/pg_trgm--1.4--1.5.sql",
+          "share/extension/pg_trgm--1.5--1.6.sql",
+          "share/extension/pg_trgm.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/pg_trgm.index.bc",
@@ -266,6 +301,11 @@
   },
   "version": 1,
   "versions": {
+    "ivorysql": [
+      "3.0",
+      "4.0",
+      "5.0"
+    ],
     "postgres": [
       "15.0",
       "16.0",

@@ -2,6 +2,26 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "ivorysql": {
+        "3.0": [
+          "lib/dict_xsyn.so",
+          "share/extension/dict_xsyn--1.0.sql",
+          "share/extension/dict_xsyn.control",
+          "share/tsearch_data/xsyn_sample.rules"
+        ],
+        "4.0": [
+          "lib/dict_xsyn.so",
+          "share/extension/dict_xsyn--1.0.sql",
+          "share/extension/dict_xsyn.control",
+          "share/tsearch_data/xsyn_sample.rules"
+        ],
+        "5.0": [
+          "lib/dict_xsyn.so",
+          "share/extension/dict_xsyn--1.0.sql",
+          "share/extension/dict_xsyn.control",
+          "share/tsearch_data/xsyn_sample.rules"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/dict_xsyn.index.bc",
@@ -148,6 +168,11 @@
   },
   "version": 1,
   "versions": {
+    "ivorysql": [
+      "3.0",
+      "4.0",
+      "5.0"
+    ],
     "postgres": [
       "15.0",
       "16.0",
