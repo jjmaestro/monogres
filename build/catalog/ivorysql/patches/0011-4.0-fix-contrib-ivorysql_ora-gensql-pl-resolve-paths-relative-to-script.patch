@@ -1,0 +1,47 @@
+From 8f5c075ffdc47d601ba1351bfa6051ed91b48fac Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Fri, 5 Jun 2026 06:47:43 +0000
+Subject: [PATCH] patch: resolve gensql.pl's own paths relative to the script
+
+Same shape as the 3.0 patch: anchor `gensql.pl`'s file lookups to
+`dirname(__FILE__)` so they don't depend on the caller's CWD. 4.0
+flipped `use warnings;` to `use warnings FATAL => 'all';` (and 5.x
+inherits that), so 0007-3.0's surrounding context no longer matches.
+This re-roll's context matches both 4.x and 5.x.
+---
+ contrib/ivorysql_ora/gensql.pl | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/contrib/ivorysql_ora/gensql.pl b/contrib/ivorysql_ora/gensql.pl
+index 12ff69273e..c835b4bf08 100755
+--- a/contrib/ivorysql_ora/gensql.pl
++++ b/contrib/ivorysql_ora/gensql.pl
+@@ -19,8 +19,10 @@
+ use strict;
+ use warnings FATAL => 'all';
+ use Carp;
++use File::Basename;
+ 
+ use File::Spec;
++my $script_dir = File::Spec->rel2abs(dirname(__FILE__));
+ 
+ my @sql_set;
+ 
+@@ -42,7 +44,7 @@ sub sql_merge
+ 	# Read information from ivorysql_ora_merge_sqls.
+ 	#     There are SQLs specified which need to be merged.
+ 	if ($first_arg eq 'meson') {
+-		open(INFO, "<", File::Spec->rel2abs("../contrib/ivorysql_ora/ivorysql_ora_merge_sqls"))
++		open(INFO, "<", "$script_dir/ivorysql_ora_merge_sqls")
+ 		|| croak "Could not open file ivorysql_ora_merge_sqls: $!";
+ 	}
+ 	else {
+@@ -55,7 +57,7 @@ sub sql_merge
+ 		# Delete the last tailing "\n" of this line.
+ 		chomp($_);
+ 		if ($first_arg eq 'meson') {
+-			push @sql_set, "../contrib/ivorysql_ora/$_";
++			push @sql_set, "$script_dir/$_";
+ 		}
+ 		else
+ 		{

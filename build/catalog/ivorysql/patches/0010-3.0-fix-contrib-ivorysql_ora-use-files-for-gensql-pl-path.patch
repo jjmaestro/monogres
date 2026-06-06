@@ -1,0 +1,32 @@
+From ab911ad4ed561d73fdce171ccbbad02df1c12720 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Fri, 5 Jun 2026 00:23:43 +0000
+Subject: [PATCH] patch: resolve the ivorysql_ora gensql.pl path with files()
+
+The `ivorysql_ora--1.0.sql` custom_target invokes `gensql.pl` via the
+relative path `'../contrib/ivorysql_ora/gensql.pl'`. That assumes the
+build dir is structured as `<src_root>/build/` (so `..` lands on the
+source root), true for IvorySQL's typical CI build, but not for
+sandboxed builds (rules_foreign_cc, distros) where `..` is unrelated to
+the source tree.
+
+Use `files('gensql.pl')` so meson resolves the path against the current
+source directory regardless of build-dir layout. This is the standard
+meson idiom.
+---
+ contrib/ivorysql_ora/meson.build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/contrib/ivorysql_ora/meson.build b/contrib/ivorysql_ora/meson.build
+index c18deda293..301d16328c 100644
+--- a/contrib/ivorysql_ora/meson.build
++++ b/contrib/ivorysql_ora/meson.build
+@@ -34,7 +34,7 @@ endif
+ 
+ custom_target('ivorysql_ora--1.0.sql',
+   output: 'ivorysql_ora--1.0.sql',
+-  command: [perl, '../contrib/ivorysql_ora/gensql.pl', 'meson', '1.0'],
++  command: [perl, files('gensql.pl'), 'meson', '1.0'],
+   capture: true,
+   install: true,
+   install_dir: contrib_data_args['install_dir'],

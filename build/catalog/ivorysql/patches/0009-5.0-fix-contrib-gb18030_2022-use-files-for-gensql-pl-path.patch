@@ -1,0 +1,28 @@
+From 8d5f12a07b77c254f752ce641295530ae17a7020 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Thu, 4 Jun 2026 21:11:43 +0000
+Subject: [PATCH] patch: resolve the gb18030_2022 gensql.pl path with files()
+
+5.x added a new contrib (`gb18030_2022`) whose `meson.build` reuses
+`contrib/ivorysql_ora/gensql.pl` via the same broken relative path as
+the original ivorysql_ora target. Same fix shape: replace the literal
+`'../contrib/ivorysql_ora/gensql.pl'` with
+`files('../ivorysql_ora/gensql.pl')` so meson resolves it against the
+caller's source dir.
+---
+ contrib/gb18030_2022/meson.build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/contrib/gb18030_2022/meson.build b/contrib/gb18030_2022/meson.build
+index 9342ca1027..be118fee9c 100644
+--- a/contrib/gb18030_2022/meson.build
++++ b/contrib/gb18030_2022/meson.build
+@@ -12,7 +12,7 @@ endif
+ 
+ custom_target('gb18030_2022.bc',
+   output: 'utf8_and_gb18030_2022.bc',
+-  command: [perl, '../contrib/ivorysql_ora/gensql.pl', 'meson', '1.0'],
++  command: [perl, files('../ivorysql_ora/gensql.pl'), 'meson', '1.0'],
+   capture: true,
+   install: true,
+   install_dir: contrib_data_args['install_dir'],

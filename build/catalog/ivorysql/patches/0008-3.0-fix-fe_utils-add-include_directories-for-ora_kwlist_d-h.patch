@@ -1,0 +1,32 @@
+From d56285055ba81490cd850ec639ac6ef491d6db40 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Thu, 4 Jun 2026 17:59:43 +0000
+Subject: [PATCH] patch: add the fe_utils build directory to its include path
+
+The `libpgfeutils` target compiles `ora_keywords.c` (an IvorySQL
+addition), which `#include "ora_kwlist_d.h"` (the keyword list header
+generated to `<builddir>/src/fe_utils/`). The original
+`include_directories: [postgres_inc, libpq_inc]` lists doesn't include
+the target's own dir, so the generated header is unreachable and the
+compile fails with `'ora_kwlist_d.h' file not found`.
+
+Stock PG's `libpgcommon` handles the equivalent `kwlist_d.h` by passing
+`include_directories('.')` (which exposes both srcdir and builddir of
+the target's package). Mirror that on `libpgfeutils`.
+---
+ src/fe_utils/meson.build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/fe_utils/meson.build b/src/fe_utils/meson.build
+index 2016b5e586..1085fa5cfa 100644
+--- a/src/fe_utils/meson.build
++++ b/src/fe_utils/meson.build
+@@ -42,7 +42,7 @@ fe_utils_sources += psqlscan
+ fe_utils = static_library('libpgfeutils',
+   fe_utils_sources + generated_headers,
+   c_pch: pch_postgres_fe_h,
+-  include_directories: [postgres_inc, libpq_inc],
++  include_directories: [postgres_inc, libpq_inc, include_directories('.')],
+   c_args: host_system == 'windows' ? ['-DFD_SETSIZE=1024'] : [],
+   dependencies: frontend_common_code,
+   kwargs: default_lib_args,

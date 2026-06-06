@@ -1,0 +1,37 @@
+From 1634de5abfe635a37d98a02cc6778c842d9b436f Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Thu, 4 Jun 2026 14:47:43 +0000
+Subject: [PATCH] patch: drop the postgres.h include from
+ identifier_alpha_transfor.c
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+`src/port/identifier_alpha_transfor.c` (added by IvorySQL) includes
+`postgres.h`, which transitively pulls in `utils/elog.h` →
+`utils/errcodes.h`. The `errcodes.h` header is *generated* by a Meson
+custom_target, and Meson does not propagate the dep ordering to
+individual `.c.o` compile actions of `pgport`. Whether the file compiles
+is a race against the `Generating ... errcodes` step.
+
+Stock PG's port files include only `c.h` (which is enough for FRONTEND
+built code: `Assert` + the `palloc → pg_malloc` macro from
+`common/fe_memutils.h`). Match that pattern by dropping the unneeded
+`postgres.h` include, which severs the stale-header dependency entirely.
+---
+ src/port/identifier_alpha_transfor.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/src/port/identifier_alpha_transfor.c b/src/port/identifier_alpha_transfor.c
+index 9491b8c71f..6919294166 100644
+--- a/src/port/identifier_alpha_transfor.c
++++ b/src/port/identifier_alpha_transfor.c
+@@ -20,8 +20,6 @@
+  */
+ 
+ 
+-#include "postgres.h"
+-
+ #include "c.h"
+ #include "common/fe_memutils.h"
+ 

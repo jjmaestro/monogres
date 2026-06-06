@@ -1,0 +1,81 @@
+From 456f8d297d291e24a3621e05027dd4ed3f634548 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Wed, 3 Jun 2026 19:35:43 +0000
+Subject: [PATCH] patch: add a prefix_distro build option
+
+Add prefix_distro option to select a "distro prefix", a path different
+from prefix where Postgres will be installed.
+
+Useful if the distro install path will be different from the install
+path at build time, and for reproducible builds since Postgres embeds
+all of the pg_config.h paths in all the binaries.
+---
+ meson.build             |  5 +++++
+ meson_options.txt       |  2 ++
+ src/include/meson.build | 24 ++++++++++++------------
+ 3 files changed, 19 insertions(+), 12 deletions(-)
+
+diff --git a/meson.build b/meson.build
+index 18aa8f11e8..4be2e090b1 100644
+--- a/meson.build
++++ b/meson.build
+@@ -490,6 +490,11 @@ cdata.set_quoted('DEF_ORAPORT_STR', get_option('oraport').to_string())
+ pkg = 'postgresql'
+ 
+ dir_prefix = get_option('prefix')
++dir_prefix_distro = get_option('prefix_distro')
++
++if dir_prefix_distro == ''
++  dir_prefix_distro = dir_prefix
++endif
+ 
+ dir_prefix_contains_pg = (dir_prefix.contains('pgsql') or dir_prefix.contains('postgres') or dir_prefix.contains('IvorySQL'))
+ 
+diff --git a/meson_options.txt b/meson_options.txt
+index 9b83189c40..e5feb145eb 100644
+--- a/meson_options.txt
++++ b/meson_options.txt
+@@ -74,6 +74,8 @@ option('darwin_sysroot', type: 'string', value: '',
+ option('rpath', type: 'boolean', value: true,
+   description: 'Embed shared library search path in executables')
+ 
++option('prefix_distro', type: 'string', value: '',
++  description: 'Select a "distro prefix" (a path different from prefix where Postgres will be installed). Useful if the distro install path will be different from the install path at build time.')
+ 
+ # External dependencies
+ 
+diff --git a/src/include/meson.build b/src/include/meson.build
+index 3fc5d10299..18484c7761 100644
+--- a/src/include/meson.build
++++ b/src/include/meson.build
+@@ -20,18 +20,18 @@ configure_files += pg_config
+ 
+ 
+ config_paths_data = configuration_data()
+-config_paths_data.set_quoted('PGBINDIR', dir_prefix / dir_bin)
+-config_paths_data.set_quoted('PGSHAREDIR', dir_prefix / dir_data)
+-config_paths_data.set_quoted('SYSCONFDIR', dir_prefix / dir_sysconf)
+-config_paths_data.set_quoted('INCLUDEDIR', dir_prefix / dir_include)
+-config_paths_data.set_quoted('PKGINCLUDEDIR', dir_prefix / dir_include_pkg)
+-config_paths_data.set_quoted('INCLUDEDIRSERVER', dir_prefix / dir_include_server)
+-config_paths_data.set_quoted('LIBDIR', dir_prefix / dir_lib)
+-config_paths_data.set_quoted('PKGLIBDIR', dir_prefix / dir_lib_pkg)
+-config_paths_data.set_quoted('LOCALEDIR', dir_prefix / dir_locale)
+-config_paths_data.set_quoted('DOCDIR', dir_prefix / dir_doc)
+-config_paths_data.set_quoted('HTMLDIR', dir_prefix / dir_doc_html)
+-config_paths_data.set_quoted('MANDIR', dir_prefix / dir_man)
++config_paths_data.set_quoted('PGBINDIR', dir_prefix_distro / dir_bin)
++config_paths_data.set_quoted('PGSHAREDIR', dir_prefix_distro / dir_data)
++config_paths_data.set_quoted('SYSCONFDIR', dir_prefix_distro / dir_sysconf)
++config_paths_data.set_quoted('INCLUDEDIR', dir_prefix_distro / dir_include)
++config_paths_data.set_quoted('PKGINCLUDEDIR', dir_prefix_distro / dir_include_pkg)
++config_paths_data.set_quoted('INCLUDEDIRSERVER', dir_prefix_distro / dir_include_server)
++config_paths_data.set_quoted('LIBDIR', dir_prefix_distro / dir_lib)
++config_paths_data.set_quoted('PKGLIBDIR', dir_prefix_distro / dir_lib_pkg)
++config_paths_data.set_quoted('LOCALEDIR', dir_prefix_distro / dir_locale)
++config_paths_data.set_quoted('DOCDIR', dir_prefix_distro / dir_doc)
++config_paths_data.set_quoted('HTMLDIR', dir_prefix_distro / dir_doc_html)
++config_paths_data.set_quoted('MANDIR', dir_prefix_distro / dir_man)
+ 
+ 
+ var_cc = ' '.join(cc.cmd_array())

@@ -268,6 +268,14 @@ monoext.monogres(
 )
 use_repo(monoext, "pg", "pg_ext", "pg_pkgs")
 
+monoext.monogres(
+    name = "ivory",
+    base = "//catalog/ivorysql:repo.json",
+    deb_lock = "//catalog/locks:ivory_pkgs.lock",
+    extensions = "//catalog/extensions:index.json",
+)
+use_repo(monoext, "ivory", "ivory_ext", "ivory_pkgs")
+
 # sysroots/
 #
 # Debian package closures materialized via `//sysroots` from per-toolchain

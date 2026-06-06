@@ -1,0 +1,251 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "owner": "IvorySQL",
+      "repo": "IvorySQL",
+      "filename": "{tag}",
+      "url": "https://github.com/{owner}/{repo}/archive/refs/tags/{filename}.tar.gz",
+      "strip_prefix": "{repo}-{tag}"
+    }
+  },
+  "versions": {
+    "5.0": {
+      "tag": "IvorySQL_5.0",
+      "sha256": "15c83705ed0ded5f7aa3bb39376762307ea32955428b918c078103547fb11e83"
+    },
+    "4.0": {
+      "tag": "IvorySQL_4.0",
+      "sha256": "aeedbcbc765c9310ae318caad8074c17f544e81e3904009cf583b16c01154143"
+    },
+    "3.0": {
+      "tag": "IvorySQL_3.0",
+      "sha256": "180fce0e3d7c2895e6314082140348ce832e92ccb08b705412125a9438c025ac"
+    }
+  },
+  "metadata": {
+    "flavor": "ivorysql",
+    "introspect": {
+      "5.0": {
+        "barebones": "//catalog/ivorysql/introspect:ivorysql~5.0~barebones.json",
+        "full": "//catalog/ivorysql/introspect:ivorysql~5.0~full.json",
+        "minimal": "//catalog/ivorysql/introspect:ivorysql~5.0~minimal.json",
+        "regular": "//catalog/ivorysql/introspect:ivorysql~5.0~regular.json"
+      },
+      "4.0": {
+        "barebones": "//catalog/ivorysql/introspect:ivorysql~4.0~barebones.json",
+        "full": "//catalog/ivorysql/introspect:ivorysql~4.0~full.json",
+        "minimal": "//catalog/ivorysql/introspect:ivorysql~4.0~minimal.json",
+        "regular": "//catalog/ivorysql/introspect:ivorysql~4.0~regular.json"
+      },
+      "3.0": {
+        "barebones": "//catalog/ivorysql/introspect:ivorysql~3.0~barebones.json",
+        "full": "//catalog/ivorysql/introspect:ivorysql~3.0~full.json",
+        "minimal": "//catalog/ivorysql/introspect:ivorysql~3.0~minimal.json",
+        "regular": "//catalog/ivorysql/introspect:ivorysql~3.0~regular.json"
+      }
+    },
+    "build_options": {
+      "injection_points": {
+        "compatible": ">=4.0"
+      },
+      "atomics": {
+        "compatible": "<5.0"
+      },
+      "spinlocks": {
+        "compatible": "<5.0"
+      }
+    },
+    "patches": [
+      {
+        "label": "//catalog/ivorysql/patches:0001-3.0-fix-pgflex-propagate-environment-to-flex-subprocess.patch",
+        "spec": "*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0002-3.0-fix-pgflex-suppress-line-directives.patch",
+        "spec": "*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0003-3.0-fix-pgflex-flex-2.6.4-noline-bugs.patch",
+        "spec": "<4.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0004-3.0-feat-prefix_distro-option.patch",
+        "spec": "<5.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0004-5.0-feat-prefix_distro-option.patch",
+        "spec": ">=5.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0005-3.0-hack-remove-execroot-from-CC.patch",
+        "spec": "3.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0005-4.0-hack-remove-execroot-from-CC.patch",
+        "spec": ">=4.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0006-3.0-feat-add-build-option-to-disable-contrib-builds.patch",
+        "spec": "3.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0006-4.0-feat-add-build-option-to-disable-contrib-builds.patch",
+        "spec": "4.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0006-5.0-feat-add-build-option-to-disable-contrib-builds.patch",
+        "spec": ">=5.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0007-3.0-fix-port-identifier_alpha_transfor-drop-postgres-h-include.patch",
+        "spec": "*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0008-3.0-fix-fe_utils-add-include_directories-for-ora_kwlist_d-h.patch",
+        "spec": "<5.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0009-5.0-fix-contrib-gb18030_2022-use-files-for-gensql-pl-path.patch",
+        "spec": ">=5.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0010-3.0-fix-contrib-ivorysql_ora-use-files-for-gensql-pl-path.patch",
+        "spec": "*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0011-3.0-fix-contrib-ivorysql_ora-gensql-pl-resolve-paths-relative-to-script.patch",
+        "spec": "3.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0011-4.0-fix-contrib-ivorysql_ora-gensql-pl-resolve-paths-relative-to-script.patch",
+        "spec": ">=4.0/*"
+      }
+    ],
+    "deps": {
+      "buildtime": {
+        "debian": {
+          "12": {
+            "*": [
+              "gettext",
+              "libavahi-compat-libdnssd-dev",
+              "libcurl4-openssl-dev",
+              "libedit-dev",
+              "libeditreadline-dev",
+              "libicu-dev",
+              "libkrb5-dev",
+              "libldap-dev",
+              "liblz4-dev",
+              "libnuma-dev",
+              "libossp-uuid-dev",
+              "libpam0g-dev",
+              "libperl-dev",
+              "libpython3-dev",
+              "libselinux1-dev",
+              "libssl-dev",
+              "libsystemd-dev",
+              "liburing-dev",
+              "libxml2-dev",
+              "libxslt1-dev",
+              "libzstd-dev",
+              "llvm-14-dev",
+              "tcl-dev",
+              "uuid-dev",
+              "zlib1g-dev"
+            ]
+          },
+          "13": {
+            "*": [
+              "gettext",
+              "libavahi-compat-libdnssd-dev",
+              "libcurl4-openssl-dev",
+              "libedit-dev",
+              "libeditreadline-dev",
+              "libicu-dev",
+              "libkrb5-dev",
+              "libldap-dev",
+              "liblz4-dev",
+              "libnuma-dev",
+              "libossp-uuid-dev",
+              "libpam0g-dev",
+              "libperl-dev",
+              "libpython3-dev",
+              "libselinux1-dev",
+              "libssl-dev",
+              "libsystemd-dev",
+              "liburing-dev",
+              "libxml2-dev",
+              "libxslt1-dev",
+              "libzstd-dev",
+              "llvm-19-dev",
+              "tcl-dev",
+              "uuid-dev",
+              "zlib1g-dev"
+            ]
+          }
+        }
+      },
+      "runtime": {
+        "debian": {
+          "12": {
+            "*": [
+              "gettext",
+              "libavahi-compat-libdnssd1",
+              "libedit2",
+              "libicu72",
+              "libkrb5-3",
+              "libldap-2.5-0",
+              "liblz4-1",
+              "libnuma1",
+              "libossp-uuid16",
+              "libpam0g",
+              "libperl5.36",
+              "libpython3.11",
+              "libselinux1",
+              "libssl3",
+              "libsystemd0",
+              "liburing2",
+              "libuuid1",
+              "libxml2",
+              "libxslt1.1",
+              "libzstd1",
+              "llvm-14-runtime",
+              "ncurses-term",
+              "tcl",
+              "zlib1g"
+            ]
+          },
+          "13": {
+            "*": [
+              "gettext",
+              "libavahi-compat-libdnssd1",
+              "libc-bin",
+              "libedit2",
+              "libicu76",
+              "libkrb5-3",
+              "libldap2",
+              "liblz4-1",
+              "libnuma1",
+              "libossp-uuid16",
+              "libpam0g",
+              "libperl5.40",
+              "libpython3.13",
+              "libselinux1",
+              "libssl3",
+              "libsystemd0",
+              "liburing2",
+              "libuuid1",
+              "libxml2",
+              "libxslt1.1",
+              "libzstd1",
+              "llvm-19-runtime",
+              "ncurses-term",
+              "tcl",
+              "zlib1g"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
