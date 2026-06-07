@@ -1,0 +1,58 @@
+From 58193239e633405c2ea79b5b2f071ed1beb98333 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Fri, 5 Jun 2026 13:38:05 +0000
+Subject: [PATCH] patch: pin the jsonb_jsonpath time_tz() UTC offset
+
+IvorySQL 4.0 forked PostgreSQL's jsonb_jsonpath regression test from a pre-17.1
+snapshot, where the .time_tz() subtest runs
+jsonb_path_query_tz('"12:34:56"', '$.time_tz().string()') with no fixed
+timezone. A bare time carries no date, so coercing it to time with time zone
+absorbs the session zone's UTC offset as of the current date; under the
+regression timezone that is -08:00 in standard time and -07:00 during daylight
+saving, so the expected output is not reproducible across the year. PostgreSQL
+17.1 pinned the zone (begin; set local timezone = 'UTC-10'; ...; rollback;) to
+make the result a deterministic +10:00, and IvorySQL 5.0 already carries the
+fix; backport it so the hermetic regress lane is stable on any date.
+---
+ src/test/regress/expected/jsonb_jsonpath.out | 6 +++++-
+ src/test/regress/sql/jsonb_jsonpath.sql      | 4 ++++
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/src/test/regress/expected/jsonb_jsonpath.out b/src/test/regress/expected/jsonb_jsonpath.out
+index 70e7247c0c..8cf6ecfc7f 100644
+--- a/src/test/regress/expected/jsonb_jsonpath.out
++++ b/src/test/regress/expected/jsonb_jsonpath.out
+@@ -2634,12 +2634,16 @@ select jsonb_path_query('"12:34:56 +5:30"', '$.time_tz().string()');
+  "12:34:56+05:30"
+ (1 row)
+ 
++-- this timetz usage will absorb the UTC offset of the current timezone setting
++begin;
++set local timezone = 'UTC-10';
+ select jsonb_path_query_tz('"12:34:56"', '$.time_tz().string()');
+  jsonb_path_query_tz 
+ ---------------------
+- "12:34:56-08:00"
++ "12:34:56+10:00"
+ (1 row)
+ 
++rollback;
+ select jsonb_path_query('"12:34:56"', '$.time().string()');
+  jsonb_path_query 
+ ------------------
+diff --git a/src/test/regress/sql/jsonb_jsonpath.sql b/src/test/regress/sql/jsonb_jsonpath.sql
+index c647af55e9..acb508c0dd 100644
+--- a/src/test/regress/sql/jsonb_jsonpath.sql
++++ b/src/test/regress/sql/jsonb_jsonpath.sql
+@@ -596,7 +596,11 @@ select jsonb_path_query_tz('"2023-08-15 12:34:56"', '$.timestamp_tz().string()')
+ select jsonb_path_query('"2023-08-15 12:34:56 +5:30"', '$.timestamp_tz().string()');
+ select jsonb_path_query('"2023-08-15 12:34:56"', '$.timestamp().string()');
+ select jsonb_path_query('"12:34:56 +5:30"', '$.time_tz().string()');
++-- this timetz usage will absorb the UTC offset of the current timezone setting
++begin;
++set local timezone = 'UTC-10';
+ select jsonb_path_query_tz('"12:34:56"', '$.time_tz().string()');
++rollback;
+ select jsonb_path_query('"12:34:56"', '$.time().string()');
+ select jsonb_path_query('"2023-08-15"', '$.date().string()');
+ 
