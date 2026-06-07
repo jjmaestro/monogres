@@ -38,6 +38,7 @@ FLAVORS = {
         build_options = _ivory_build_options,
         build_system = _ivory_build_system,
         pg_base_version = _ivory_pg_base_version,
+        test = True,
     ),
     "postgres": struct(
         OPTION_SETS = _pg_OPTION_SETS,
