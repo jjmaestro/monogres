@@ -557,6 +557,15 @@ for mod in regress refint autoinc; do
     found=$$(find "$$BUILD_TMPDIR" -name "$$mod.so" -type f 2>/dev/null | head -1)
     if [ -n "$$found" ]; then cp -f "$$found" "$$INSTALLDIR/lib/postgresql/"; fi
 done
+
+# IvorySQL's main oracle suite (src/oracle_test/regress) dlopen's
+# `oraregress.so` (test_setup.sql: `\\set regresslib :libdir '/oraregress'`). Its
+# regress.c is the same PG_FUNCTION_INFO_V1 symbols as core regress.c, but the
+# IvorySQL meson build never enters src/oracle_test, so it is never emitted. The
+# captured regress.so satisfies it. No-op when regress.so was not captured.
+if [ -e "$$INSTALLDIR/lib/postgresql/regress.so" ]; then
+    cp -f "$$INSTALLDIR/lib/postgresql/regress.so" "$$INSTALLDIR/lib/postgresql/oraregress.so"
+fi
 """.format(major = LLVM_MAJOR)
 
 # Capture src/test/modules test fixtures into the install tree. Appended to the
