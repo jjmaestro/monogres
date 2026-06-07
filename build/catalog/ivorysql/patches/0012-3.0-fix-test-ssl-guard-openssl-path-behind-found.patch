@@ -1,0 +1,32 @@
+From 3fd7f6ecea7dd9c79c85c315e2dd5e6980e077ca Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Fri, 5 Jun 2026 11:16:05 +0000
+Subject: [PATCH] patch: guard openssl.path() when the openssl CLI is absent
+
+IvorySQL 3.0 (an early PG16 fork) calls `openssl.path()` unconditionally in
+`src/test/ssl/meson.build`, which aborts `meson setup` with "Unable to get the
+path of a not-found external program" when the openssl binary is absent (the
+hermetic sandbox ships none). Upstream PostgreSQL guards it as
+`openssl.found() ? openssl.path() : ''`, and IvorySQL 4.0/5.0 carry that guard;
+backport it so the `--enable-tap-tests` test variant can configure. The ssl
+suite skips without PG_TEST_EXTRA, so the empty value is never read.
+
+References: https://postgr.es/c/b64c8b01c2
+References: https://postgr.es/c/2a08dda291
+---
+ src/test/ssl/meson.build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/test/ssl/meson.build b/src/test/ssl/meson.build
+index 4cda81f3bc..abb30ab214 100644
+--- a/src/test/ssl/meson.build
++++ b/src/test/ssl/meson.build
+@@ -7,7 +7,7 @@ tests += {
+   'tap': {
+     'env': {
+       'with_ssl': ssl_library,
+-      'OPENSSL': openssl.path(),
++      'OPENSSL': openssl.found() ? openssl.path() : '',
+     },
+     'tests': [
+       't/001_ssltests.pl',
