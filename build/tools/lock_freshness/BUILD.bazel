@@ -10,6 +10,7 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 _APT_LOCKS = [
     "//catalog/locks:ivory_pkgs.lock",
+    "//catalog/locks:openhalo_pkgs.lock",
     "//catalog/locks:pg_pkgs.lock",
     "//toolchains/libc_sysroot/locks:libc_sysroot.lock",
     "//toolchains/llvm_sysroot/locks:llvm_sysroot.lock",

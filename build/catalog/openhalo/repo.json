@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "owner": "HaloTech-Co-Ltd",
+      "repo": "openHalo",
+      "filename": "{tag}",
+      "url": "https://github.com/{owner}/{repo}/archive/refs/tags/{filename}.tar.gz",
+      "strip_prefix": "{repo}-{dirname}"
+    }
+  },
+  "versions": {
+    "1beta1": {
+      "tag": "v1.0-beta1",
+      "dirname": "1.0-beta1",
+      "sha256": "071418985314133b8c9b8d46b26cabebaec11d6e57f3e29ffbaf76443093847b"
+    }
+  },
+  "metadata": {
+    "flavor": "openhalo",
+    "deps": {
+      "buildtime": {
+        "debian": {
+          "12": {
+            "*": [
+              "bison",
+              "clang-14",
+              "flex",
+              "gettext",
+              "libavahi-compat-libdnssd-dev",
+              "libcurl4-openssl-dev",
+              "libedit-dev",
+              "libeditreadline-dev",
+              "libicu-dev",
+              "libkrb5-dev",
+              "libldap-dev",
+              "liblz4-dev",
+              "libossp-uuid-dev",
+              "libpam0g-dev",
+              "libperl-dev",
+              "libpython3-dev",
+              "libselinux1-dev",
+              "libssl-dev",
+              "libsystemd-dev",
+              "libxml2-dev",
+              "libxslt1-dev",
+              "llvm-14-dev",
+              "m4",
+              "make",
+              "tcl-dev",
+              "uuid-dev",
+              "zlib1g-dev"
+            ]
+          },
+          "13": {
+            "*": [
+              "bison",
+              "clang-19",
+              "flex",
+              "gettext",
+              "libavahi-compat-libdnssd-dev",
+              "libcurl4-openssl-dev",
+              "libedit-dev",
+              "libeditreadline-dev",
+              "libicu-dev",
+              "libkrb5-dev",
+              "libldap-dev",
+              "liblz4-dev",
+              "libossp-uuid-dev",
+              "libpam0g-dev",
+              "libperl-dev",
+              "libpython3-dev",
+              "libselinux1-dev",
+              "libssl-dev",
+              "libsystemd-dev",
+              "libxml2-dev",
+              "libxslt1-dev",
+              "llvm-19-dev",
+              "m4",
+              "make",
+              "tcl-dev",
+              "uuid-dev",
+              "zlib1g-dev"
+            ]
+          }
+        }
+      },
+      "runtime": {
+        "debian": {
+          "12": {
+            "*": [
+              "gettext",
+              "libavahi-compat-libdnssd1",
+              "libedit2",
+              "libgssapi-krb5-2",
+              "libicu72",
+              "libkrb5-3",
+              "libldap-2.5-0",
+              "libllvm14",
+              "liblz4-1",
+              "libossp-uuid16",
+              "libpam0g",
+              "libperl5.36",
+              "libpython3.11",
+              "libselinux1",
+              "libssl3",
+              "libsystemd0",
+              "libuuid1",
+              "libxml2",
+              "libxslt1.1",
+              "llvm-14-runtime",
+              "ncurses-term",
+              "tcl",
+              "tzdata",
+              "zlib1g"
+            ]
+          },
+          "13": {
+            "*": [
+              "gettext",
+              "libavahi-compat-libdnssd1",
+              "libc-bin",
+              "libedit2",
+              "libgssapi-krb5-2",
+              "libicu76",
+              "libkrb5-3",
+              "libldap2",
+              "libllvm19",
+              "liblz4-1",
+              "libossp-uuid16",
+              "libpam0g",
+              "libperl5.40",
+              "libpython3.13",
+              "libselinux1",
+              "libssl3",
+              "libsystemd0",
+              "libuuid1",
+              "libxml2",
+              "libxslt1.1",
+              "llvm-19-runtime",
+              "ncurses-term",
+              "tcl",
+              "tzdata",
+              "zlib1g"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files(glob(
+    ["*.patch"],
+    # The directory exists up-front but is empty until a patch is needed; the
+    # default `allow_empty = False` would fail loading this BUILD file before
+    # any .patch lands. Keep the BUILD here so future patches just drop in.
+    allow_empty = True,
+))

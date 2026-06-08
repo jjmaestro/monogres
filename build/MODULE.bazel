@@ -276,6 +276,14 @@ monoext.monogres(
 )
 use_repo(monoext, "ivory", "ivory_ext", "ivory_pkgs")
 
+monoext.monogres(
+    name = "openhalo",
+    base = "//catalog/openhalo:repo.json",
+    deb_lock = "//catalog/locks:openhalo_pkgs.lock",
+    extensions = "//catalog/extensions:index.json",
+)
+use_repo(monoext, "openhalo", "openhalo_ext", "openhalo_pkgs")
+
 # sysroots/
 #
 # Debian package closures materialized via `//sysroots` from per-toolchain
