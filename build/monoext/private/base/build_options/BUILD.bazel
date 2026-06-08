@@ -11,6 +11,7 @@ exports_files([
     "flavors.bzl",
     "helpers.bzl",
     "ivory.bzl",
+    "openhalo.bzl",
     "pg.bzl",
 ])
 
@@ -45,10 +46,19 @@ bzl_library(
 )
 
 bzl_library(
+    name = "openhalo",
+    srcs = ["openhalo.bzl"],
+    deps = [
+        ":pg",
+    ],
+)
+
+bzl_library(
     name = "flavors",
     srcs = ["flavors.bzl"],
     deps = [
         ":ivory",
+        ":openhalo",
         ":pg",
     ],
 )

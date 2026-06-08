@@ -1,9 +1,12 @@
 load(":configure_args.bzl", configure_args_suite = "test_suite")
 load(":ivory.bzl", ivory_suite = "test_suite")
+load(":openhalo.bzl", openhalo_suite = "test_suite")
 load(":pg.bzl", pg_suite = "test_suite")
 
 configure_args_suite()
 
 ivory_suite()
+
+openhalo_suite()
 
 pg_suite()

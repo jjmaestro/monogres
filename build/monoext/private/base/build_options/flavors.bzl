@@ -25,6 +25,13 @@ load(
     _ivory_pg_base_version = "pg_base_version",
 )
 load(
+    ":openhalo.bzl",
+    _openhalo_OPTION_SETS = "OPTION_SETS",
+    _openhalo_build_options = "build_options",
+    _openhalo_build_system = "build_system",
+    _openhalo_pg_base_version = "pg_base_version",
+)
+load(
     ":pg.bzl",
     _pg_OPTION_SETS = "OPTION_SETS",
     _pg_build_options = "build_options",
@@ -39,6 +46,12 @@ FLAVORS = {
         build_system = _ivory_build_system,
         pg_base_version = _ivory_pg_base_version,
         test = True,
+    ),
+    "openhalo": struct(
+        OPTION_SETS = _openhalo_OPTION_SETS,
+        build_options = _openhalo_build_options,
+        build_system = _openhalo_build_system,
+        pg_base_version = _openhalo_pg_base_version,
     ),
     "postgres": struct(
         OPTION_SETS = _pg_OPTION_SETS,
