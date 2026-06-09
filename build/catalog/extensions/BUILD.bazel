@@ -1,4 +1,5 @@
 load("@ivory//:introspect.bzl", IVORY_INTROSPECTIONS = "INTROSPECTIONS")
+load("@openhalo//:introspect.bzl", OPENHALO_INTROSPECTIONS = "INTROSPECTIONS")
 load("@pg//:introspect.bzl", PG_INTROSPECTIONS = "INTROSPECTIONS")
 load("//tools:gen_contrib.bzl", "gen_contrib", "update_contrib")
 load("//tools:gen_index.bzl", "gen_index", "update_index")
@@ -15,6 +16,7 @@ gen_contrib(
     name = "gen_contrib",
     introspections = [
         IVORY_INTROSPECTIONS,
+        OPENHALO_INTROSPECTIONS,
         PG_INTROSPECTIONS,
     ],
 )

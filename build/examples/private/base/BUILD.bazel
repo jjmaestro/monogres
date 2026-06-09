@@ -1,4 +1,4 @@
-"""Private e2e tests for @pg and @ivory."""
+"""Private e2e tests for @pg, @ivory, and @openhalo."""
 
 load(
     "@ivory//:all.bzl",
@@ -8,6 +8,14 @@ load(
     ivory_VERSIONS = "VERSIONS",
 )
 load("@ivory//:introspect.bzl", ivory_INTROSPECTIONS = "INTROSPECTIONS")
+load(
+    "@openhalo//:all.bzl",
+    openhalo_CFG = "CFG",
+    openhalo_DEFAULT_VERSION = "DEFAULT_VERSION",
+    openhalo_OPTION_SETS = "OPTION_SETS",
+    openhalo_VERSIONS = "VERSIONS",
+)
+load("@openhalo//:introspect.bzl", openhalo_INTROSPECTIONS = "INTROSPECTIONS")
 load("@pg//:all.bzl", "CFG", "DEFAULT_VERSION", "OPTION_SETS", "VERSIONS")
 load("@pg//:introspect.bzl", "INTROSPECTIONS")
 load(":test.bzl", "e2e_tests")
@@ -30,4 +38,14 @@ e2e_tests(
     introspections = ivory_INTROSPECTIONS,
     option_sets = ivory_OPTION_SETS,
     versions = ivory_VERSIONS,
+)
+
+e2e_tests(
+    name = "openhalo",
+    cfg = openhalo_CFG,
+    default_version = openhalo_DEFAULT_VERSION,
+    expected_flavor = "openhalo",
+    introspections = openhalo_INTROSPECTIONS,
+    option_sets = openhalo_OPTION_SETS,
+    versions = openhalo_VERSIONS,
 )

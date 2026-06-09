@@ -29,6 +29,14 @@ monoext.monogres(
 )
 use_repo(monoext, "ivory", "ivory_ext", "ivory_pkgs")
 
+monoext.monogres(
+    name = "openhalo",
+    base = "@monogres//catalog/openhalo:repo.json",
+    deb_lock = "@monogres//catalog/locks:openhalo_pkgs.lock",
+    extensions = "@monogres//catalog/extensions:index.json",
+)
+use_repo(monoext, "openhalo", "openhalo_ext", "openhalo_pkgs")
+
 local_path_override(
     module_name = "monogres",
     path = "..",

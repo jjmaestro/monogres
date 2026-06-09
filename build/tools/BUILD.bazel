@@ -4,6 +4,11 @@ load(
     ivory_OPTION_SETS = "OPTION_SETS",
     ivory_VERSIONS = "VERSIONS",
 )
+load(
+    "@openhalo//:all.bzl",
+    openhalo_OPTION_SETS = "OPTION_SETS",
+    openhalo_VERSIONS = "VERSIONS",
+)
 load("@pg//:all.bzl", pg_OPTION_SETS = "OPTION_SETS", pg_VERSIONS = "VERSIONS")
 load(":gen_pg_introspect_jsons.bzl", "gen_pg_introspect_jsons")
 
@@ -52,4 +57,12 @@ gen_pg_introspect_jsons(
     option_sets = ivory_OPTION_SETS,
     test_versions = ivory_VERSIONS,
     versions = ivory_VERSIONS,
+)
+
+gen_pg_introspect_jsons(
+    name = "gen_openhalo_introspect_jsons",
+    flavor = "openhalo",
+    hub = "openhalo",
+    option_sets = openhalo_OPTION_SETS,
+    versions = openhalo_VERSIONS,
 )
