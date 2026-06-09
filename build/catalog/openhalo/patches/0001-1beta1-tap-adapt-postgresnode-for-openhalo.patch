@@ -1,0 +1,71 @@
+From 9fa3cbbd8915fb47a64d1a16cad570018883df88 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sun, 7 Jun 2026 23:13:19 +0000
+Subject: [PATCH] patch: adapt PostgresNode to the non-stock TAP defaults
+
+openHalo diverges from stock PostgreSQL in two defaults that the upstream Perl
+TAP framework (PostgresNode), which openHalo does not run, depends on:
+
+1. The default administrative database is "halo0root", not "postgres" (initdb.c
+   make_postgres; carried through the backend, the client tools, and the C
+   regress driver pg_regress.c). PostgresNode connects to "postgres" by default
+   and the .pl tests hard-code it in SQL and connection strings.
+2. postgresql.conf.sample enables the logging collector with
+   log_destination='csvlog' (stock PG leaves both off/stderr), so server logs go
+   to pgdata/diag/*.csv, while the framework greps the stderr logfile
+   ($node->logfile) via log_contains / issues_sql_like / wait_for_log.
+
+Adapt PostgresNode::init so the inherited suite runs verbatim: recreate the
+stock "postgres" db in single-user mode right after initdb (the same empty,
+template1-cloned db with the standard comment stock initdb make_postgres
+produces), and restore stderr logging in the node config block. Both are
+test-only (src/test/perl is not installed in the production tree), so openHalo's
+production defaults (halo0root, csvlog) are unchanged and the shipped artifact is
+byte-identical.
+---
+ src/test/perl/PostgresNode.pm | 27 +++++++++++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/src/test/perl/PostgresNode.pm b/src/test/perl/PostgresNode.pm
+index 2c2366d1ac..a0d8f3f7d7 100644
+--- a/src/test/perl/PostgresNode.pm
++++ b/src/test/perl/PostgresNode.pm
+@@ -484,11 +484,38 @@ sub init
+ 
+ 	TestLib::system_or_bail('initdb', '-D', $pgdata, '-A', 'trust', '-N',
+ 		@{ $params{extra} });
++	# openHalo names the default admin database "halo0root", not "postgres"
++	# (initdb.c make_postgres), and carries that rename through the backend, the
++	# client tools, and the C regress driver pg_regress.c. The upstream Perl TAP
++	# suite (which openHalo does not run) still expects the stock "postgres"
++	# database: PostgresNode defaults to it and the .pl tests hard-code it in SQL
++	# and connection strings. Recreate it here in single-user mode, as the same
++	# empty, template1-cloned database with the standard comment that stock
++	# initdb make_postgres produces, so the upstream tests run verbatim. Test
++	# only (src/test/perl is not installed): openHalo's production default stays
++	# "halo0root", and base backups inherit this db, so standbys need no handling.
++	{
++		open(my $oh_single, '|-', 'postgres', '--single', '-D', $pgdata, 'template1')
++		  or die "could not run postgres --single to create the postgres db: $!";
++		print $oh_single "CREATE DATABASE postgres;\n";
++		print $oh_single "COMMENT ON DATABASE postgres IS 'default administrative connection database';\n";
++		close($oh_single)
++		  or die "postgres --single failed creating the postgres db (exit $?)";
++	}
+ 	TestLib::system_or_bail($ENV{PG_REGRESS}, '--config-auth', $pgdata,
+ 		@{ $params{auth_extra} });
+ 
+ 	open my $conf, '>>', "$pgdata/postgresql.conf";
+ 	print $conf "\n# Added by PostgresNode.pm\n";
++	# openHalo's postgresql.conf.sample enables the logging collector with
++	# log_destination='csvlog' (stock PG leaves both off/stderr), so server logs
++	# land in pgdata/diag/*.csv. The TAP framework greps the stderr logfile
++	# ($node->logfile) via log_contains / issues_sql_like / wait_for_log, which
++	# then only sees the collector-redirect stub. Restore stock stderr logging so
++	# those assertions find the lines openHalo does emit (behaviour is identical;
++	# only the sink differs). Test-only; the production default stays csvlog.
++	print $conf "log_destination = 'stderr'\n";
++	print $conf "logging_collector = off\n";
+ 	print $conf "fsync = off\n";
+ 	print $conf "restart_after_crash = off\n";
+ 	print $conf "log_line_prefix = '%m [%p] %q%a '\n";
