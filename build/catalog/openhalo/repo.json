@@ -18,6 +18,14 @@
   },
   "metadata": {
     "flavor": "openhalo",
+    "introspect": {
+      "1beta1": {
+        "barebones": "//catalog/openhalo/introspect:openhalo~1beta1~barebones.json",
+        "minimal": "//catalog/openhalo/introspect:openhalo~1beta1~minimal.json",
+        "regular": "//catalog/openhalo/introspect:openhalo~1beta1~regular.json",
+        "full": "//catalog/openhalo/introspect:openhalo~1beta1~full.json"
+      }
+    },
     "deps": {
       "buildtime": {
         "debian": {
