@@ -13,6 +13,13 @@
           "lib/passwordcheck.so"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/postgresql/bitcode/passwordcheck.index.bc",
+          "lib/postgresql/bitcode/passwordcheck/passwordcheck.bc",
+          "lib/postgresql/passwordcheck.so"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/passwordcheck.index.bc",
@@ -94,6 +101,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

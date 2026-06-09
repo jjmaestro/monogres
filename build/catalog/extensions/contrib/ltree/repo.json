@@ -30,6 +30,26 @@
           "share/extension/ltree.control"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "include/postgresql/server/extension/ltree/ltree.h",
+          "lib/postgresql/bitcode/ltree.index.bc",
+          "lib/postgresql/bitcode/ltree/_ltree_gist.bc",
+          "lib/postgresql/bitcode/ltree/_ltree_op.bc",
+          "lib/postgresql/bitcode/ltree/crc32.bc",
+          "lib/postgresql/bitcode/ltree/lquery_op.bc",
+          "lib/postgresql/bitcode/ltree/ltree_gist.bc",
+          "lib/postgresql/bitcode/ltree/ltree_io.bc",
+          "lib/postgresql/bitcode/ltree/ltree_op.bc",
+          "lib/postgresql/bitcode/ltree/ltxtquery_io.bc",
+          "lib/postgresql/bitcode/ltree/ltxtquery_op.bc",
+          "lib/postgresql/ltree.so",
+          "share/postgresql/extension/ltree--1.0--1.1.sql",
+          "share/postgresql/extension/ltree--1.1--1.2.sql",
+          "share/postgresql/extension/ltree--1.1.sql",
+          "share/postgresql/extension/ltree.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "include/server/extension/ltree/ltree.h",
@@ -244,6 +264,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

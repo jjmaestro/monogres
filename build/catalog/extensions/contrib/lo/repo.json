@@ -23,6 +23,16 @@
           "share/extension/lo.control"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/postgresql/bitcode/lo.index.bc",
+          "lib/postgresql/bitcode/lo/lo.bc",
+          "lib/postgresql/lo.so",
+          "share/postgresql/extension/lo--1.0--1.1.sql",
+          "share/postgresql/extension/lo--1.1.sql",
+          "share/postgresql/extension/lo.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/lo.index.bc",
@@ -175,6 +185,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

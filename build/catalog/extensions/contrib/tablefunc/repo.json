@@ -19,6 +19,16 @@
           "share/extension/tablefunc.control"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "include/postgresql/server/executor/tablefunc.h",
+          "lib/postgresql/bitcode/tablefunc.index.bc",
+          "lib/postgresql/bitcode/tablefunc/tablefunc.bc",
+          "lib/postgresql/tablefunc.so",
+          "share/postgresql/extension/tablefunc--1.0.sql",
+          "share/postgresql/extension/tablefunc.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "include/server/executor/tablefunc.h",
@@ -147,6 +157,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

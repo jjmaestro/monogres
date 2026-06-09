@@ -19,6 +19,15 @@
           "share/extension/tsm_system_time.control"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/postgresql/bitcode/tsm_system_time.index.bc",
+          "lib/postgresql/bitcode/tsm_system_time/tsm_system_time.bc",
+          "lib/postgresql/tsm_system_time.so",
+          "share/postgresql/extension/tsm_system_time--1.0.sql",
+          "share/postgresql/extension/tsm_system_time.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/tsm_system_time.index.bc",
@@ -146,6 +155,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

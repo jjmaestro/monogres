@@ -12,6 +12,18 @@
           "share/extension/adminpack.control"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/postgresql/adminpack.so",
+          "lib/postgresql/bitcode/adminpack.index.bc",
+          "lib/postgresql/bitcode/adminpack/adminpack.bc",
+          "share/postgresql/extension/adminpack--1.0--1.1.sql",
+          "share/postgresql/extension/adminpack--1.0.sql",
+          "share/postgresql/extension/adminpack--1.1--2.0.sql",
+          "share/postgresql/extension/adminpack--2.0--2.1.sql",
+          "share/postgresql/extension/adminpack.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/adminpack.so",
@@ -126,6 +138,9 @@
   "versions": {
     "ivorysql": [
       "3.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

@@ -23,6 +23,20 @@
           "share/extension/postgres_fdw.control"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/postgresql/bitcode/postgres_fdw.index.bc",
+          "lib/postgresql/bitcode/postgres_fdw/connection.bc",
+          "lib/postgresql/bitcode/postgres_fdw/deparse.bc",
+          "lib/postgresql/bitcode/postgres_fdw/option.bc",
+          "lib/postgresql/bitcode/postgres_fdw/postgres_fdw.bc",
+          "lib/postgresql/bitcode/postgres_fdw/shippable.bc",
+          "lib/postgresql/postgres_fdw.so",
+          "share/postgresql/extension/postgres_fdw--1.0--1.1.sql",
+          "share/postgresql/extension/postgres_fdw--1.0.sql",
+          "share/postgresql/extension/postgres_fdw.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/postgres_fdw.index.bc",
@@ -179,6 +193,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

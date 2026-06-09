@@ -4,6 +4,7 @@
     "amcheck",
     "auth_delay",
     "auto_explain",
+    "aux_mysql",
     "basebackup_to_shell",
     "basic_archive",
     "bloom",

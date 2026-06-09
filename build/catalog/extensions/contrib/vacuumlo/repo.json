@@ -13,6 +13,11 @@
           "bin/vacuumlo"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "bin/vacuumlo"
+        ]
+      },
       "postgres": {
         "15.0": [
           "bin/vacuumlo"
@@ -92,6 +97,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

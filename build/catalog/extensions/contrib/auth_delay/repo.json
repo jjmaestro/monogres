@@ -13,6 +13,13 @@
           "lib/auth_delay.so"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/postgresql/auth_delay.so",
+          "lib/postgresql/bitcode/auth_delay.index.bc",
+          "lib/postgresql/bitcode/auth_delay/auth_delay.bc"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/auth_delay.so",
@@ -94,6 +101,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

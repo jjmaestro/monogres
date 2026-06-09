@@ -19,6 +19,20 @@
           "share/extension/bloom.control"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/postgresql/bitcode/bloom.index.bc",
+          "lib/postgresql/bitcode/bloom/blcost.bc",
+          "lib/postgresql/bitcode/bloom/blinsert.bc",
+          "lib/postgresql/bitcode/bloom/blscan.bc",
+          "lib/postgresql/bitcode/bloom/blutils.bc",
+          "lib/postgresql/bitcode/bloom/blvacuum.bc",
+          "lib/postgresql/bitcode/bloom/blvalidate.bc",
+          "lib/postgresql/bloom.so",
+          "share/postgresql/extension/bloom--1.0.sql",
+          "share/postgresql/extension/bloom.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/bloom.index.bc",
@@ -151,6 +165,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

@@ -22,6 +22,16 @@
           "share/tsearch_data/xsyn_sample.rules"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/postgresql/bitcode/dict_xsyn.index.bc",
+          "lib/postgresql/bitcode/dict_xsyn/dict_xsyn.bc",
+          "lib/postgresql/dict_xsyn.so",
+          "share/postgresql/extension/dict_xsyn--1.0.sql",
+          "share/postgresql/extension/dict_xsyn.control",
+          "share/postgresql/tsearch_data/xsyn_sample.rules"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/dict_xsyn.index.bc",
@@ -172,6 +182,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

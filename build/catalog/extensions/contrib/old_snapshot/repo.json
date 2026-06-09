@@ -9,6 +9,16 @@
           "share/extension/old_snapshot.control"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "include/postgresql/server/utils/old_snapshot.h",
+          "lib/postgresql/bitcode/old_snapshot.index.bc",
+          "lib/postgresql/bitcode/old_snapshot/time_mapping.bc",
+          "lib/postgresql/old_snapshot.so",
+          "share/postgresql/extension/old_snapshot--1.0.sql",
+          "share/postgresql/extension/old_snapshot.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "include/server/utils/old_snapshot.h",
@@ -85,6 +95,9 @@
   "versions": {
     "ivorysql": [
       "3.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

@@ -25,6 +25,17 @@
           "share/tsearch_data/unaccent.rules"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/postgresql/bitcode/unaccent.index.bc",
+          "lib/postgresql/bitcode/unaccent/unaccent.bc",
+          "lib/postgresql/unaccent.so",
+          "share/postgresql/extension/unaccent--1.0--1.1.sql",
+          "share/postgresql/extension/unaccent--1.1.sql",
+          "share/postgresql/extension/unaccent.control",
+          "share/postgresql/tsearch_data/unaccent.rules"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/unaccent.index.bc",
@@ -198,6 +209,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

@@ -23,6 +23,16 @@
           "share/extension/earthdistance.control"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/postgresql/bitcode/earthdistance.index.bc",
+          "lib/postgresql/bitcode/earthdistance/earthdistance.bc",
+          "lib/postgresql/earthdistance.so",
+          "share/postgresql/extension/earthdistance--1.0--1.1.sql",
+          "share/postgresql/extension/earthdistance--1.1.sql",
+          "share/postgresql/extension/earthdistance.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/earthdistance.index.bc",
@@ -179,6 +189,16 @@
       }
     },
     "requires": {
+      "ivorysql": {
+        "*": [
+          "cube"
+        ]
+      },
+      "openhalo": {
+        "1beta1": [
+          "cube"
+        ]
+      },
       "postgres": {
         "*": [
           "cube"
@@ -192,6 +212,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

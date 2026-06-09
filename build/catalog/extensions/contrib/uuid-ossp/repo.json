@@ -22,6 +22,16 @@
           "share/extension/uuid-ossp.control"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/postgresql/bitcode/uuid-ossp.index.bc",
+          "lib/postgresql/bitcode/uuid-ossp/uuid-ossp.bc",
+          "lib/postgresql/uuid-ossp.so",
+          "share/postgresql/extension/uuid-ossp--1.0--1.1.sql",
+          "share/postgresql/extension/uuid-ossp--1.1.sql",
+          "share/postgresql/extension/uuid-ossp.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/uuid-ossp.index.bc",
@@ -172,6 +182,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

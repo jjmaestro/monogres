@@ -19,6 +19,15 @@
           "share/extension/tcn.control"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/postgresql/bitcode/tcn.index.bc",
+          "lib/postgresql/bitcode/tcn/tcn.bc",
+          "lib/postgresql/tcn.so",
+          "share/postgresql/extension/tcn--1.0.sql",
+          "share/postgresql/extension/tcn.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/tcn.index.bc",
@@ -146,6 +155,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

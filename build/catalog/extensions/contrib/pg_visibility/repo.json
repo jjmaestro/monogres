@@ -25,6 +25,17 @@
           "share/extension/pg_visibility.control"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/postgresql/bitcode/pg_visibility.index.bc",
+          "lib/postgresql/bitcode/pg_visibility/pg_visibility.bc",
+          "lib/postgresql/pg_visibility.so",
+          "share/postgresql/extension/pg_visibility--1.0--1.1.sql",
+          "share/postgresql/extension/pg_visibility--1.1--1.2.sql",
+          "share/postgresql/extension/pg_visibility--1.1.sql",
+          "share/postgresql/extension/pg_visibility.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/pg_visibility.index.bc",
@@ -198,6 +209,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

@@ -13,6 +13,13 @@
           "lib/test_decoding.so"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/postgresql/bitcode/test_decoding.index.bc",
+          "lib/postgresql/bitcode/test_decoding/test_decoding.bc",
+          "lib/postgresql/test_decoding.so"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/test_decoding.index.bc",
@@ -94,6 +101,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

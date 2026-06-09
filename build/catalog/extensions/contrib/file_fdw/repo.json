@@ -19,6 +19,15 @@
           "share/extension/file_fdw.control"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/postgresql/bitcode/file_fdw.index.bc",
+          "lib/postgresql/bitcode/file_fdw/file_fdw.bc",
+          "lib/postgresql/file_fdw.so",
+          "share/postgresql/extension/file_fdw--1.0.sql",
+          "share/postgresql/extension/file_fdw.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/file_fdw.index.bc",
@@ -146,6 +155,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

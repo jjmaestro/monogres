@@ -29,6 +29,18 @@
           "share/extension/isn.control"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "include/postgresql/server/extension/isn/isn.h",
+          "lib/postgresql/bitcode/isn.index.bc",
+          "lib/postgresql/bitcode/isn/isn.bc",
+          "lib/postgresql/isn.so",
+          "share/postgresql/extension/isn--1.0--1.1.sql",
+          "share/postgresql/extension/isn--1.1--1.2.sql",
+          "share/postgresql/extension/isn--1.1.sql",
+          "share/postgresql/extension/isn.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "include/server/extension/isn/isn.h",
@@ -227,6 +239,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

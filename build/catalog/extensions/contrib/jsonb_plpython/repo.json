@@ -19,6 +19,18 @@
           "share/extension/jsonb_plpython3u.control"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/postgresql/bitcode/jsonb_plpython3/jsonb_plpython.bc",
+          "lib/postgresql/jsonb_plpython3.so",
+          "share/postgresql/extension/jsonb_plpython2u--1.0.sql",
+          "share/postgresql/extension/jsonb_plpython2u.control",
+          "share/postgresql/extension/jsonb_plpython3u--1.0.sql",
+          "share/postgresql/extension/jsonb_plpython3u.control",
+          "share/postgresql/extension/jsonb_plpythonu--1.0.sql",
+          "share/postgresql/extension/jsonb_plpythonu.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/jsonb_plpython3/jsonb_plpython.bc",
@@ -139,6 +151,18 @@
       }
     },
     "requires": {
+      "ivorysql": {
+        "*": [
+          "plpython3u"
+        ]
+      },
+      "openhalo": {
+        "1beta1": [
+          "plpython2u",
+          "plpython3u",
+          "plpythonu"
+        ]
+      },
       "postgres": {
         "*": [
           "plpython3u"
@@ -152,6 +176,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

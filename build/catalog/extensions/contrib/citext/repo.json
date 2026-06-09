@@ -39,6 +39,21 @@
           "share/extension/citext.control"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/postgresql/bitcode/citext.index.bc",
+          "lib/postgresql/bitcode/citext/citext.bc",
+          "lib/postgresql/citext.so",
+          "share/postgresql/extension/citext--1.0--1.1.sql",
+          "share/postgresql/extension/citext--1.1--1.2.sql",
+          "share/postgresql/extension/citext--1.2--1.3.sql",
+          "share/postgresql/extension/citext--1.3--1.4.sql",
+          "share/postgresql/extension/citext--1.4--1.5.sql",
+          "share/postgresql/extension/citext--1.4.sql",
+          "share/postgresql/extension/citext--1.5--1.6.sql",
+          "share/postgresql/extension/citext.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/bitcode/citext.index.bc",
@@ -308,6 +323,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

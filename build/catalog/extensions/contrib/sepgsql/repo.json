@@ -16,6 +16,12 @@
           "share/extension/sepgsql.sql"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/sepgsql.so",
+          "share/extension/sepgsql.sql"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/sepgsql.so",
@@ -118,6 +124,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

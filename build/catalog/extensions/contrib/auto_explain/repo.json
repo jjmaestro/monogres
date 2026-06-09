@@ -13,6 +13,13 @@
           "lib/auto_explain.so"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "lib/postgresql/auto_explain.so",
+          "lib/postgresql/bitcode/auto_explain.index.bc",
+          "lib/postgresql/bitcode/auto_explain/auto_explain.bc"
+        ]
+      },
       "postgres": {
         "15.0": [
           "lib/auto_explain.so",
@@ -94,6 +101,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",

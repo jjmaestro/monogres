@@ -54,6 +54,32 @@
           "share/extension/refint.control"
         ]
       },
+      "openhalo": {
+        "1beta1": [
+          "include/postgresql/server/executor/spi.h",
+          "lib/postgresql/autoinc.so",
+          "lib/postgresql/bitcode/autoinc/autoinc.bc",
+          "lib/postgresql/bitcode/insert_username/insert_username.bc",
+          "lib/postgresql/bitcode/moddatetime/moddatetime.bc",
+          "lib/postgresql/bitcode/postgres/executor/spi.bc",
+          "lib/postgresql/bitcode/refint/refint.bc",
+          "lib/postgresql/insert_username.so",
+          "lib/postgresql/moddatetime.so",
+          "lib/postgresql/refint.so",
+          "share/doc/postgresql/extension/autoinc.example",
+          "share/doc/postgresql/extension/insert_username.example",
+          "share/doc/postgresql/extension/moddatetime.example",
+          "share/doc/postgresql/extension/refint.example",
+          "share/postgresql/extension/autoinc--1.0.sql",
+          "share/postgresql/extension/autoinc.control",
+          "share/postgresql/extension/insert_username--1.0.sql",
+          "share/postgresql/extension/insert_username.control",
+          "share/postgresql/extension/moddatetime--1.0.sql",
+          "share/postgresql/extension/moddatetime.control",
+          "share/postgresql/extension/refint--1.0.sql",
+          "share/postgresql/extension/refint.control"
+        ]
+      },
       "postgres": {
         "15.0": [
           "include/server/executor/spi.h",
@@ -436,6 +462,9 @@
       "3.0",
       "4.0",
       "5.0"
+    ],
+    "openhalo": [
+      "1beta1"
     ],
     "postgres": [
       "15.0",
