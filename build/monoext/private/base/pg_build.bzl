@@ -803,7 +803,8 @@ def pg_build(
         auto_features,
         pg_base_version = None,
         sysroot_tar = None,
-        exec_sysroot_tar = None):
+        exec_sysroot_tar = None,
+        extra_sources = {}):
     """
     Generates a Bazel target to build Postgres with the Meson build system.
 
@@ -843,7 +844,14 @@ def pg_build(
             to `PATH` so meson's `find_program(..., native: true)` picks
             build-machine tools (msgfmt, etc.) before falling back to the TARGET
             arch's bins.
+        extra_sources (dict): Accepted for API symmetry with `pg_build_make`
+            (the per-target BUILD files render the same kwargs for both build
+            systems) and ignored: Meson builds consume a single source tree (no
+            sibling-tarball merges). Flavors that need overlays are make-based.
     """
+
+    # buildifier: disable=unused-variable
+    _ = extra_sources
 
     _pg_build_meson(
         name,

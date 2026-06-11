@@ -64,6 +64,61 @@ from pathlib import Path
 
 _PATH_BOUNDARY_CHARS = frozenset({"", "-", "."})
 
+# Match `requires = '...'` / `requires = "..."` / `requires = bareword` in a
+# `.control` file. Same accepted forms as `gen_pg_introspect_jsons.py`'s
+# meson-side walk (which defers to the `contrib_requires` emitted here when
+# present, since only this script sees the MERGED tree with overlay contribs).
+_REQUIRES_RE = re.compile(
+    r"""
+    ^\s*requires\s*=\s*       # the key
+    (?:
+        '(?P<sq>[^']*)'       # single-quoted
+        | "(?P<dq>[^"]*)"     # double-quoted
+        | (?P<bare>\S+)       # bareword (no spaces, no commas)
+    )
+    \s*(?:\#.*)?$             # optional trailing # comment
+    """,
+    re.VERBOSE | re.MULTILINE,
+)
+
+
+def _parse_requires(content: str) -> list[str]:
+    """Parse the `requires` directive from a `.control` file's contents."""
+    matches = list(_REQUIRES_RE.finditer(content))
+    if not matches:
+        return []
+    last = matches[-1]
+    raw = last.group("sq") or last.group("dq") or last.group("bare") or ""
+    if not raw.strip():
+        return []
+    parts = [p.strip() for p in raw.split(",")]
+    return sorted({p for p in parts if p})
+
+
+def _walk_contrib_requires(
+    workdir: Path,
+    contrib_names: list[str],
+) -> dict[str, list[str]]:
+    """Map contrib name -> sorted `.control requires` list (skip-on-empty).
+
+    Walks the MERGED source tree, so overlay contribs (merged in before
+    configure ran) contribute their requires too — something a primary-tree
+    walk at JSON-generation time cannot see.
+    """
+    out: dict[str, list[str]] = {}
+    for name in contrib_names:
+        sub = workdir / "contrib" / name
+        reqs: set[str] = set()
+        for control in sorted(sub.glob("*.control")):
+            try:
+                content = control.read_text(errors="replace")
+            except OSError:
+                continue
+            reqs.update(_parse_requires(content))
+        if reqs:
+            out[name] = sorted(reqs)
+    return out
+
 
 def _list_contrib_dirs(workdir: Path) -> list[str]:
     """Return sorted contrib names from `<workdir>/contrib/*/Makefile`.
@@ -547,7 +602,7 @@ def synth(workdir: Path, installdir: Path, prefix: str) -> dict:
     # leading `/`) — `get_contrib_names` looks for `/contrib/` substring.
     buildsystem_files = [f"/src/contrib/{name}/Makefile" for name in contrib_names]
 
-    return {
+    result = {
         "buildoptions": [
             {
                 "name": "prefix",
@@ -568,6 +623,14 @@ def synth(workdir: Path, installdir: Path, prefix: str) -> dict:
             owner_index,
         ),
     }
+
+    # Per-contrib `.control requires`, from the MERGED tree (overlay contribs
+    # included). The catalog generator defers to this key when present.
+    contrib_requires = _walk_contrib_requires(workdir, contrib_names)
+    if contrib_requires:
+        result["contrib_requires"] = contrib_requires
+
+    return result
 
 
 def main() -> int:

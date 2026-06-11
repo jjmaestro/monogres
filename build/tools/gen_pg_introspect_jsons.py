@@ -576,13 +576,20 @@ def enrich_with_requires(cleaned: str, src_dir: Path | None) -> str:
     content; `json.dumps(indent=4)` matches the formatting contract
     documented on `normalize_structural`. Skip-on-empty: no source dir, no
     contrib dir, or no contrib with `requires` leaves the JSON unchanged.
+
+    Defers to a producer-emitted `contrib_requires` key when one is already
+    present: the make path's synth script walks the MERGED source tree
+    (overlay contribs included), which this primary-tree walk cannot see, so
+    its data is strictly more complete.
     """
     if src_dir is None or not src_dir.is_dir():
+        return cleaned
+    data = json.loads(cleaned)
+    if "contrib_requires" in data:
         return cleaned
     contrib_requires = walk_contrib_controls(src_dir)
     if not contrib_requires:
         return cleaned
-    data = json.loads(cleaned)
     data["contrib_requires"] = contrib_requires
     return json.dumps(data, indent=4) + "\n"
 

@@ -251,9 +251,11 @@ def _pg_build_make_genrule(
         extra_libs,
         make_targets,
         make_install_targets,
+        extra_sources,
         sysroot_tar,
         exec_sysroot_tar,
         prefix,
+        contrib_enabled,
         tap_tests_enabled,
         introspect_synth_script,
         debug):
@@ -267,6 +269,22 @@ def _pg_build_make_genrule(
         exec_sysroot_tar,
         _SYSROOT_CLANG_WRAPPER,
     ]
+
+    # Each `extra_sources` entry contributes a source tree that gets merged into
+    # the primary source tree at `contrib_dir` before `./configure` runs.
+    # Rendered as bash array entries of the form
+    # `<extra_path>::<contrib_dir>::<excludes_csv>` — the build script splits on
+    # `::` to recover the three fields.
+    extras_meta = []
+    for _key, src in extra_sources.items():
+        srcs.append(src["dir"])
+        excludes_csv = ",".join(sorted(src.get("exclude", [])))
+        extras_meta.append((src["dir"], src["contrib_dir"], excludes_csv))
+
+    extras_array = "\n".join([
+        '                "$(execpath %s)::%s::%s"' % (label, contrib_dir, excludes_csv)
+        for (label, contrib_dir, excludes_csv) in extras_meta
+    ])
 
     # `tools` (exec config) for everything that runs on the build machine.
     # `_PYTHON_FILES` is the full python-build-standalone install tree: the
@@ -359,6 +377,150 @@ def _pg_build_make_genrule(
             ln -sf "$$PERL_SYSROOT_DIR/usr/bin/perl" /usr/bin/perl
 
             export SYSROOT_DIR EXEC_SYSROOT_DIR TARGET_MULTIARCH PERL_SYSROOT_DIR
+        }}
+
+        # Helper: split an EXTRAS entry shaped
+        # "<extra_path>::<contrib_dir>::<excludes_csv>" into the named global
+        # vars `_E_PATH`, `_E_CDIR`, `_E_EXCL`. The third field may be empty
+        # when no exclusions are declared.
+        _parse_extras_entry() {{
+            local entry="$$1"
+            local rest
+            _E_PATH="$${{entry%%::*}}"
+            rest="$${{entry#*::}}"
+            _E_CDIR="$${{rest%%::*}}"
+            _E_EXCL="$${{rest#*::}}"
+            if [ "$$_E_EXCL" = "$$_E_CDIR" ]; then
+                # No third `::` separator -> no exclusions.
+                _E_EXCL=""
+            fi
+        }}
+
+        merge_extras() {{
+            # The `<contrib_dir>` field names a directory that exists in
+            # *both* the overlay and the workdir; for every immediate
+            # subdirectory <X> under <extra_path>/<contrib_dir>/, copy
+            # <extra_path>/<contrib_dir>/<X>/. into <workdir>/<contrib_dir>/
+            # <X>/. so the subsequent configure/make sees a unified source
+            # tree. The `*/` glob iterates only directories — top-level files
+            # (Makefile, README.md, ...) at the overlay's <contrib_dir>/ are
+            # intentionally skipped, since they would otherwise clobber the
+            # primary tree's same-name file (most importantly the PG fork's
+            # `contrib/Makefile`, which holds the SUBDIRS allowlist for PG's
+            # standard contribs).
+            #
+            # Merge always copies ALL subdirs — the <excludes_csv> field is
+            # consulted only by `pgxs_install_extras` (so excluded subdirs are
+            # still present as source for peer contribs that #include their
+            # headers).
+            local workdir="$$1"; shift
+            local extras=("$$@");
+
+            echo "# $$(date) - merge_extras"
+
+            for entry in "$${{extras[@]}}"; do
+                _parse_extras_entry "$$entry"
+                local src_root="$$EXT_BUILD_ROOT/$$_E_PATH/$$_E_CDIR"
+                local dst_root="$$workdir/$$_E_CDIR"
+                if [ ! -d "$$src_root" ]; then
+                    echo "merge_extras: $$src_root is not a directory" >&2
+                    return 1
+                fi
+                shopt -s nullglob
+                local subdirs=("$$src_root"/*/)
+                shopt -u nullglob
+                # `-L` follows symlinks because the staged source tree may
+                # carry symlinks back into the source repo.
+                for src in "$${{subdirs[@]}}"; do
+                    local name
+                    name=$$(basename "$$src")
+                    local dst="$$dst_root/$$name"
+                    echo "  - $$src -> $$dst"
+                    mkdir -p "$$dst"
+                    cp -raL "$$src/." "$$dst/"
+                done
+            done
+        }}
+
+        pgxs_install_extras() {{
+            # Post-install PGXS pass for overlay contribs (auto-discovered).
+            # The PG fork installs first via `make install[-world-bin]`, then
+            # each PGXS-shaped overlay extension is built+installed against
+            # the just-staged `pg_config` via `USE_PGXS=1`. PG's core
+            # `contrib/Makefile` has a hardcoded SUBDIRS list and does not
+            # recurse into overlay-added subdirs, so they must be installed
+            # in this separate pass.
+            #
+            # Strict-by-default: a per-subdir failure fails the whole build.
+            # If a specific overlay contrib needs build-env pieces not
+            # plumbed through this pass, list it in the catalog's
+            # `metadata.extra_sources.<key>.exclude` array so this pass skips
+            # it explicitly.
+            #
+            # Skips a subdir silently when it has no Makefile (defensive —
+            # every PGXS-shaped contrib has one, but an overlay may ship
+            # non-installable helper directories).
+            local workdir="$$1"; shift
+            local installdir="$$1"; shift
+            local prefix="$$1"; shift
+            local extras=("$$@");
+
+            echo "# $$(date) - pgxs_install_extras"
+
+            local pg_config="$$installdir$$prefix/bin/pg_config"
+            if [ ! -x "$$pg_config" ]; then
+                echo "pgxs_install_extras: pg_config not found at $$pg_config" >&2
+                return 1
+            fi
+
+            for entry in "$${{extras[@]}}"; do
+                _parse_extras_entry "$$entry"
+                local src_root="$$EXT_BUILD_ROOT/$$_E_PATH/$$_E_CDIR"
+                local excludes_csv="$$_E_EXCL"
+                shopt -s nullglob
+                local subdirs=("$$src_root"/*/)
+                shopt -u nullglob
+                for src in "$${{subdirs[@]}}"; do
+                    local name
+                    name=$$(basename "$$src")
+                    # Skip if `name` is in the comma-separated exclude list.
+                    # `,$$excludes_csv,` framing lets the substring search
+                    # match the first and last entries unambiguously.
+                    if [ -n "$$excludes_csv" ] \\
+                        && [[ ",$$excludes_csv," == *",$$name,"* ]]; then
+                        echo "  - skip $$name (excluded via metadata.extra_sources)"
+                        continue
+                    fi
+                    local subdir="$$workdir/$$_E_CDIR/$$name"
+                    if [ ! -f "$$subdir/Makefile" ]; then
+                        echo "  - skip $$subdir (no Makefile)"
+                        continue
+                    fi
+                    echo "  - PGXS install: $$subdir"
+                    # PG_SRC points at the merged PG source tree so the
+                    # overlay's PGXS Makefiles can resolve `-I$$(PG_SRC)`
+                    # includes against PG-internal headers.
+                    #
+                    # Note: no `DESTDIR` is passed. PGXS resolves install
+                    # paths via `pg_config --libdir` / `--sharedir` / etc.,
+                    # which at runtime use argv[0]-relative computation — so
+                    # the staged pg_config (at
+                    # $$installdir$$prefix/bin/pg_config) reports paths that
+                    # already include $$installdir as their prefix. Adding
+                    # DESTDIR=$$installdir would double-prefix the
+                    # destinations and the install would land outside the
+                    # expected staging subtree.
+                    # shellcheck disable=SC2086
+                    "$$MAKE_BIN" \\
+                        -C "$$subdir" \\
+                        -j"$$JOBS" \\
+                        FLEXFLAGS=-noline \\
+                        USE_PGXS=1 \\
+                        PG_CONFIG="$$pg_config" \\
+                        PG_SRC="$$workdir" \\
+                        install || return $$?
+                done
+            done
         }}
 
         set_up_build_env() {{
@@ -998,7 +1160,11 @@ PY_SHIM_EOF
         MAKE_INSTALL_TARGETS=(
 {make_install_targets_array}
         )
+        EXTRAS=(
+{extras_array}
+        )
         INSTALL_PREFIX="{install_prefix}"
+        CONTRIB_ENABLED="{contrib_enabled}"
         TAP_TESTS_ENABLED="{tap_tests_enabled}"
 
         WORKDIR="$$EXT_BUILD_ROOT/build_tmp"
@@ -1032,6 +1198,9 @@ PY_SHIM_EOF
             # writable workdir first; chmod because `cp -aL` preserves mode and
             # tree-artifact files come back read-only.
             cp -raL "$$PG_SRC" "$$WORKDIR"
+
+            merge_extras "$$WORKDIR" "$${{EXTRAS[@]}}"
+
             chmod -R u+w "$$WORKDIR"
 
             set_up_python_shim "$$PYTHON_SHIM_DIR"
@@ -1047,9 +1216,22 @@ PY_SHIM_EOF
                 "$${{MAKE_INSTALL_TARGETS[@]}}"
 
             # Sanity-check the install tree (pg_config in expected location)
-            # before downstream consumers (introspect synth) use it. Fails
-            # fast on layout drift.
+            # before downstream consumers (PGXS pass, introspect synth) use
+            # it. Fails fast on layout drift.
             verify_install "$$INSTALLDIR" "$$INSTALL_PREFIX"
+
+            # Overlay contribs are gated on `contrib=true` for the same
+            # reason PG's own contribs are: when contrib is disabled, the
+            # build is PG core only (make target `all`), and a `barebones` /
+            # `minimal` install shouldn't ship the overlay's contribs either.
+            # Runs BEFORE scrub_install_tree so the staged Makefile.global
+            # still carries this action's live tool paths.
+            if [ "$$CONTRIB_ENABLED" = "True" ]; then
+                pgxs_install_extras "$$WORKDIR" "$$INSTALLDIR" "$$INSTALL_PREFIX" \\
+                    "$${{EXTRAS[@]}}"
+            else
+                echo "# $$(date) - pgxs_install_extras: skipped (contrib=false)"
+            fi
 
             scrub_install_tree "$$INSTALLDIR"
 
@@ -1095,6 +1277,8 @@ PY_SHIM_EOF
         log_file = "$(execpath %s)" % log_file,
         introspect_json_file = "$(execpath %s)" % introspect_json_file,
         synth_script = "$(execpath %s)" % introspect_synth_script,
+        extras_array = extras_array,
+        contrib_enabled = "%s" % contrib_enabled,
         tap_tests_enabled = "%s" % tap_tests_enabled,
         pg_src = "$(execpath %s)" % pg_src,
         sysroot_tar = "$(execpath %s)" % sysroot_tar,
@@ -1156,16 +1340,21 @@ def pg_build_make(
         introspect_synth_script,
         sysroot_tar,
         exec_sysroot_tar,
+        extra_sources = {},
+        auto_features = "disabled",
         debug = False):
     """Build PostgreSQL with the autoconf+make build system.
 
     Translates the Meson-shaped `build_options` to autoconf `./configure` flags
-    via `configure_args.to_configure_args`, then runs `./configure && make
-    TARGET && make INSTALL_TARGET DESTDIR=...` against the per-PG sysroot pair
-    (extracted at action time exactly like `pg_build`). The choice between `make
+    via `configure_args.to_configure_args`, optionally merges sibling source
+    trees into the primary tree at the configured `contrib_dir` paths
+    (`metadata.extra_sources`), then runs `./configure && make TARGET && make
+    INSTALL_TARGET DESTDIR=...` against the per-PG sysroot pair (extracted at
+    action time exactly like `pg_build`). The choice between `make
     all`/`install` and `make world-bin`/`install-world-bin` is keyed off the
     `contrib` option: `contrib=true` selects the `world-bin` variants (core +
-    contrib, no docs).
+    contrib, no docs) and additionally runs the post-install PGXS pass over
+    overlay contribs.
 
     The macro emits a `:tar` artifact (the install dir, tarred), a `:logs`
     alias, a `:toolchain` template-variable target, and an `:introspect`
@@ -1214,8 +1403,21 @@ def pg_build_make(
             Materialized at `$EXT_BUILD_ROOT/exec_sysroot` (symlinked to the
             target tree for native builds); all tools that RUN during the build
             resolve from it. Required, same as `sysroot_tar`.
+        extra_sources (dict): Catalog `metadata.extra_sources` mapping (`{<key>:
+            {...}}`) of sibling source trees merged into the primary `pg_src`
+            tree at their configured in-tree destinations before `./configure`;
+            each is a `:dir` tree artifact like `pg_src`. Empty (`{}`) for
+            single-source flavors.
+        auto_features (str): Meson `auto_features` value. Accepted for API
+            symmetry with `pg_build` (the per-target BUILD files render the same
+            kwargs for both build systems) and ignored: the autoconf+make path
+            has no `--auto-features` counterpart and does not consume it.
         debug (bool): If `True`, the build script enables `set -x`.
     """
+
+    # buildifier: disable=unused-variable
+    _ = auto_features
+
     if not sysroot_tar or not exec_sysroot_tar:
         fail("pg_build_make requires sysroot_tar + exec_sysroot_tar (the " +
              "make path sources its compiler and build tools from the per-PG " +
@@ -1239,6 +1441,18 @@ def pg_build_make(
     # own name is `:<name>.genrule` (private); its output filenames stay
     # `<name>.tar` / `<name>.log` / `<name>.introspect.json` so file-label
     # consumers (the `:logs` alias, the `:introspect` filegroup) keep resolving.
+    #
+    # The `contrib` build option gates both the PG `world-bin` make targets and
+    # the overlay PGXS pass; resolve it once here for the genrule's shell guard
+    # and the `_install_tree` binary list below.
+    contrib_value = build_options.get("contrib")
+    contrib_enabled = (
+        contrib_value == True or
+        (type(
+            contrib_value,
+        ) == "string" and contrib_value.lower() in ("enabled", "true"))
+    )
+
     # The test-enabled build variant flips tap_tests=enabled; gate the libpq TAP
     # helper build + test_bin/ staging on it (production builds keep neither).
     tap_tests_enabled = build_options.get("tap_tests") == "enabled"
@@ -1256,9 +1470,11 @@ def pg_build_make(
         extra_libs = extra_libs,
         make_targets = targets,
         make_install_targets = install_targets,
+        extra_sources = extra_sources,
         sysroot_tar = sysroot_tar,
         exec_sysroot_tar = exec_sysroot_tar,
         prefix = prefix,
+        contrib_enabled = contrib_enabled,
         tap_tests_enabled = tap_tests_enabled,
         introspect_synth_script = introspect_synth_script,
         debug = debug,
@@ -1273,13 +1489,6 @@ def pg_build_make(
     # Matches the meson out_binaries set so `$(PSQL)`/`$(PG_CTL)` resolve on
     # both paths; both are already in the install `bin/`, so this only adds the
     # `:toolchain` template-vars (no tar change).
-    contrib_value = build_options.get("contrib")
-    contrib_enabled = (
-        contrib_value == True or
-        (type(
-            contrib_value,
-        ) == "string" and contrib_value.lower() in ("enabled", "true"))
-    )
     pg_binaries = ["initdb", "postgres", "pg_config", "pg_isready", "psql", "pg_ctl"]
     if contrib_enabled:
         pg_binaries += ["oid2name", "vacuumlo"]

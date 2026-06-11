@@ -89,6 +89,40 @@ def create_base_src(ctx, hub_name, base_label):
         version_scheme = "pgver",
     )
 
+    # Multi-source support: `metadata.extra_sources` declares sibling tarballs
+    # to download alongside the primary source tree. Each entry has its own
+    # `repo.json`-shaped index file (with its own sources/versions/patches),
+    # which we hand to `download_archives` to produce a parallel set of
+    # per-version repos. The build wrapper (`pg_build_make`) merges these into
+    # the primary tree at `contrib_dir` at build time.
+    extra_sources = {}
+    for key, ext_config in metadata.get("extra_sources", {}).items():
+        ext_index = Label(ext_config["index"])
+        ext_repo = "{src}_{key}".format(src = src_repo, key = key)
+        ext_index_data = json.decode(ctx.read(ext_index))
+        ext_metadata = ext_index_data.get("metadata", {})
+        download_archives(
+            ctx = ctx,
+            name = ext_repo,
+            index = ext_index,
+            patches = {
+                Label(patch["label"]): patch["spec"]
+                for patch in ext_metadata.get("patches", [])
+            },
+            version_scheme = "pgver",
+        )
+        extra_sources[key] = struct(
+            repo = ext_repo,
+            contrib_dir = ext_config.get("contrib_dir", ""),
+            # Names (relative to `<extra_path>/<contrib_dir>/`) to skip during
+            # the post-install PGXS pass. The merge step still copies these
+            # subdirs (so peer overlays can `#include` their headers); only
+            # `pg_build_make`'s `pgxs_install_extras` honors the list. Default
+            # empty — an escape hatch for overlay contribs that need build-env
+            # pieces not plumbed through the PGXS pass.
+            exclude = ext_config.get("exclude", []),
+        )
+
     # register per-version introspect repos (lazy, no downloads at this point)
     introspect_meta = metadata.get("introspect", {})
     introspect_repos = {}
@@ -153,6 +187,7 @@ def create_base_src(ctx, hub_name, base_label):
         source_repo = src_repo,
         versions = versions,
         flavor = flavor,
+        extra_sources = extra_sources,
     )
 
 def _build_entries(base_data, versions_deps, hub_name):
@@ -188,6 +223,20 @@ def _build_entries(base_data, versions_deps, hub_name):
         # wrapper gate PG-version-specific tooling on the real PG version, not
         # the flavor's own version number.
         pg_base_version = flavor_mod.pg_base_version(version)
+
+        # Per-target snapshot of extra_sources: `{key: {dir, contrib_dir,
+        # exclude}}` where `dir` is a per-version `:dir` filegroup label on the
+        # sibling source repo created in `create_base_src`. The build wrapper
+        # consumes this at the BUILD-file level to merge sibling trees into the
+        # primary build tree.
+        per_version_extras = {
+            key: {
+                "contrib_dir": src.contrib_dir,
+                "dir": "@{repo}//{v}:dir".format(repo = src.repo, v = version),
+                "exclude": src.exclude,
+            }
+            for key, src in base_data.extra_sources.items()
+        }
 
         targets = []
         for option_set in flavor_mod.OPTION_SETS:
@@ -227,6 +276,7 @@ def _build_entries(base_data, versions_deps, hub_name):
                 version_deps = vd,
                 build_system = build_system,
                 pg_base_version = pg_base_version,
+                extra_sources = per_version_extras,
             ))
 
         entry = _BaseSchema.BaseEntry.new(

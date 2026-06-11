@@ -85,8 +85,13 @@ def _option_set_build(
     is_test = build_options != None
     bopts = build_options if is_test else target.build_options
 
-    # Extra build-wrapper kwargs, merged into the meson build args below.
+    # Sibling source trees merged into the primary tree by the make wrapper
+    # (`metadata.extra_sources`). Rendered only when present so single-source
+    # flavors keep their BUILD files free of empty-dict noise; the meson wrapper
+    # accepts (and ignores) the kwarg for API symmetry.
     extras_kwargs = {}
+    if target.extra_sources:
+        extras_kwargs["extra_sources"] = target.extra_sources
 
     if target.build_system == "make":
         # Make-based path: `pg_build_make` is a hand-rolled genrule that runs
@@ -114,6 +119,7 @@ def _option_set_build(
                 ),
                 sysroot_tar = target.deps.buildtime.sysroot_tar,
                 exec_sysroot_tar = target.deps.buildtime.exec_sysroot_tar,
+                **extras_kwargs
             ),
             Star.alias(name = option_set, actual = ":tar"),
         ]

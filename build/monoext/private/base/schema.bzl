@@ -30,7 +30,8 @@ def _base_data_new(
         metadata,
         source_repo,
         versions,
-        flavor = "postgres"):
+        flavor = "postgres",
+        extra_sources = {}):
     """Constructs a `BaseData`.
 
     Args:
@@ -48,6 +49,15 @@ def _base_data_new(
         flavor: Flavor identity from `metadata.flavor` (e.g. `"postgres"`,
             `"ivorysql"`). Drives build_options dispatch, the `pkgs_group` key,
             and the `CFG.name` baked into `all.bzl`.
+        extra_sources: Dict `{key: struct(repo, contrib_dir, exclude)}` of
+            additional source-index repos created from `metadata.extra_sources`.
+            Each entry describes a sibling tarball that is downloaded (and
+            patched) by its own `download_archives` call and merged into the
+            primary source tree at `contrib_dir` by the build wrapper. `exclude`
+            is a list of subdir names (relative to
+            `<extra_path>/<contrib_dir>/`) to skip during the post-install PGXS
+            pass; the merge still copies everything so peer overlays can
+            `#include` each other's headers.
 
     Returns:
         A `BaseData` struct.
@@ -61,6 +71,7 @@ def _base_data_new(
         source_repo = source_repo,
         versions = versions,
         flavor = flavor,
+        extra_sources = extra_sources,
     )
 
 def _base_source_init(dir, files, version):
@@ -108,6 +119,7 @@ def _base_target_init(
         version,
         build_system = "meson",
         pg_base_version = None,
+        extra_sources = {},
         test_build_options = {}):
     return struct(
         artifact = artifact,
@@ -121,6 +133,7 @@ def _base_target_init(
         version = version,
         build_system = build_system,
         pg_base_version = pg_base_version or version,
+        extra_sources = extra_sources,
     )
 
 def _base_target_new(
@@ -132,6 +145,7 @@ def _base_target_new(
         version_deps,
         build_system = "meson",
         pg_base_version = None,
+        extra_sources = {},
         test_build_options = {}):
     """Constructs a `BaseTarget`.
 
@@ -155,6 +169,13 @@ def _base_target_new(
             from `FLAVORS[<flavor>].pg_base_version(version)`; defaults to
             `version` when omitted. Gates PG-version-specific tooling in the
             build wrapper (e.g. the PG17 src/bin backup tools).
+        extra_sources: Dict `{key: {"dir": <label>, "contrib_dir": <path>,
+            "exclude": [...]}}` of sibling source trees that the build wrapper
+            merges into the primary tree at the given `contrib_dir` path. The
+            `exclude` list names subdirs to skip at PGXS-install time. The `dir`
+            label is a per-version `:dir` filegroup on the sibling source repo
+            created by `download_archives` (one per `metadata.extra_sources`
+            entry).
         test_build_options: Dict of Meson build options for the test-enabled
             sibling build (`{version}/{option_set}/test/`), i.e. `build_options`
             plus the `_TEST_OVERLAY` (tap_tests, ...). Empty `{}` when the
@@ -181,6 +202,7 @@ def _base_target_new(
         version = version,
         build_system = build_system,
         pg_base_version = pg_base_version,
+        extra_sources = extra_sources,
     )
 
 def _base_target_from_dict(d):
@@ -197,6 +219,7 @@ def _base_target_from_dict(d):
         version = d["version"],
         build_system = d.get("build_system", "meson"),
         pg_base_version = d.get("pg_base_version", d["version"]),
+        extra_sources = d.get("extra_sources", {}),
     )
 
 def _base_entry_init(source_repo, source = None, targets = [], versions_deps = None):
