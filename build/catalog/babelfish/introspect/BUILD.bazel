@@ -1,0 +1,9 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files(glob(
+    ["*.json"],
+    # The directory exists up-front but is empty until the introspect JSONs are
+    # generated; the default `allow_empty = False` would fail loading this BUILD
+    # file before they land.
+    allow_empty = True,
+))

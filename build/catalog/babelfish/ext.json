@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "owner": "babelfish-for-postgresql",
+      "repo": "babelfish_extensions",
+      "filename": "{tag}",
+      "url": "https://github.com/{owner}/{repo}/archive/refs/tags/{filename}.tar.gz",
+      "strip_prefix": "{repo}-{tag}"
+    }
+  },
+  "versions": {
+    "4.0": {
+      "tag": "BABEL_4_0_0",
+      "sha256": "4b35aa8643771b16c16b072927f0c91e258e3edb69d40e3ed110069fb5bbccb2"
+    },
+    "5.1": {
+      "tag": "BABEL_5_1_0",
+      "sha256": "8937597ebf7299c4719aa2ae71c8ba87e6564bb63fda4af5784899d32dba793e"
+    }
+  },
+  "metadata": {
+    "patches": [
+      {
+        "label": "//catalog/babelfish/patches:0001-4.0-fix-drop-werror-from-makefiles.patch",
+        "spec": "<5.0/*"
+      },
+      {
+        "label": "//catalog/babelfish/patches:0001-5.1-fix-drop-werror-from-makefiles.patch",
+        "spec": ">=5.0/*"
+      },
+      {
+        "label": "//catalog/babelfish/patches:0002-4.0-fix-babelfishpg_unit-clang19-int-conversion.patch",
+        "spec": "*/*"
+      }
+    ]
+  }
+}

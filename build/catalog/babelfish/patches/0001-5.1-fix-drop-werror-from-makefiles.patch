@@ -1,0 +1,107 @@
+From 53621d2601c781577dc1a7108dd618504e7d3a3c Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Wed, 10 Jun 2026 18:15:12 +0000
+Subject: [PATCH] patch: drop -Werror from the babelfishpg makefiles
+
+Upstream Makefiles for babelfishpg_{common,money,tds,tsql} pass -Werror
+to PGXS. Under our LLVM toolchain (clang-14), additional warnings fire
+that gcc does not -- most visibly -Wsometimes-uninitialized in
+babelfishpg_common/src/datetime2.c -- turning them into hard build
+errors. Drop -Werror from these PG_CFLAGS / PG_CXXFLAGS lines while
+keeping the underlying -Wfloat-conversion warning enabled (it still
+fires under clang, but only as a warning). Babelfish 5.1 also passes
+-Werror to a couple of cpp invocations that generate .sql files; drop
+those too.
+---
+ contrib/babelfishpg_common/Makefile | 6 +++---
+ contrib/babelfishpg_money/Makefile  | 2 +-
+ contrib/babelfishpg_tds/Makefile    | 2 +-
+ contrib/babelfishpg_tsql/Makefile   | 6 +++---
+ 4 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/contrib/babelfishpg_common/Makefile b/contrib/babelfishpg_common/Makefile
+index 0e456f61..5a3cefa0 100644
+--- a/contrib/babelfishpg_common/Makefile
++++ b/contrib/babelfishpg_common/Makefile
+@@ -12,7 +12,7 @@ PREV_EXTVERSION = 1.0.0
+ MODULEPATH = $$libdir/$(EXTENSION)-$(BBFPGCMN_MAJOR_VERSION)
+ MODULE_big = $(EXTENSION)
+ 
+-PG_CFLAGS += -g -Werror -Wfloat-conversion
++PG_CFLAGS += -g -Wfloat-conversion
+ PG_CFLAGS += -fstack-protector-strong
+ ifdef PREV_EXTVERSION
+ DATA = sql/$(EXTENSION)--$(PREV_EXTVERSION).sql
+@@ -106,7 +106,7 @@ FLAG_TO_CHECK := -DENABLE_SPATIAL_TYPES
+ ifeq (,$(filter $(FLAG_TO_CHECK),$(PG_CPPFLAGS)))
+ # The flag is not present then build the .in file not including the spatial type files
+     sql/$(EXTENSION)--$(EXTVERSION).sql: sql/$(EXTENSION).in
+-		cpp -Werror $< | sed 's/^# /-- /g' > $@
++		cpp $< | sed 's/^# /-- /g' > $@
+ 
+     sql/$(EXTENSION)--3.2.0--3.3.0.sql: sql/upgrades/babelfishpg_upgrades.in
+ 		cpp -D PREV_VERSION=3.2.0 -D CUR_VERSION=3.3.0 $< | sed 's/^# /-- /g' > $@
+@@ -137,7 +137,7 @@ ifeq (,$(filter $(FLAG_TO_CHECK),$(PG_CPPFLAGS)))
+ else
+ # The flag is present build the .in file including the spatial type files
+     sql/$(EXTENSION)--$(EXTVERSION).sql: sql/$(EXTENSION).in
+-		cpp -Werror -D ENABLE_SPATIAL_TYPES=1 $< | sed 's/^# /-- /g' > $@
++		cpp -D ENABLE_SPATIAL_TYPES=1 $< | sed 's/^# /-- /g' > $@
+ 
+     sql/$(EXTENSION)--3.2.0--3.3.0.sql: sql/upgrades/babelfishpg_upgrades.in
+ 		cpp -D ENABLE_SPATIAL_TYPES=1 -D PREV_VERSION=3.2.0 -D CUR_VERSION=3.3.0 $< | sed 's/^# /-- /g' > $@
+diff --git a/contrib/babelfishpg_money/Makefile b/contrib/babelfishpg_money/Makefile
+index 673d4cc0..f38cbe87 100755
+--- a/contrib/babelfishpg_money/Makefile
++++ b/contrib/babelfishpg_money/Makefile
+@@ -11,7 +11,7 @@ DATA_built = babelfishpg_money--1.1.0.sql
+ #include ../Makefile.common
+ 
+ CFLAGS = `$(PG_CONFIG) --includedir-server`
+-PG_CFLAGS += -Werror -Wfloat-conversion
++PG_CFLAGS += -Wfloat-conversion
+ PG_CFLAGS += -fstack-protector-strong
+ TESTS = $(wildcard test/sql/*.sql)
+ 
+diff --git a/contrib/babelfishpg_tds/Makefile b/contrib/babelfishpg_tds/Makefile
+index 53dc1009..2d6da2a7 100644
+--- a/contrib/babelfishpg_tds/Makefile
++++ b/contrib/babelfishpg_tds/Makefile
+@@ -9,7 +9,7 @@ tds_backend = $(tds_top_dir)/src/backend
+ tds_include = $(tds_top_dir)/src/include
+ TSQL_SRC = ../babelfishpg_tsql
+ 
+-PG_CFLAGS += -Werror -Wfloat-conversion
++PG_CFLAGS += -Wfloat-conversion
+ PG_CFLAGS += -fstack-protector-strong
+ PG_CPPFLAGS += -I$(TSQL_SRC) -I$(PG_SRC) -I$(tds_top_dir)
+ 
+diff --git a/contrib/babelfishpg_tsql/Makefile b/contrib/babelfishpg_tsql/Makefile
+index 74cdd109..11edbd3a 100644
+--- a/contrib/babelfishpg_tsql/Makefile
++++ b/contrib/babelfishpg_tsql/Makefile
+@@ -85,13 +85,13 @@ export ANTLR4_RUNTIME_LIB_DIR=/usr/local/lib
+ 
+ OBJS += src/pltsql_bulkcopy.o
+ 
+-PG_CXXFLAGS += -g -Werror -Wfloat-conversion
++PG_CXXFLAGS += -g -Wfloat-conversion
+ PG_CXXFLAGS += -Wno-deprecated -Wno-error=attributes -Wno-suggest-attribute=format # disable some warnings from ANTLR runtime header
+ PG_CXXFLAGS += -Wno-undef -Wall -Wcpp
+ PG_CXXFLAGS += -Wno-register # otherwise C++17 gags on PostgreSQL headers
+ PG_CXXFLAGS += -I$(ANTLR4_RUNTIME_INCLUDE_DIR)
+ PG_CXXFLAGS += -std=c++17
+-PG_CFLAGS += -g -Werror -Wfloat-conversion
++PG_CFLAGS += -g -Wfloat-conversion
+ PG_CFLAGS += -fstack-protector-strong
+ PG_CPPFLAGS += -I$(TSQLSRC) -I$(PG_SRC) -DFAULT_INJECTOR -Wfloat-conversion
+ 
+@@ -150,7 +150,7 @@ $(EXTENSION).control: $(EXTENSION).control.in
+ 		> $@
+ 
+ sql/$(EXTENSION)--$(EXTVERSION).sql: sql/$(EXTENSION).in
+-	cpp -Werror $< | sed 's/^# /-- /g' > $@
++	cpp $< | sed 's/^# /-- /g' > $@
+ 
+ sql/%.sql: sql/upgrades/%.sql
+ 	cp $< $@

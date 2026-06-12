@@ -1,0 +1,77 @@
+From 71639b0e0d439b202f84c1ca3afecb94571f92d7 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Tue, 9 Jun 2026 18:15:12 +0000
+Subject: [PATCH] patch: drop -Werror from the babelfishpg makefiles
+
+Upstream Makefiles for babelfishpg_{common,money,tds,tsql} pass -Werror
+to PGXS. Under our LLVM toolchain (clang-14), additional warnings fire
+that gcc does not -- most visibly -Wsometimes-uninitialized in
+babelfishpg_common/src/datetime2.c -- turning them into hard build
+errors. Drop -Werror from these PG_CFLAGS / PG_CXXFLAGS lines while
+keeping the underlying -Wfloat-conversion warning enabled (it still
+fires under clang, but only as a warning).
+---
+ contrib/babelfishpg_common/Makefile | 2 +-
+ contrib/babelfishpg_money/Makefile  | 2 +-
+ contrib/babelfishpg_tds/Makefile    | 2 +-
+ contrib/babelfishpg_tsql/Makefile   | 4 ++--
+ 4 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/contrib/babelfishpg_common/Makefile b/contrib/babelfishpg_common/Makefile
+index 0e1ed167..7bf385ff 100644
+--- a/contrib/babelfishpg_common/Makefile
++++ b/contrib/babelfishpg_common/Makefile
+@@ -12,7 +12,7 @@ PREV_EXTVERSION = 1.0.0
+ MODULEPATH = $$libdir/$(EXTENSION)-$(BBFPGCMN_MAJOR_VERSION)
+ MODULE_big = $(EXTENSION)
+ 
+-PG_CFLAGS += -g -Werror -Wfloat-conversion
++PG_CFLAGS += -g -Wfloat-conversion
+ PG_CFLAGS += -fstack-protector-strong
+ ifdef PREV_EXTVERSION
+ DATA = sql/$(EXTENSION)--$(PREV_EXTVERSION).sql
+diff --git a/contrib/babelfishpg_money/Makefile b/contrib/babelfishpg_money/Makefile
+index 673d4cc0..f38cbe87 100755
+--- a/contrib/babelfishpg_money/Makefile
++++ b/contrib/babelfishpg_money/Makefile
+@@ -11,7 +11,7 @@ DATA_built = babelfishpg_money--1.1.0.sql
+ #include ../Makefile.common
+ 
+ CFLAGS = `$(PG_CONFIG) --includedir-server`
+-PG_CFLAGS += -Werror -Wfloat-conversion
++PG_CFLAGS += -Wfloat-conversion
+ PG_CFLAGS += -fstack-protector-strong
+ TESTS = $(wildcard test/sql/*.sql)
+ 
+diff --git a/contrib/babelfishpg_tds/Makefile b/contrib/babelfishpg_tds/Makefile
+index 53dc1009..2d6da2a7 100644
+--- a/contrib/babelfishpg_tds/Makefile
++++ b/contrib/babelfishpg_tds/Makefile
+@@ -9,7 +9,7 @@ tds_backend = $(tds_top_dir)/src/backend
+ tds_include = $(tds_top_dir)/src/include
+ TSQL_SRC = ../babelfishpg_tsql
+ 
+-PG_CFLAGS += -Werror -Wfloat-conversion
++PG_CFLAGS += -Wfloat-conversion
+ PG_CFLAGS += -fstack-protector-strong
+ PG_CPPFLAGS += -I$(TSQL_SRC) -I$(PG_SRC) -I$(tds_top_dir)
+ 
+diff --git a/contrib/babelfishpg_tsql/Makefile b/contrib/babelfishpg_tsql/Makefile
+index f2ef072a..6a7284da 100644
+--- a/contrib/babelfishpg_tsql/Makefile
++++ b/contrib/babelfishpg_tsql/Makefile
+@@ -84,12 +84,12 @@ export ANTLR4_RUNTIME_LIB_DIR=/usr/local/lib
+ 
+ OBJS += src/pltsql_bulkcopy.o
+ 
+-PG_CXXFLAGS += -g -Werror -Wfloat-conversion
++PG_CXXFLAGS += -g -Wfloat-conversion
+ PG_CXXFLAGS += -Wno-deprecated -Wno-error=attributes -Wno-suggest-attribute=format # disable some warnings from ANTLR runtime header
+ PG_CXXFLAGS += -Wno-undef -Wall -Wcpp
+ PG_CXXFLAGS += -Wno-register # otherwise C++17 gags on PostgreSQL headers
+ PG_CXXFLAGS += -I$(ANTLR4_RUNTIME_INCLUDE_DIR)
+-PG_CFLAGS += -g -Werror -Wfloat-conversion
++PG_CFLAGS += -g -Wfloat-conversion
+ PG_CFLAGS += -fstack-protector-strong
+ PG_CPPFLAGS += -I$(TSQLSRC) -I$(PG_SRC) -DFAULT_INJECTOR -Wfloat-conversion
+ 

@@ -1,0 +1,29 @@
+From 30411131daefd625a65926d1870f453212ef4353 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Thu, 11 Jun 2026 18:15:12 +0000
+Subject: [PATCH] patch: build babelfishpg_unit's run_time Datum with
+ Int64GetDatum
+
+babelfishpg_unit stores the per-test run_time (a uint64 microsecond
+value; the RUNTIME result column is INT8/bigint) via PointerGetDatum,
+an int-to-pointer conversion. clang-19 makes -Wint-conversion a hard
+error by default (clang-14 only warned), breaking the build. Use
+Int64GetDatum, the correct integer Datum macro (identical Datum bits
+on 64-bit); no behavior change.
+---
+ contrib/babelfishpg_unit/babelfishpg_unit.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/contrib/babelfishpg_unit/babelfishpg_unit.c b/contrib/babelfishpg_unit/babelfishpg_unit.c
+index 6c70e83a..290bbd05 100644
+--- a/contrib/babelfishpg_unit/babelfishpg_unit.c
++++ b/contrib/babelfishpg_unit/babelfishpg_unit.c
+@@ -326,7 +326,7 @@ babelfishpg_unit_run_tests(PG_FUNCTION_ARGS)
+ 		values[STATUS_NAME_COLUMN] = PointerGetDatum(cstring_to_text(test->enabled ? 
+ 				(tr->result ? PASS : FAIL) : NOT_RUN));
+ 		values[MESSAGE_NAME_COLUMN] = PointerGetDatum(cstring_to_text(tr->message));
+-		values[RUNTIME_NAME_COLUMN] = PointerGetDatum(tr->run_time);
++		values[RUNTIME_NAME_COLUMN] = Int64GetDatum(tr->run_time);
+ 		values[ENABLED_NAME_COLUMN] = PointerGetDatum(cstring_to_text(test->enabled ? ENABLED : DISABLED));
+ 		tuple = heap_form_tuple(state->tupledesc, values, state->nulls);
+ 		result = HeapTupleGetDatum(tuple);

@@ -292,6 +292,14 @@ monoext.monogres(
 )
 use_repo(monoext, "openhalo", "openhalo_ext", "openhalo_pkgs")
 
+monoext.monogres(
+    name = "babelfish",
+    base = "//catalog/babelfish:repo.json",
+    deb_lock = "//catalog/locks:babelfish_pkgs.lock",
+    extensions = "//catalog/extensions:index.json",
+)
+use_repo(monoext, "babelfish", "babelfish_ext", "babelfish_pkgs")
+
 # sysroots/
 #
 # Debian package closures materialized via `//sysroots` from per-toolchain

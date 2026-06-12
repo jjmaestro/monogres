@@ -9,6 +9,7 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 # the assertion tracks the bump automatically.
 
 _APT_LOCKS = [
+    "//catalog/locks:babelfish_pkgs.lock",
     "//catalog/locks:ivory_pkgs.lock",
     "//catalog/locks:openhalo_pkgs.lock",
     "//catalog/locks:pg_pkgs.lock",

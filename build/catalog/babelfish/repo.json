@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "owner": "babelfish-for-postgresql",
+      "repo": "postgresql_modified_for_babelfish",
+      "filename": "{tag}",
+      "url": "https://github.com/{owner}/{repo}/archive/refs/tags/{filename}.tar.gz",
+      "strip_prefix": "{repo}-{tag}"
+    }
+  },
+  "versions": {
+    "4.0": {
+      "tag": "BABEL_4_0_0__PG_16_1",
+      "sha256": "978faec98365494b327c5bd162b3da686d326ddb1717ceb72996f9ad0e5785fd"
+    },
+    "5.1": {
+      "tag": "BABEL_5_1_0__PG_17_4",
+      "sha256": "3160f8cfdd9d57c137e47ae18f4f4ef049d31aa35c0b03c94f233c86221108c3"
+    }
+  },
+  "metadata": {
+    "flavor": "babelfish",
+    "extra_sources": {
+      "ext": {
+        "index": "//catalog/babelfish:ext.json",
+        "contrib_dir": "contrib"
+      }
+    },
+    "deps": {
+      "buildtime": {
+        "debian": {
+          "12": {
+            "*": [
+              "bison",
+              "clang-14",
+              "cmake",
+              "default-jre-headless",
+              "flex",
+              "gettext",
+              "libavahi-compat-libdnssd-dev",
+              "libcurl4-openssl-dev",
+              "libedit-dev",
+              "libeditreadline-dev",
+              "libicu-dev",
+              "libkrb5-dev",
+              "libldap-dev",
+              "liblz4-dev",
+              "libossp-uuid-dev",
+              "libpam0g-dev",
+              "libperl-dev",
+              "libpython3-dev",
+              "libselinux1-dev",
+              "libssl-dev",
+              "libsystemd-dev",
+              "libutfcpp-dev",
+              "libxml2-dev",
+              "libxslt1-dev",
+              "libzstd-dev",
+              "llvm-14-dev",
+              "m4",
+              "make",
+              "tcl-dev",
+              "uuid-dev",
+              "zlib1g-dev"
+            ]
+          },
+          "13": {
+            "*": [
+              "bison",
+              "clang-19",
+              "cmake",
+              "default-jre-headless",
+              "flex",
+              "gettext",
+              "libavahi-compat-libdnssd-dev",
+              "libcurl4-openssl-dev",
+              "libedit-dev",
+              "libeditreadline-dev",
+              "libicu-dev",
+              "libkrb5-dev",
+              "libldap-dev",
+              "liblz4-dev",
+              "libossp-uuid-dev",
+              "libpam0g-dev",
+              "libperl-dev",
+              "libpython3-dev",
+              "libselinux1-dev",
+              "libssl-dev",
+              "libsystemd-dev",
+              "libutfcpp-dev",
+              "libxml2-dev",
+              "libxslt1-dev",
+              "libzstd-dev",
+              "llvm-19-dev",
+              "m4",
+              "make",
+              "tcl-dev",
+              "uuid-dev",
+              "zlib1g-dev"
+            ]
+          }
+        }
+      },
+      "runtime": {
+        "debian": {
+          "12": {
+            "*": [
+              "gettext",
+              "libavahi-compat-libdnssd1",
+              "libedit2",
+              "libgssapi-krb5-2",
+              "libicu72",
+              "libkrb5-3",
+              "libldap-2.5-0",
+              "libllvm14",
+              "liblz4-1",
+              "libossp-uuid16",
+              "libpam0g",
+              "libperl5.36",
+              "libpython3.11",
+              "libselinux1",
+              "libssl3",
+              "libsystemd0",
+              "libuuid1",
+              "libxml2",
+              "libxslt1.1",
+              "libzstd1",
+              "llvm-14-runtime",
+              "ncurses-term",
+              "tcl",
+              "tzdata",
+              "zlib1g"
+            ]
+          },
+          "13": {
+            "*": [
+              "gettext",
+              "libavahi-compat-libdnssd1",
+              "libc-bin",
+              "libedit2",
+              "libgssapi-krb5-2",
+              "libicu76",
+              "libkrb5-3",
+              "libldap2",
+              "libllvm19",
+              "liblz4-1",
+              "libossp-uuid16",
+              "libpam0g",
+              "libperl5.40",
+              "libpython3.13",
+              "libselinux1",
+              "libssl3",
+              "libsystemd0",
+              "libuuid1",
+              "libxml2",
+              "libxslt1.1",
+              "libzstd1",
+              "llvm-19-runtime",
+              "ncurses-term",
+              "tcl",
+              "tzdata",
+              "zlib1g"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
