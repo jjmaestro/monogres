@@ -1,0 +1,11 @@
+# Public alias for the vendored ANTLR4 Java tool jar.
+#
+# Consumers reference `@antlr_jar//:jar` (e.g. as a tool input to a cmake step
+# that runs ANTLR codegen). The actual jar comes from the `antlr_jar_complete`
+# http_file declared in `antlr.bzl`.
+
+alias(
+    name = "jar",
+    actual = "@antlr_jar_complete//file",
+    visibility = ["//visibility:public"],
+)

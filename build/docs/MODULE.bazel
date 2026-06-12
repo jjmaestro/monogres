@@ -28,6 +28,11 @@ local_path_override(
     path = "../sysroots",
 )
 
+local_path_override(
+    module_name = "antlr_jar",
+    path = "../third_party/antlr",
+)
+
 BDA_VERSION = "0.1.0"
 
 archive_override(

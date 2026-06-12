@@ -51,6 +51,7 @@ MODULE=(
   starlark_utils/docs
   sysroots
   sysroots/examples
+  third_party/antlr
   tests
   examples
   e2e

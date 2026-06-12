@@ -3,11 +3,18 @@ module(
     bazel_compatibility = [">=8.4.2"],
 )
 
+bazel_dep(
+    name = "antlr4-cpp-runtime",
+    version = "4.13.2.bcr.1",
+    dev_dependency = True,
+)
+bazel_dep(name = "antlr_jar", version = "0.0.1", dev_dependency = True)
 bazel_dep(name = "bazel_skylib", version = "1.9.0", dev_dependency = True)
 bazel_dep(name = "gawk", version = "5.3.2.bcr.7", dev_dependency = True)
 bazel_dep(name = "monogres", version = "", dev_dependency = True)
 bazel_dep(name = "rules_python", version = "1.9.0", dev_dependency = True)
 bazel_dep(name = "platforms", version = "1.1.0", dev_dependency = True)
+bazel_dep(name = "rules_java", version = "8.14.0", dev_dependency = True)
 bazel_dep(name = "sysroots", version = "0.0.1", dev_dependency = True)
 bazel_dep(name = "starlark_utils", version = "0.0.1", dev_dependency = True)
 bazel_dep(name = "toolchains_llvm", version = "1.7.0", dev_dependency = True)
@@ -36,6 +43,11 @@ monoext.monogres(
     extensions = "@monogres//catalog/extensions:index.json",
 )
 use_repo(monoext, "openhalo", "openhalo_ext", "openhalo_pkgs")
+
+local_path_override(
+    module_name = "antlr_jar",
+    path = "../third_party/antlr",
+)
 
 local_path_override(
     module_name = "monogres",

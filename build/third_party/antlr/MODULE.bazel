@@ -1,0 +1,23 @@
+"""Vendored ANTLR4 Java tool jar as a self-contained Bazel module.
+
+Exposes the ANTLR4 Java tool (`antlr-<version>-complete.jar`) as
+`@antlr_jar//:jar`. The C++ runtime (linked into generated parsers) is a
+separate Bazel Central Registry module (`antlr4-cpp-runtime`); this module
+covers only the Java jar, which is not on BCR and must be downloaded directly
+from www.antlr.org.
+
+Designed to be publishable to BCR later: the module is fully self-contained (no
+`local_path_override`s of its own, no monogres dependencies), so the same files
+can be uploaded to a BCR PR with no edits.
+"""
+
+module(
+    name = "antlr_jar",
+    version = "0.0.1",
+    compatibility_level = 1,
+)
+
+bazel_dep(name = "bazel_skylib", version = "1.7.1")
+
+antlr_jar = use_extension(":antlr.bzl", "antlr_jar")
+use_repo(antlr_jar, "antlr_jar_complete")

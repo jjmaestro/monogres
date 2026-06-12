@@ -2,3 +2,4 @@ docs
 examples
 starlark_utils
 sysroots
+third_party/antlr
