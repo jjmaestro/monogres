@@ -44,6 +44,14 @@ monoext.monogres(
 )
 use_repo(monoext, "openhalo", "openhalo_ext", "openhalo_pkgs")
 
+monoext.monogres(
+    name = "babelfish",
+    base = "@monogres//catalog/babelfish:repo.json",
+    deb_lock = "@monogres//catalog/locks:babelfish_pkgs.lock",
+    extensions = "@monogres//catalog/extensions:index.json",
+)
+use_repo(monoext, "babelfish", "babelfish_ext", "babelfish_pkgs")
+
 local_path_override(
     module_name = "antlr_jar",
     path = "../third_party/antlr",

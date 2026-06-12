@@ -1,5 +1,13 @@
-"""Private e2e tests for @pg, @ivory, and @openhalo."""
+"""Private e2e tests for @pg, @ivory, @openhalo, and @babelfish."""
 
+load(
+    "@babelfish//:all.bzl",
+    babelfish_CFG = "CFG",
+    babelfish_DEFAULT_VERSION = "DEFAULT_VERSION",
+    babelfish_OPTION_SETS = "OPTION_SETS",
+    babelfish_VERSIONS = "VERSIONS",
+)
+load("@babelfish//:introspect.bzl", babelfish_INTROSPECTIONS = "INTROSPECTIONS")
 load(
     "@ivory//:all.bzl",
     ivory_CFG = "CFG",
@@ -18,7 +26,7 @@ load(
 load("@openhalo//:introspect.bzl", openhalo_INTROSPECTIONS = "INTROSPECTIONS")
 load("@pg//:all.bzl", "CFG", "DEFAULT_VERSION", "OPTION_SETS", "VERSIONS")
 load("@pg//:introspect.bzl", "INTROSPECTIONS")
-load(":test.bzl", "e2e_tests")
+load(":test.bzl", "e2e_tests", "make_build_required_contribs_test")
 
 e2e_tests(
     name = "pg",
@@ -48,4 +56,66 @@ e2e_tests(
     introspections = openhalo_INTROSPECTIONS,
     option_sets = openhalo_OPTION_SETS,
     versions = openhalo_VERSIONS,
+)
+
+e2e_tests(
+    name = "babelfish",
+    cfg = babelfish_CFG,
+    default_version = babelfish_DEFAULT_VERSION,
+    expected_flavor = "babelfish",
+    introspections = babelfish_INTROSPECTIONS,
+    option_sets = babelfish_OPTION_SETS,
+    versions = babelfish_VERSIONS,
+)
+
+# --- Make-build integration tests -------------------------------------------
+#
+# Asserts the autoconf+make introspect-synth pipeline shipped expected overlay
+# contribs. Catches regressions in:
+#
+# - `pg_build_make`'s `pgxs_install_extras` (whether the overlay's contribs
+# actually install when contrib=true).
+# - `pg_build_make_introspect.py` (whether the synth attributes the installed
+# files to the right contrib).
+# - Layer-1 paths repo (whether the synthesized JSONs flow through the
+# `installed_paths` -> INTROSPECTIONS pipeline).
+#
+# `babelfishpg_unit` is included in the expected list even though upstream
+# excludes it from its `contrib/Makefile` SUBDIRS — the merge step
+# auto-discovers all subdirs of the overlay's `contrib/`, so it ships.
+
+make_build_required_contribs_test(
+    name = "babelfish_4.0_full_contribs",
+    introspections = babelfish_INTROSPECTIONS,
+    option_set = "full",
+    required_contribs = [
+        "babelfishpg_common",
+        "babelfishpg_money",
+        "babelfishpg_tds",
+        "babelfishpg_tsql",
+        "babelfishpg_unit",
+    ],
+    version = "4.0",
+)
+
+make_build_required_contribs_test(
+    name = "babelfish_5.1_full_contribs",
+    introspections = babelfish_INTROSPECTIONS,
+    option_set = "full",
+    required_contribs = [
+        "babelfishpg_common",
+        "babelfishpg_money",
+        "babelfishpg_tds",
+        "babelfishpg_tsql",
+        "babelfishpg_unit",
+    ],
+    version = "5.1",
+)
+
+make_build_required_contribs_test(
+    name = "openhalo_1beta1_full_contribs",
+    introspections = openhalo_INTROSPECTIONS,
+    option_set = "full",
+    required_contribs = ["aux_mysql"],
+    version = "1beta1",
 )

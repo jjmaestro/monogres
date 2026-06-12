@@ -114,3 +114,98 @@ def e2e_tests(
             cfg.default.introspect,
         ],
     )
+
+def _required_contribs_test_impl(ctx):
+    """Phase 2 assertion that named contribs appear in the introspect data.
+
+    Used as a focused make-build integration test: confirms that overlay
+    contribs (e.g. babelfish_extensions's `babelfishpg_*`) actually appear in
+    the Layer-1 INTROSPECTIONS dict with non-empty paths after the end-to-end
+    synth + Layer-1 stub pipeline. Catches regressions where the introspect
+    synth drops contribs or misattributes file ownership.
+
+    `INTROSPECTIONS` shape (passed via `introspections_json`): a dict keyed by
+    `[version, option_set]` tuples, each value containing a `contrib` dict with
+    per-contrib `paths` lists.
+    """
+    env = unittest.begin(ctx)
+
+    target_key = (ctx.attr.version, ctx.attr.option_set)
+    introspections = json.decode(ctx.attr.introspections_json)
+    entry_key = json.encode([target_key[0], target_key[1]])
+    entry = introspections.get(entry_key)
+    asserts.true(
+        env,
+        entry != None,
+        "(version=%r, option_set=%r) not in INTROSPECTIONS — got keys %r" %
+        (target_key[0], target_key[1], list(introspections.keys())),
+    )
+    if entry == None:
+        return unittest.end(env)
+
+    contribs = entry.get("contrib", {})
+    for name in ctx.attr.required_contribs:
+        asserts.true(
+            env,
+            name in contribs,
+            "contrib %r missing from INTROSPECTIONS[%s]" % (name, entry_key),
+        )
+        if name in contribs:
+            paths = contribs[name].get("paths", [])
+            asserts.true(
+                env,
+                len(paths) > 0,
+                "contrib %r has empty paths list in INTROSPECTIONS[%s]" %
+                (name, entry_key),
+            )
+
+    return unittest.end(env)
+
+_required_contribs_test = unittest.make(
+    _required_contribs_test_impl,
+    attrs = dict(
+        introspections_json = attr.string(mandatory = True),
+        option_set = attr.string(mandatory = True),
+        required_contribs = attr.string_list(mandatory = True),
+        version = attr.string(mandatory = True),
+    ),
+)
+
+def make_build_required_contribs_test(
+        name,
+        introspections,
+        version,
+        option_set,
+        required_contribs):
+    """End-to-end assertion for the autoconf+make introspect pipeline.
+
+    Asserts that `introspections[(version, option_set)]` (from the hub's
+    `@<flavor>//:introspect.bzl`) contains each of `required_contribs` with
+    non-empty `paths`. The introspect data here comes from the synthesized JSONs
+    checked in at `build/catalog/<flavor>/introspect/<...>.json` → Layer-1 paths
+    repo → introspect.bzl, so the test exercises the whole synth → Layer-1 →
+    consumer chain without needing the underlying build.
+
+    Args:
+        name: test target name.
+        introspections: `INTROSPECTIONS` dict from `@<flavor>//:introspect.bzl`.
+        version: base version to check (e.g. `"5.1"`).
+        option_set: option set to check (e.g. `"full"`).
+        required_contribs: contrib names that must be present with paths.
+    """
+
+    # The INTROSPECTIONS dict uses tuple keys which JSON can't represent. Re-key
+    # with `json.encode(list)` of the tuple so the data passes through the test
+    # rule's string attribute and reconstructs on the other side.
+    flat = {
+        json.encode([k[0], k[1]]): v
+        for (k, v) in introspections.items()
+    }
+    _required_contribs_test(
+        name = name,
+        introspections_json = json.encode(flat),
+        option_set = option_set,
+        required_contribs = required_contribs,
+        version = version,
+        size = "small",
+    )

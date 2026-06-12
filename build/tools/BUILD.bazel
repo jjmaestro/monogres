@@ -1,3 +1,8 @@
+load(
+    "@babelfish//:all.bzl",
+    babelfish_OPTION_SETS = "OPTION_SETS",
+    babelfish_VERSIONS = "VERSIONS",
+)
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load(
     "@ivory//:all.bzl",
@@ -65,4 +70,12 @@ gen_pg_introspect_jsons(
     hub = "openhalo",
     option_sets = openhalo_OPTION_SETS,
     versions = openhalo_VERSIONS,
+)
+
+gen_pg_introspect_jsons(
+    name = "gen_babelfish_introspect_jsons",
+    flavor = "babelfish",
+    hub = "babelfish",
+    option_sets = babelfish_OPTION_SETS,
+    versions = babelfish_VERSIONS,
 )

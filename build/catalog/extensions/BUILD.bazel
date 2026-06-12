@@ -1,3 +1,4 @@
+load("@babelfish//:introspect.bzl", BABELFISH_INTROSPECTIONS = "INTROSPECTIONS")
 load("@ivory//:introspect.bzl", IVORY_INTROSPECTIONS = "INTROSPECTIONS")
 load("@openhalo//:introspect.bzl", OPENHALO_INTROSPECTIONS = "INTROSPECTIONS")
 load("@pg//:introspect.bzl", PG_INTROSPECTIONS = "INTROSPECTIONS")
@@ -15,6 +16,7 @@ _CONTRIB_REPO_JSONS = glob(["contrib/*/repo.json"])
 gen_contrib(
     name = "gen_contrib",
     introspections = [
+        BABELFISH_INTROSPECTIONS,
         IVORY_INTROSPECTIONS,
         OPENHALO_INTROSPECTIONS,
         PG_INTROSPECTIONS,
