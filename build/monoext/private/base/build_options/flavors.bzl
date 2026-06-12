@@ -18,6 +18,13 @@ return a constant.
 """
 
 load(
+    ":babelfish.bzl",
+    _babelfish_OPTION_SETS = "OPTION_SETS",
+    _babelfish_build_options = "build_options",
+    _babelfish_build_system = "build_system",
+    _babelfish_pg_base_version = "pg_base_version",
+)
+load(
     ":ivory.bzl",
     _ivory_OPTION_SETS = "OPTION_SETS",
     _ivory_build_options = "build_options",
@@ -40,6 +47,12 @@ load(
 )
 
 FLAVORS = {
+    "babelfish": struct(
+        OPTION_SETS = _babelfish_OPTION_SETS,
+        build_options = _babelfish_build_options,
+        build_system = _babelfish_build_system,
+        pg_base_version = _babelfish_pg_base_version,
+    ),
     "ivorysql": struct(
         OPTION_SETS = _ivory_OPTION_SETS,
         build_options = _ivory_build_options,
