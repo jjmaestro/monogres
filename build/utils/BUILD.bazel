@@ -1,10 +1,17 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load(":cc_lib_sources.bzl", "cc_lib_sources")
 
 package(default_visibility = ["//visibility:public"])
 
 exports_files([
+    "cc_lib_sources.bzl",
     "declare_outputs.bzl",
 ])
+
+bzl_library(
+    name = "cc_lib_sources",
+    srcs = ["cc_lib_sources.bzl"],
+)
 
 bzl_library(
     name = "declare_outputs",
@@ -12,4 +19,17 @@ bzl_library(
     deps = [
         "@bazel_skylib//lib:paths",
     ],
+)
+
+# antlr4-cpp-runtime source tree (not the Bazel-built cc_library output). Used
+# by `pg_build_make` to compile the runtime inline during the babelfishpg_tsql
+# build, without dragging in Abseil (the BCR cc_library compiles with
+# `ANTLR4CPP_USING_ABSEIL` and links Abseil transitively — fine for Bazel
+# consumers, undesirable for the make path which loads the produced `.so` into a
+# PG backend that mustn't pull in Abseil symbols).
+#
+# See `cc_lib_sources.bzl` for the extraction mechanics.
+cc_lib_sources(
+    name = "antlr4_cpp_runtime_srcs",
+    lib = "@antlr4-cpp-runtime//:antlr4-cpp-runtime",
 )

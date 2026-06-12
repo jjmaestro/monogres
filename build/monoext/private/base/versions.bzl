@@ -117,6 +117,15 @@ def _option_set_build(
                 introspect_synth_script = f(
                     "@{build}//tools:pg_build_make_introspect.py",
                 ),
+                # ANTLR4 build-time inputs are pulled in unconditionally on the
+                # make path. Only a `babelfishpg_tsql` overlay actually uses
+                # them (cmake-driven codegen + linked runtime); other make
+                # flavors see the inputs but never reach the consuming code
+                # path. Cost: two small filegroup labels.
+                antlr_cpp_runtime_srcs = f(
+                    "@{build}//utils:antlr4_cpp_runtime_srcs",
+                ),
+                antlr_jar = "@antlr_jar//:jar",
                 sysroot_tar = target.deps.buildtime.sysroot_tar,
                 exec_sysroot_tar = target.deps.buildtime.exec_sysroot_tar,
                 **extras_kwargs

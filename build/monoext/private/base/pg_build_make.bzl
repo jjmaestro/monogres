@@ -258,6 +258,8 @@ def _pg_build_make_genrule(
         contrib_enabled,
         tap_tests_enabled,
         introspect_synth_script,
+        antlr_cpp_runtime_srcs,
+        antlr_jar,
         debug):
     srcs = [
         pg_src,
@@ -285,6 +287,13 @@ def _pg_build_make_genrule(
         '                "$(execpath %s)::%s::%s"' % (label, contrib_dir, excludes_csv)
         for (label, contrib_dir, excludes_csv) in extras_meta
     ])
+
+    # ANTLR4 build-time inputs, unconditionally added on the make path so the
+    # `prep_babelfishpg_tsql` shell step can find them. Make builds with no
+    # `babelfishpg_tsql` overlay never run that step; they pay only the
+    # label-resolution cost (two small filegroups, no transitive closures).
+    srcs.append(antlr_cpp_runtime_srcs)
+    srcs.append(antlr_jar)
 
     # `tools` (exec config) for everything that runs on the build machine.
     # `_PYTHON_FILES` is the full python-build-standalone install tree: the
@@ -442,6 +451,253 @@ def _pg_build_make_genrule(
             done
         }}
 
+        build_antlr_runtime() {{
+            # Compile antlr4-cpp-runtime to a static library from upstream
+            # sources, NOT against the BCR `cc_library` artifact.
+            #
+            # The BCR `@antlr4-cpp-runtime` cc_library compiles with
+            # `ANTLR4CPP_USING_ABSEIL` and links Abseil transitively — fine
+            # for Bazel-built consumers, but unsuitable here: the resulting
+            # symbols would end up inside `libbabelfishpg_tsql.so` (loaded
+            # into a PG backend that mustn't depend on Abseil). Extracting
+            # the upstream sources via `//utils:antlr4_cpp_runtime_srcs` (an
+            # aspect-based rule walking the cc_library's
+            # `srcs`/`hdrs`/`textual_hdrs`) and rebuilding them stock here
+            # gives a clean, Abseil-free runtime.
+            #
+            # Outputs (under `$$out_dir`):
+            #   include/antlr4-runtime/<headers...>
+            #   lib/libantlr4-runtime.a
+            #
+            # The babelfish make-build links against this static lib, so the
+            # resulting `babelfishpg_tsql.so` has no external
+            # libantlr4-runtime runtime dep. The compiler is the sysroot's
+            # clang++ pointed at the per-PG sysroot (libc + libstdc++ headers
+            # live there), same as `run_configure`'s CXX.
+            local antlr_src_dir="$$1"
+            local out_dir="$$2"
+
+            echo "# $$(date) - build_antlr_runtime"
+            echo "  src: $$antlr_src_dir"
+            echo "  out: $$out_dir"
+
+            mkdir -p "$$out_dir/include/antlr4-runtime" "$$out_dir/lib"
+
+            # Install headers: copy the entire runtime/src tree into
+            # `include/antlr4-runtime/` so `#include "antlr4-runtime.h"` and
+            # `#include "<sub>/<...>.h"` both resolve (matches upstream's
+            # `/usr/local/include/antlr4-runtime/` layout).
+            cp -aR "$$antlr_src_dir/runtime/src/." \\
+                "$$out_dir/include/antlr4-runtime/"
+
+            # Compile each .cpp to .o, then archive into libantlr4-runtime.a
+            # (two-step because we want a static archive, not a shared
+            # object).
+            local cxx="$$SYSROOT_DIR/usr/lib/llvm-$$LLVM_MAJOR/bin/clang++"
+            local cxx_flags=(
+                "--sysroot=$$SYSROOT_DIR"
+                "-std=c++17" "-fPIC" "-O2" "-fvisibility=hidden"
+                "-Wno-deprecated" "-Wno-attributes"
+                "-I$$antlr_src_dir/runtime/src"
+                "-idirafter" "$$SYSROOT_DIR/usr/include"
+                "-idirafter" "$$SYSROOT_DIR/usr/include/$$TARGET_MULTIARCH"
+            )
+
+            local cpp_files=()
+            while IFS= read -r f; do
+                cpp_files+=("$$f")
+            done < <(find "$$antlr_src_dir/runtime/src" -name "*.cpp")
+
+            local objs_dir="$$out_dir/objs"
+            mkdir -p "$$objs_dir"
+
+            # Compile in parallel via xargs, mirroring the source tree's
+            # directory structure under `$$objs_dir/` so basenames that
+            # repeat across subdirs don't collide.
+            printf '%s\\n' "$${{cpp_files[@]}}" | \\
+                xargs -n 1 -P "$$JOBS" -I'@' bash -c '
+                    src="@"
+                    src_root="'"$$antlr_src_dir"'/runtime/src/"
+                    rel="$${{src#$$src_root}}"
+                    obj="'"$$objs_dir"'/$${{rel%.cpp}}.o"
+                    mkdir -p "$$(dirname "$$obj")"
+                    "'"$$cxx"'" '"$${{cxx_flags[*]}}"' -c "$$src" -o "$$obj"
+                ' || return $$?
+
+            # Archive all .o files into the static library (recursive find
+            # because we mirror subdirs).
+            local obj_list
+            obj_list=$$(find "$$objs_dir" -name "*.o" -type f)
+            # shellcheck disable=SC2086
+            "$$EXEC_SYSROOT_DIR/usr/bin/ar" rcs \\
+                "$$out_dir/lib/libantlr4-runtime.a" \\
+                $$obj_list || return $$?
+
+            rm -rf "$$objs_dir"
+        }}
+
+        prep_babelfishpg_tsql() {{
+            # CMakeLists + Makefile + ANTLR-jar fixups for babelfishpg_tsql.
+            #
+            # The contrib's `Makefile` and `antlr/CMakeLists.txt` between
+            # them hardcode several paths and version assumptions that need
+            # patching for the sandboxed build:
+            #
+            #   Makefile (with `=` assignments — env-var override fails, and
+            #   command-line make-vars don't compose with the Makefile's own
+            #   `+=` because command-line vars become immutable):
+            #     export ANTLR4_RUNTIME_INCLUDE_DIR=/usr/local/include/antlr4-runtime
+            #     export ANTLR4_RUNTIME_LIB_DIR=/usr/local/lib
+            #     export ANTLR4_JAVA_BIN=java
+            #     (uses `$$(cmake)` — undefined -> empty -> cmake step no-ops)
+            #     (no `-std=c++17` — antlr4-runtime 4.13.2 requires it)
+            #
+            #   CMakeLists.txt (no CACHE -> `-D` overrides ignored):
+            #     SET (MYDIR /usr/local/include/antlr4-runtime/)
+            #     set(CMAKE_CXX_STANDARD 14)
+            #     set(ANTLR_EXECUTABLE
+            #       $${{PROJECT_SOURCE_DIR}}/thirdparty/antlr/antlr-<v>.jar)
+            #
+            # Sed each path to point at the sysroot / our built runtime, and
+            # bump C++14 -> C++17. The ANTLR jar referenced from
+            # `ANTLR_EXECUTABLE` is left structurally alone — instead the
+            # embedded jar file is overwritten in place with `@antlr_jar`
+            # (version-matched to the runtime).
+            local subdir="$$1"
+            local antlr_runtime_dir="$$2"
+            local antlr_jar="$$3"
+
+            local java_bin
+            java_bin=$$(find "$$EXEC_SYSROOT_DIR/usr/lib/jvm" \\
+                -maxdepth 3 -name "java" -type f 2>/dev/null \\
+                | head -1)
+            if [ -z "$$java_bin" ]; then
+                echo "prep_babelfishpg_tsql: java not found in $$EXEC_SYSROOT_DIR/usr/lib/jvm" >&2
+                return 1
+            fi
+
+            # Patch the contrib's Makefile in-place:
+            # - Hardcoded `/usr/local/{{include,lib}}` ANTLR paths -> our
+            #   built runtime.
+            # - `java` -> the sysroot's actual java binary (debs are
+            #   extracted without running update-alternatives, so
+            #   `/usr/bin/java` doesn't exist).
+            # - Define `cmake := <sysroot cmake>` near the top so the
+            #   existing `cd antlr && $$(cmake) .` step works.
+            # - `PG_CXXFLAGS += -std=c++17` (antlr4-runtime 4.13.2 needs it).
+            # - `PG_CFLAGS += -fcommon`: allows the multiple tentative
+            #   definitions babelfish carries
+            #   (`pltsql_curr_compile_body_lineno` lives in both
+            #   `src/pl_comp.c` and `src/pl_comp-2.c`; `pgtsql_base_yydebug`
+            #   in both `gram-backend.c` and `parser.c`). GCC 10+ and modern
+            #   clang default to `-fno-common`, which turns these into
+            #   linker errors.
+            # The Makefile internals are modified (not command-line vars)
+            # because the Makefile uses `PG_CFLAGS += ...` for its own
+            # additions, and command-line vars can't be appended to from
+            # within the Makefile.
+            local makefile="$$subdir/Makefile"
+            sed -i \\
+                -e "s|^export ANTLR4_RUNTIME_INCLUDE_DIR=.*|export ANTLR4_RUNTIME_INCLUDE_DIR=$$antlr_runtime_dir/include/antlr4-runtime|" \\
+                -e "s|^export ANTLR4_RUNTIME_LIB_DIR=.*|export ANTLR4_RUNTIME_LIB_DIR=$$antlr_runtime_dir/lib|" \\
+                -e "s|^export ANTLR4_JAVA_BIN=.*|export ANTLR4_JAVA_BIN=$$java_bin|" \\
+                -e "1icmake := $$EXEC_SYSROOT_DIR/usr/bin/cmake" \\
+                -e "1iPG_CXXFLAGS += -std=c++17" \\
+                -e "1iPG_CFLAGS += -fcommon" \\
+                "$$makefile"
+
+            # The JIT bitcode step (`%.bc : %.cpp` in `Makefile.global`)
+            # uses `BITCODE_CXXFLAGS + CPPFLAGS`; PG_CXXFLAGS doesn't reach
+            # it. `-std=c++17` and the runtime include dir are needed for
+            # the bitcode-side .cpp compiles. Injected via `override
+            # BITCODE_CXXFLAGS += ...` appended after `include $$(PGXS)`
+            # so the additions land on top.
+            #
+            # Single-quoted `echo` strings keep `$$(...)` literal — those
+            # lines end up in the Makefile and are interpreted by make, not
+            # bash. The double-quoted form is for the line that needs
+            # `$$antlr_runtime_dir` expanded by bash.
+            echo "" >> "$$makefile"
+            echo "# Injected by monoext/pg_build_make (BCR antlr4-cpp-runtime 4.13.2)." \\
+                >> "$$makefile"
+            echo "override BITCODE_CXXFLAGS += -std=c++17 -I$$antlr_runtime_dir/include/antlr4-runtime" \\
+                >> "$$makefile"
+            # Move `antlr/libantlr_tsql.a` from `OBJS` to `SHLIB_LINK`.
+            # PGXS's JIT-bitcode install macro (`install_llvm_module` in
+            # `Makefile.global`) does `$$(patsubst %.o,%.bc, $$(OBJS))` and
+            # feeds the result to `llvm-lto --thinlto`. `.a` entries don't
+            # match the patsubst and stay literal, so the archive ends up
+            # in the lto input list and fails with "not a valid object
+            # file". Moving the .a out of OBJS keeps it in the .so link
+            # (via SHLIB_LINK) while excluding it from the bitcode
+            # iteration. Done as a Make-level filter override rather than
+            # a sed against the line itself to stay robust against every
+            # variant the babelfish Makefile may use to add the archive.
+            echo 'override OBJS := $$(filter-out %.a,$$(OBJS))' \\
+                >> "$$makefile"
+            echo 'SHLIB_LINK += antlr/libantlr_tsql.a' \\
+                >> "$$makefile"
+
+            # Patch the contrib's CMakeLists:
+            # 1. Repoint `/usr/local/include/antlr4-runtime` to our built
+            #    runtime's include dir.
+            # 2. Bump `CMAKE_CXX_STANDARD` 14 -> 17: the antlr4-cpp-runtime
+            #    4.13.2 headers use C++17 features (std::string_view,
+            #    std::any, ...). Babelfish trees that set 14 targeted the
+            #    older 4.9-era runtime; jar + runtime are pinned to 4.13.2
+            #    here, so C++17 is required.
+            local cmakelists="$$subdir/antlr/CMakeLists.txt"
+            if [ -f "$$cmakelists" ]; then
+                sed -i \\
+                    -e "s|/usr/local/include/antlr4-runtime/|$$antlr_runtime_dir/include/antlr4-runtime/|g" \\
+                    -e "s|CMAKE_CXX_STANDARD 14|CMAKE_CXX_STANDARD 17|g" \\
+                    "$$cmakelists"
+            fi
+
+            # Overwrite the embedded ANTLR jar with `@antlr_jar` (same
+            # filename, version-matched to the runtime). The CMakeLists
+            # hardcodes the embedded jar's filename — that path keeps
+            # working because only the file contents are replaced.
+            shopt -s nullglob
+            local embedded_jars=("$$subdir/antlr/thirdparty/antlr"/antlr-*-complete.jar)
+            shopt -u nullglob
+            if [ "$${{#embedded_jars[@]}}" -ge 1 ]; then
+                cp -f "$$antlr_jar" "$${{embedded_jars[0]}}"
+            fi
+
+            # Per-version source compat. Babelfish trees written against
+            # the ANTLR 4.9-era API call helpers that 4.13.2 removed.
+            # Detect the legacy usage by grepping `tsqlIface.cpp` for
+            # `antlrcpp::utf8_to_utf32` (the canonical legacy call); the
+            # grep is the version selector, no separate version arg needed.
+            local iface="$$subdir/src/tsqlIface.cpp"
+            if [ -f "$$iface" ] && grep -q "antlrcpp::utf8_to_utf32" "$$iface"; then
+                echo "    detected legacy ANTLR API in babelfishpg_tsql; applying compat patches"
+                apply_legacy_antlr_compat_patches "$$iface"
+            fi
+        }}
+
+        apply_legacy_antlr_compat_patches() {{
+            # Migrate the three ANTLR 4.9-era call sites in `tsqlIface.cpp`
+            # to the 4.13 equivalents:
+            #
+            #   antlrcpp::utf8_to_utf32(begin, end) -> antlrcpp::Utf8::lenientDecode(string_view)
+            #   antlrcpp::utf32_to_utf8(u32string)  -> antlrcpp::Utf8::lenientEncode(u32string_view)
+            #   UTF32String                         -> std::u32string
+            #
+            # `antlrcpp::Utf8` lives in `support/Utf8.h`, which is NOT in
+            # the umbrella `antlr4-runtime.h`; add the explicit include
+            # right after it so the call sites compile.
+            local iface="$$1"
+            sed -i \\
+                -e "s|antlrcpp::utf8_to_utf32(s, s + strlen(s))|antlrcpp::Utf8::lenientDecode(std::string_view(s, strlen(s)))|g" \\
+                -e "s|UTF32String\\b|std::u32string|g" \\
+                -e "s|antlrcpp::utf32_to_utf8(rewritten_query)|antlrcpp::Utf8::lenientEncode(std::u32string_view(rewritten_query))|g" \\
+                '-e' '/^#include "antlr4-runtime.h"/a\\
+#include "support/Utf8.h"' \\
+                "$$iface"
+        }}
+
         pgxs_install_extras() {{
             # Post-install PGXS pass for overlay contribs (auto-discovered).
             # The PG fork installs first via `make install[-world-bin]`, then
@@ -455,7 +711,10 @@ def _pg_build_make_genrule(
             # If a specific overlay contrib needs build-env pieces not
             # plumbed through this pass, list it in the catalog's
             # `metadata.extra_sources.<key>.exclude` array so this pass skips
-            # it explicitly.
+            # it explicitly. `babelfishpg_tsql` is handled inline below
+            # (ANTLR4 cmake codegen wiring): `prep_babelfishpg_tsql` patches
+            # the contrib's Makefile + CMakeLists; the runtime itself is
+            # compiled once by `build_antlr_runtime` and reused.
             #
             # Skips a subdir silently when it has no Makefile (defensive —
             # every PGXS-shaped contrib has one, but an overlay may ship
@@ -471,6 +730,23 @@ def _pg_build_make_genrule(
             if [ ! -x "$$pg_config" ]; then
                 echo "pgxs_install_extras: pg_config not found at $$pg_config" >&2
                 return 1
+            fi
+
+            # Build the antlr4 runtime once, lazily — only when a contrib in
+            # the extras list actually needs it. Checks the *unfiltered*
+            # subdir list (excludes don't matter at the gate level).
+            local antlr_runtime_dir="$$EXT_BUILD_ROOT/antlr_runtime"
+            local need_antlr=0
+            for entry in "$${{extras[@]}}"; do
+                _parse_extras_entry "$$entry"
+                if [ -d "$$EXT_BUILD_ROOT/$$_E_PATH/$$_E_CDIR/babelfishpg_tsql" ]; then
+                    need_antlr=1
+                    break
+                fi
+            done
+            if [ "$$need_antlr" = "1" ]; then
+                build_antlr_runtime "$$ANTLR_CPP_SRC_DIR" "$$antlr_runtime_dir" \\
+                    || return $$?
             fi
 
             for entry in "$${{extras[@]}}"; do
@@ -497,6 +773,37 @@ def _pg_build_make_genrule(
                         continue
                     fi
                     echo "  - PGXS install: $$subdir"
+
+                    # Per-contrib pre-install hooks. Currently one case:
+                    # babelfishpg_tsql needs ANTLR4 build-env plumbing
+                    # (cmake codegen + linked runtime). The hook patches
+                    # the contrib's Makefile + CMakeLists in place.
+                    #
+                    # `local_jobs` lets per-contrib hooks downgrade the
+                    # parallelism when the contrib's Makefile races under
+                    # `make -j`. babelfishpg_tsql's Makefile is missing the
+                    # dependency edge from `src/tsqlIface.o` to the
+                    # cmake-generated parser headers, so the outer make is
+                    # serialized; the cmake/codegen pre-step is internally
+                    # parallel and keeps `-j$$JOBS`.
+                    local local_jobs="$$JOBS"
+                    case "$$name" in
+                        babelfishpg_tsql)
+                            prep_babelfishpg_tsql "$$subdir" \\
+                                "$$antlr_runtime_dir" "$$ANTLR_JAR_PATH" \\
+                                || return $$?
+                            local_jobs="1"
+                            echo "    pre-step: build antlr/libantlr_tsql.a"
+                            "$$MAKE_BIN" \\
+                                -C "$$subdir" \\
+                                -j"$$JOBS" \\
+                                USE_PGXS=1 \\
+                                PG_CONFIG="$$pg_config" \\
+                                PG_SRC="$$workdir" \\
+                                antlr/libantlr_tsql.a || return $$?
+                            ;;
+                    esac
+
                     # PG_SRC points at the merged PG source tree so the
                     # overlay's PGXS Makefiles can resolve `-I$$(PG_SRC)`
                     # includes against PG-internal headers.
@@ -513,7 +820,7 @@ def _pg_build_make_genrule(
                     # shellcheck disable=SC2086
                     "$$MAKE_BIN" \\
                         -C "$$subdir" \\
-                        -j"$$JOBS" \\
+                        -j"$$local_jobs" \\
                         FLEXFLAGS=-noline \\
                         USE_PGXS=1 \\
                         PG_CONFIG="$$pg_config" \\
@@ -1138,6 +1445,8 @@ PY_SHIM_EOF
         LOG_FILE="$$EXT_BUILD_ROOT/{log_file}"
         INTROSPECT_JSON="$$EXT_BUILD_ROOT/{introspect_json_file}"
         INTROSPECT_SYNTH_SCRIPT="$$EXT_BUILD_ROOT/{synth_script}"
+        ANTLR_CPP_SRC_DIR="$$EXT_BUILD_ROOT/{antlr_cpp_srcs}"
+        ANTLR_JAR_PATH="$$EXT_BUILD_ROOT/{antlr_jar}"
         PG_SRC="$$EXT_BUILD_ROOT/{pg_src}"
         SYSROOT_TAR="$$EXT_BUILD_ROOT/{sysroot_tar}"
         EXEC_SYSROOT_TAR="$$EXT_BUILD_ROOT/{exec_sysroot_tar}"
@@ -1277,6 +1586,8 @@ PY_SHIM_EOF
         log_file = "$(execpath %s)" % log_file,
         introspect_json_file = "$(execpath %s)" % introspect_json_file,
         synth_script = "$(execpath %s)" % introspect_synth_script,
+        antlr_cpp_srcs = "$(execpath %s)" % antlr_cpp_runtime_srcs,
+        antlr_jar = "$(execpath %s)" % antlr_jar,
         extras_array = extras_array,
         contrib_enabled = "%s" % contrib_enabled,
         tap_tests_enabled = "%s" % tap_tests_enabled,
@@ -1338,6 +1649,8 @@ def pg_build_make(
         pg_src,
         build_options,
         introspect_synth_script,
+        antlr_cpp_runtime_srcs,
+        antlr_jar,
         sysroot_tar,
         exec_sysroot_tar,
         extra_sources = {},
@@ -1391,6 +1704,19 @@ def pg_build_make(
             invokes it post-`make install` (under the hermetic python
             interpreter) to synthesize the meson-shape introspect JSON consumed
             by Layer 2 + gen_contrib.
+        antlr_cpp_runtime_srcs (str): Label of a tree artifact containing the
+            antlr4-cpp-runtime source files (typically
+            `//utils:antlr4_cpp_runtime_srcs`, which extracts the BCR
+            `@antlr4-cpp-runtime` cc_library's `srcs`/`hdrs`/`textual_hdrs`).
+            The shell pre-step `build_antlr_runtime` compiles a clean (no
+            Abseil) `libantlr4-runtime.a` from these sources before
+            `babelfishpg_tsql` is built. Required for all make builds even
+            though only `babelfishpg_tsql` uses it; the gate is in the shell,
+            not the macro signature.
+        antlr_jar (str): Label of the ANTLR4 Java tool jar (typically
+            `@antlr_jar//:jar`). Used to override the version-pinned jar
+            embedded in babelfish's source tree so the generated parser code
+            matches the runtime version (`@antlr4-cpp-runtime`).
         sysroot_tar (str): The per-PG `:sysroot_tar` alias label (rendered
             per-version by `versions.bzl`, arch-selected). Extracted at action
             time by `sysroot_setup.sh` into `$EXT_BUILD_ROOT/sysroot`; provides
@@ -1477,6 +1803,8 @@ def pg_build_make(
         contrib_enabled = contrib_enabled,
         tap_tests_enabled = tap_tests_enabled,
         introspect_synth_script = introspect_synth_script,
+        antlr_cpp_runtime_srcs = antlr_cpp_runtime_srcs,
+        antlr_jar = antlr_jar,
         debug = debug,
     )
 
