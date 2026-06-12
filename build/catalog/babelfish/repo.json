@@ -27,6 +27,20 @@
         "spec": "<5.0/*"
       }
     ],
+    "introspect": {
+      "4.0": {
+        "barebones": "//catalog/babelfish/introspect:babelfish~4.0~barebones.json",
+        "minimal": "//catalog/babelfish/introspect:babelfish~4.0~minimal.json",
+        "regular": "//catalog/babelfish/introspect:babelfish~4.0~regular.json",
+        "full": "//catalog/babelfish/introspect:babelfish~4.0~full.json"
+      },
+      "5.1": {
+        "barebones": "//catalog/babelfish/introspect:babelfish~5.1~barebones.json",
+        "minimal": "//catalog/babelfish/introspect:babelfish~5.1~minimal.json",
+        "regular": "//catalog/babelfish/introspect:babelfish~5.1~regular.json",
+        "full": "//catalog/babelfish/introspect:babelfish~5.1~full.json"
+      }
+    },
     "extra_sources": {
       "ext": {
         "index": "//catalog/babelfish:ext.json",
