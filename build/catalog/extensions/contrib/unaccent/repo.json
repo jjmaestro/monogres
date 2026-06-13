@@ -2,6 +2,26 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/bitcode/unaccent.index.bc",
+          "lib/postgresql/bitcode/unaccent/unaccent.bc",
+          "lib/postgresql/unaccent.so",
+          "share/postgresql/extension/unaccent--1.0--1.1.sql",
+          "share/postgresql/extension/unaccent--1.1.sql",
+          "share/postgresql/extension/unaccent.control",
+          "share/postgresql/tsearch_data/unaccent.rules"
+        ],
+        "5.1": [
+          "lib/postgresql/bitcode/unaccent.index.bc",
+          "lib/postgresql/bitcode/unaccent/unaccent.bc",
+          "lib/postgresql/unaccent.so",
+          "share/postgresql/extension/unaccent--1.0--1.1.sql",
+          "share/postgresql/extension/unaccent--1.1.sql",
+          "share/postgresql/extension/unaccent.control",
+          "share/postgresql/tsearch_data/unaccent.rules"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/unaccent.so",
@@ -205,6 +225,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

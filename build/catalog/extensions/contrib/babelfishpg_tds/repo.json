@@ -1,0 +1,35 @@
+{
+  "kind": "contrib",
+  "metadata": {
+    "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/babelfishpg_tds.so",
+          "lib/postgresql/bitcode/babelfishpg_tds.index.bc",
+          "share/postgresql/extension/babelfishpg_tds--1.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tds.control"
+        ],
+        "5.1": [
+          "lib/postgresql/babelfishpg_tds.so",
+          "lib/postgresql/bitcode/babelfishpg_tds.index.bc",
+          "share/postgresql/extension/babelfishpg_tds--1.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tds.control"
+        ]
+      }
+    },
+    "requires": {
+      "babelfish": {
+        "*": [
+          "babelfishpg_tsql"
+        ]
+      }
+    }
+  },
+  "version": 1,
+  "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ]
+  }
+}

@@ -2,6 +2,26 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/bitcode/pgrowlocks.index.bc",
+          "lib/postgresql/bitcode/pgrowlocks/pgrowlocks.bc",
+          "lib/postgresql/pgrowlocks.so",
+          "share/postgresql/extension/pgrowlocks--1.0--1.1.sql",
+          "share/postgresql/extension/pgrowlocks--1.1--1.2.sql",
+          "share/postgresql/extension/pgrowlocks--1.2.sql",
+          "share/postgresql/extension/pgrowlocks.control"
+        ],
+        "5.1": [
+          "lib/postgresql/bitcode/pgrowlocks.index.bc",
+          "lib/postgresql/bitcode/pgrowlocks/pgrowlocks.bc",
+          "lib/postgresql/pgrowlocks.so",
+          "share/postgresql/extension/pgrowlocks--1.0--1.1.sql",
+          "share/postgresql/extension/pgrowlocks--1.1--1.2.sql",
+          "share/postgresql/extension/pgrowlocks--1.2.sql",
+          "share/postgresql/extension/pgrowlocks.control"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/pgrowlocks.so",
@@ -205,6 +225,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

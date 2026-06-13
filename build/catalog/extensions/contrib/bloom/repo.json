@@ -2,6 +2,32 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/bitcode/bloom.index.bc",
+          "lib/postgresql/bitcode/bloom/blcost.bc",
+          "lib/postgresql/bitcode/bloom/blinsert.bc",
+          "lib/postgresql/bitcode/bloom/blscan.bc",
+          "lib/postgresql/bitcode/bloom/blutils.bc",
+          "lib/postgresql/bitcode/bloom/blvacuum.bc",
+          "lib/postgresql/bitcode/bloom/blvalidate.bc",
+          "lib/postgresql/bloom.so",
+          "share/postgresql/extension/bloom--1.0.sql",
+          "share/postgresql/extension/bloom.control"
+        ],
+        "5.1": [
+          "lib/postgresql/bitcode/bloom.index.bc",
+          "lib/postgresql/bitcode/bloom/blcost.bc",
+          "lib/postgresql/bitcode/bloom/blinsert.bc",
+          "lib/postgresql/bitcode/bloom/blscan.bc",
+          "lib/postgresql/bitcode/bloom/blutils.bc",
+          "lib/postgresql/bitcode/bloom/blvacuum.bc",
+          "lib/postgresql/bitcode/bloom/blvalidate.bc",
+          "lib/postgresql/bloom.so",
+          "share/postgresql/extension/bloom--1.0.sql",
+          "share/postgresql/extension/bloom.control"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/bloom.so",
@@ -161,6 +187,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

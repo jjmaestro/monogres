@@ -2,6 +2,16 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/sepgsql.so",
+          "share/extension/sepgsql.sql"
+        ],
+        "5.1": [
+          "lib/sepgsql.so",
+          "share/extension/sepgsql.sql"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/sepgsql.so",
@@ -120,6 +130,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

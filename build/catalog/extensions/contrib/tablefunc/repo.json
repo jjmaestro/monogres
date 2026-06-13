@@ -2,6 +2,24 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "include/postgresql/server/executor/tablefunc.h",
+          "lib/postgresql/bitcode/tablefunc.index.bc",
+          "lib/postgresql/bitcode/tablefunc/tablefunc.bc",
+          "lib/postgresql/tablefunc.so",
+          "share/postgresql/extension/tablefunc--1.0.sql",
+          "share/postgresql/extension/tablefunc.control"
+        ],
+        "5.1": [
+          "include/postgresql/server/executor/tablefunc.h",
+          "lib/postgresql/bitcode/tablefunc.index.bc",
+          "lib/postgresql/bitcode/tablefunc/tablefunc.bc",
+          "lib/postgresql/tablefunc.so",
+          "share/postgresql/extension/tablefunc--1.0.sql",
+          "share/postgresql/extension/tablefunc.control"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/tablefunc.so",
@@ -153,6 +171,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

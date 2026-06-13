@@ -2,6 +2,18 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/bitcode/passwordcheck.index.bc",
+          "lib/postgresql/bitcode/passwordcheck/passwordcheck.bc",
+          "lib/postgresql/passwordcheck.so"
+        ],
+        "5.1": [
+          "lib/postgresql/bitcode/passwordcheck.index.bc",
+          "lib/postgresql/bitcode/passwordcheck/passwordcheck.bc",
+          "lib/postgresql/passwordcheck.so"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/passwordcheck.so"
@@ -97,6 +109,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

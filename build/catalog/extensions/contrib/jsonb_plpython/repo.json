@@ -2,6 +2,20 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/bitcode/jsonb_plpython3/jsonb_plpython.bc",
+          "lib/postgresql/jsonb_plpython3.so",
+          "share/postgresql/extension/jsonb_plpython3u--1.0.sql",
+          "share/postgresql/extension/jsonb_plpython3u.control"
+        ],
+        "5.1": [
+          "lib/postgresql/bitcode/jsonb_plpython3/jsonb_plpython.bc",
+          "lib/postgresql/jsonb_plpython3.so",
+          "share/postgresql/extension/jsonb_plpython3u--1.0.sql",
+          "share/postgresql/extension/jsonb_plpython3u.control"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/jsonb_plpython3.so",
@@ -151,6 +165,11 @@
       }
     },
     "requires": {
+      "babelfish": {
+        "*": [
+          "plpython3u"
+        ]
+      },
       "ivorysql": {
         "*": [
           "plpython3u"
@@ -172,6 +191,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

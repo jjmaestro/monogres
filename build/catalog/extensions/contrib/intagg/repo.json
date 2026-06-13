@@ -2,6 +2,18 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "share/postgresql/extension/intagg--1.0--1.1.sql",
+          "share/postgresql/extension/intagg--1.1.sql",
+          "share/postgresql/extension/intagg.control"
+        ],
+        "5.1": [
+          "share/postgresql/extension/intagg--1.0--1.1.sql",
+          "share/postgresql/extension/intagg--1.1.sql",
+          "share/postgresql/extension/intagg.control"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "share/extension/intagg--1.0--1.1.sql",
@@ -147,6 +159,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

@@ -1,0 +1,32 @@
+{
+  "kind": "contrib",
+  "metadata": {
+    "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/babelfishpg_money.so",
+          "lib/postgresql/bitcode/babelfishpg_money.index.bc",
+          "lib/postgresql/bitcode/babelfishpg_money/fixeddecimal.bc",
+          "share/postgresql/extension/babelfishpg_money--1.1.0.sql",
+          "share/postgresql/extension/babelfishpg_money.control",
+          "share/postgresql/extension/fixeddecimal--1.0.0--1.1.0.sql"
+        ],
+        "5.1": [
+          "lib/postgresql/babelfishpg_money.so",
+          "lib/postgresql/bitcode/babelfishpg_money.index.bc",
+          "lib/postgresql/bitcode/babelfishpg_money/fixeddecimal.bc",
+          "share/postgresql/extension/babelfishpg_money--1.1.0.sql",
+          "share/postgresql/extension/babelfishpg_money.control",
+          "share/postgresql/extension/fixeddecimal--1.0.0--1.1.0.sql"
+        ]
+      }
+    }
+  },
+  "version": 1,
+  "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ]
+  }
+}

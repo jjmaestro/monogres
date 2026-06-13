@@ -1,0 +1,32 @@
+{
+  "kind": "contrib",
+  "metadata": {
+    "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/babelfishpg_unit.so",
+          "lib/postgresql/bitcode/babelfishpg_unit.index.bc",
+          "lib/postgresql/bitcode/babelfishpg_unit/babelfishpg_unit.bc",
+          "lib/postgresql/bitcode/babelfishpg_unit/test_money.bc",
+          "share/postgresql/extension/babelfishpg_unit--1.0.0.sql",
+          "share/postgresql/extension/babelfishpg_unit.control"
+        ],
+        "5.1": [
+          "lib/postgresql/babelfishpg_unit.so",
+          "lib/postgresql/bitcode/babelfishpg_unit.index.bc",
+          "lib/postgresql/bitcode/babelfishpg_unit/babelfishpg_unit.bc",
+          "lib/postgresql/bitcode/babelfishpg_unit/test_money.bc",
+          "share/postgresql/extension/babelfishpg_unit--1.0.0.sql",
+          "share/postgresql/extension/babelfishpg_unit.control"
+        ]
+      }
+    }
+  },
+  "version": 1,
+  "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ]
+  }
+}

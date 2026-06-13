@@ -2,6 +2,18 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/adminpack.so",
+          "lib/postgresql/bitcode/adminpack.index.bc",
+          "lib/postgresql/bitcode/adminpack/adminpack.bc",
+          "share/postgresql/extension/adminpack--1.0--1.1.sql",
+          "share/postgresql/extension/adminpack--1.0.sql",
+          "share/postgresql/extension/adminpack--1.1--2.0.sql",
+          "share/postgresql/extension/adminpack--2.0--2.1.sql",
+          "share/postgresql/extension/adminpack.control"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/adminpack.so",
@@ -136,6 +148,9 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0"
+    ],
     "ivorysql": [
       "3.0"
     ],

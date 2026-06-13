@@ -2,6 +2,30 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/bitcode/fuzzystrmatch.index.bc",
+          "lib/postgresql/bitcode/fuzzystrmatch/daitch_mokotoff.bc",
+          "lib/postgresql/bitcode/fuzzystrmatch/dmetaphone.bc",
+          "lib/postgresql/bitcode/fuzzystrmatch/fuzzystrmatch.bc",
+          "lib/postgresql/fuzzystrmatch.so",
+          "share/postgresql/extension/fuzzystrmatch--1.0--1.1.sql",
+          "share/postgresql/extension/fuzzystrmatch--1.1--1.2.sql",
+          "share/postgresql/extension/fuzzystrmatch--1.1.sql",
+          "share/postgresql/extension/fuzzystrmatch.control"
+        ],
+        "5.1": [
+          "lib/postgresql/bitcode/fuzzystrmatch.index.bc",
+          "lib/postgresql/bitcode/fuzzystrmatch/daitch_mokotoff.bc",
+          "lib/postgresql/bitcode/fuzzystrmatch/dmetaphone.bc",
+          "lib/postgresql/bitcode/fuzzystrmatch/fuzzystrmatch.bc",
+          "lib/postgresql/fuzzystrmatch.so",
+          "share/postgresql/extension/fuzzystrmatch--1.0--1.1.sql",
+          "share/postgresql/extension/fuzzystrmatch--1.1--1.2.sql",
+          "share/postgresql/extension/fuzzystrmatch--1.1.sql",
+          "share/postgresql/extension/fuzzystrmatch.control"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/fuzzystrmatch.so",
@@ -205,6 +229,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

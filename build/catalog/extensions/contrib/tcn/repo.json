@@ -2,6 +2,22 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/bitcode/tcn.index.bc",
+          "lib/postgresql/bitcode/tcn/tcn.bc",
+          "lib/postgresql/tcn.so",
+          "share/postgresql/extension/tcn--1.0.sql",
+          "share/postgresql/extension/tcn.control"
+        ],
+        "5.1": [
+          "lib/postgresql/bitcode/tcn.index.bc",
+          "lib/postgresql/bitcode/tcn/tcn.bc",
+          "lib/postgresql/tcn.so",
+          "share/postgresql/extension/tcn--1.0.sql",
+          "share/postgresql/extension/tcn.control"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/tcn.so",
@@ -151,6 +167,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

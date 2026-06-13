@@ -2,6 +2,24 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/bitcode/lo.index.bc",
+          "lib/postgresql/bitcode/lo/lo.bc",
+          "lib/postgresql/lo.so",
+          "share/postgresql/extension/lo--1.0--1.1.sql",
+          "share/postgresql/extension/lo--1.1.sql",
+          "share/postgresql/extension/lo.control"
+        ],
+        "5.1": [
+          "lib/postgresql/bitcode/lo.index.bc",
+          "lib/postgresql/bitcode/lo/lo.bc",
+          "lib/postgresql/lo.so",
+          "share/postgresql/extension/lo--1.0--1.1.sql",
+          "share/postgresql/extension/lo--1.1.sql",
+          "share/postgresql/extension/lo.control"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/lo.so",
@@ -181,6 +199,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

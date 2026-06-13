@@ -2,6 +2,26 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/bitcode/dblink.index.bc",
+          "lib/postgresql/bitcode/dblink/dblink.bc",
+          "lib/postgresql/dblink.so",
+          "share/postgresql/extension/dblink--1.0--1.1.sql",
+          "share/postgresql/extension/dblink--1.1--1.2.sql",
+          "share/postgresql/extension/dblink--1.2.sql",
+          "share/postgresql/extension/dblink.control"
+        ],
+        "5.1": [
+          "lib/postgresql/bitcode/dblink.index.bc",
+          "lib/postgresql/bitcode/dblink/dblink.bc",
+          "lib/postgresql/dblink.so",
+          "share/postgresql/extension/dblink--1.0--1.1.sql",
+          "share/postgresql/extension/dblink--1.1--1.2.sql",
+          "share/postgresql/extension/dblink--1.2.sql",
+          "share/postgresql/extension/dblink.control"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/dblink.so",
@@ -205,6 +225,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

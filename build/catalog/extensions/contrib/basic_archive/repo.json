@@ -2,6 +2,18 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/basic_archive.so",
+          "lib/postgresql/bitcode/basic_archive.index.bc",
+          "lib/postgresql/bitcode/basic_archive/basic_archive.bc"
+        ],
+        "5.1": [
+          "lib/postgresql/basic_archive.so",
+          "lib/postgresql/bitcode/basic_archive.index.bc",
+          "lib/postgresql/bitcode/basic_archive/basic_archive.bc"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/basic_archive.so"
@@ -90,6 +102,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

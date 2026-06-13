@@ -2,6 +2,22 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/bitcode/tsm_system_rows.index.bc",
+          "lib/postgresql/bitcode/tsm_system_rows/tsm_system_rows.bc",
+          "lib/postgresql/tsm_system_rows.so",
+          "share/postgresql/extension/tsm_system_rows--1.0.sql",
+          "share/postgresql/extension/tsm_system_rows.control"
+        ],
+        "5.1": [
+          "lib/postgresql/bitcode/tsm_system_rows.index.bc",
+          "lib/postgresql/bitcode/tsm_system_rows/tsm_system_rows.bc",
+          "lib/postgresql/tsm_system_rows.so",
+          "share/postgresql/extension/tsm_system_rows--1.0.sql",
+          "share/postgresql/extension/tsm_system_rows.control"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/tsm_system_rows.so",
@@ -151,6 +167,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

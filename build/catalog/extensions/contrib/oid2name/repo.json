@@ -2,6 +2,14 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "bin/oid2name"
+        ],
+        "5.1": [
+          "bin/oid2name"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "bin/oid2name"
@@ -93,6 +101,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

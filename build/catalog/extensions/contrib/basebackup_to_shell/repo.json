@@ -2,6 +2,18 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/basebackup_to_shell.so",
+          "lib/postgresql/bitcode/basebackup_to_shell.index.bc",
+          "lib/postgresql/bitcode/basebackup_to_shell/basebackup_to_shell.bc"
+        ],
+        "5.1": [
+          "lib/postgresql/basebackup_to_shell.so",
+          "lib/postgresql/bitcode/basebackup_to_shell.index.bc",
+          "lib/postgresql/bitcode/basebackup_to_shell/basebackup_to_shell.bc"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/basebackup_to_shell.so"
@@ -90,6 +102,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

@@ -2,6 +2,22 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/bitcode/file_fdw.index.bc",
+          "lib/postgresql/bitcode/file_fdw/file_fdw.bc",
+          "lib/postgresql/file_fdw.so",
+          "share/postgresql/extension/file_fdw--1.0.sql",
+          "share/postgresql/extension/file_fdw.control"
+        ],
+        "5.1": [
+          "lib/postgresql/bitcode/file_fdw.index.bc",
+          "lib/postgresql/bitcode/file_fdw/file_fdw.bc",
+          "lib/postgresql/file_fdw.so",
+          "share/postgresql/extension/file_fdw--1.0.sql",
+          "share/postgresql/extension/file_fdw.control"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/file_fdw.so",
@@ -151,6 +167,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

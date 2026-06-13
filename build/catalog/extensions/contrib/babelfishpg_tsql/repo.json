@@ -1,0 +1,97 @@
+{
+  "kind": "contrib",
+  "metadata": {
+    "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/babelfishpg_tsql.so",
+          "lib/postgresql/bitcode/babelfishpg_tsql.index.bc",
+          "share/postgresql/extension/babelfishpg_tsql--1.0.0--1.1.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--1.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--1.1.0--1.2.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--1.2.0--1.2.1.sql",
+          "share/postgresql/extension/babelfishpg_tsql--1.2.1--1.3.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--1.2.1--2.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--1.3.0--2.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.0.0--2.1.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.1.0--2.2.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.2.0--2.3.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.3.0--2.<PG_VERSION>.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.3.0--3.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.5.0--3.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.6.0--3.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.7.0--3.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.<PG_VERSION>--3.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--3.0.0--3.1.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--3.1.0--3.2.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--3.2.0--3.3.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--3.3.0--3.<PG_VERSION>.sql",
+          "share/postgresql/extension/babelfishpg_tsql--3.<PG_VERSION>--<PG_VERSION>.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--<PG_VERSION>.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql.control"
+        ],
+        "5.1": [
+          "lib/postgresql/babelfishpg_tsql.so",
+          "lib/postgresql/bitcode/babelfishpg_tsql.index.bc",
+          "share/postgresql/extension/babelfishpg_tsql--1.0.0--1.1.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--1.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--1.1.0--1.2.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--1.2.0--1.2.1.sql",
+          "share/postgresql/extension/babelfishpg_tsql--1.2.1--1.3.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--1.2.1--2.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--1.3.0--2.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.0.0--2.1.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.1.0--2.2.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.10.0--3.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.11.0--3.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.12.0--3.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.2.0--2.3.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.3.0--2.4.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.3.0--3.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.4.0--3.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.5.0--3.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.6.0--3.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.7.0--3.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.8.0--3.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--2.9.0--3.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--3.0.0--3.1.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--3.1.0--3.2.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--3.2.0--3.3.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--3.3.0--3.4.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--3.4.0--3.5.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--3.4.0--4.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--3.5.0--4.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--3.6.0--4.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--3.7.0--4.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--3.8.0--4.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--3.9.0--4.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--4.0.0--4.1.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--4.1.0--4.2.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--4.2.0--4.3.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--4.3.0--4.4.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--4.4.0--4.5.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--4.4.0--5.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--4.5.0--5.0.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--5.0.0--<PG_VERSION>.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql--<PG_VERSION>.0.sql",
+          "share/postgresql/extension/babelfishpg_tsql.control"
+        ]
+      }
+    },
+    "requires": {
+      "babelfish": {
+        "*": [
+          "babelfishpg_common",
+          "uuid-ossp"
+        ]
+      }
+    }
+  },
+  "version": 1,
+  "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ]
+  }
+}

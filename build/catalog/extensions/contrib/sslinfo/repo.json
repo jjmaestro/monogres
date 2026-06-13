@@ -2,6 +2,26 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/bitcode/sslinfo.index.bc",
+          "lib/postgresql/bitcode/sslinfo/sslinfo.bc",
+          "lib/postgresql/sslinfo.so",
+          "share/postgresql/extension/sslinfo--1.0--1.1.sql",
+          "share/postgresql/extension/sslinfo--1.1--1.2.sql",
+          "share/postgresql/extension/sslinfo--1.2.sql",
+          "share/postgresql/extension/sslinfo.control"
+        ],
+        "5.1": [
+          "lib/postgresql/bitcode/sslinfo.index.bc",
+          "lib/postgresql/bitcode/sslinfo/sslinfo.bc",
+          "lib/postgresql/sslinfo.so",
+          "share/postgresql/extension/sslinfo--1.0--1.1.sql",
+          "share/postgresql/extension/sslinfo--1.1--1.2.sql",
+          "share/postgresql/extension/sslinfo--1.2.sql",
+          "share/postgresql/extension/sslinfo.control"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/sslinfo.so",
@@ -205,6 +225,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

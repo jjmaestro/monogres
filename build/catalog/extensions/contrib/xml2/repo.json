@@ -2,6 +2,24 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/bitcode/pgxml/xpath.bc",
+          "lib/postgresql/bitcode/pgxml/xslt_proc.bc",
+          "lib/postgresql/pgxml.so",
+          "share/postgresql/extension/xml2--1.0--1.1.sql",
+          "share/postgresql/extension/xml2--1.1.sql",
+          "share/postgresql/extension/xml2.control"
+        ],
+        "5.1": [
+          "lib/postgresql/bitcode/pgxml/xpath.bc",
+          "lib/postgresql/bitcode/pgxml/xslt_proc.bc",
+          "lib/postgresql/pgxml.so",
+          "share/postgresql/extension/xml2--1.0--1.1.sql",
+          "share/postgresql/extension/xml2--1.1.sql",
+          "share/postgresql/extension/xml2.control"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/pgxml.so",
@@ -163,6 +181,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

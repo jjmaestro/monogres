@@ -2,6 +2,25 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/bitcode/earthdistance.index.bc",
+          "lib/postgresql/bitcode/earthdistance/earthdistance.bc",
+          "lib/postgresql/earthdistance.so",
+          "share/postgresql/extension/earthdistance--1.0--1.1.sql",
+          "share/postgresql/extension/earthdistance--1.1.sql",
+          "share/postgresql/extension/earthdistance.control"
+        ],
+        "5.1": [
+          "lib/postgresql/bitcode/earthdistance.index.bc",
+          "lib/postgresql/bitcode/earthdistance/earthdistance.bc",
+          "lib/postgresql/earthdistance.so",
+          "share/postgresql/extension/earthdistance--1.0--1.1.sql",
+          "share/postgresql/extension/earthdistance--1.1--1.2.sql",
+          "share/postgresql/extension/earthdistance--1.1.sql",
+          "share/postgresql/extension/earthdistance.control"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/earthdistance.so",
@@ -189,6 +208,11 @@
       }
     },
     "requires": {
+      "babelfish": {
+        "*": [
+          "cube"
+        ]
+      },
       "ivorysql": {
         "*": [
           "cube"
@@ -208,6 +232,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

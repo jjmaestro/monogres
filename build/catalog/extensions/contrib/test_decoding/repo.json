@@ -2,6 +2,18 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/bitcode/test_decoding.index.bc",
+          "lib/postgresql/bitcode/test_decoding/test_decoding.bc",
+          "lib/postgresql/test_decoding.so"
+        ],
+        "5.1": [
+          "lib/postgresql/bitcode/test_decoding.index.bc",
+          "lib/postgresql/bitcode/test_decoding/test_decoding.bc",
+          "lib/postgresql/test_decoding.so"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/test_decoding.so"
@@ -97,6 +109,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",

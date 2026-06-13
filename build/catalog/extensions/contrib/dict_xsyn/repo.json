@@ -2,6 +2,24 @@
   "kind": "contrib",
   "metadata": {
     "files": {
+      "babelfish": {
+        "4.0": [
+          "lib/postgresql/bitcode/dict_xsyn.index.bc",
+          "lib/postgresql/bitcode/dict_xsyn/dict_xsyn.bc",
+          "lib/postgresql/dict_xsyn.so",
+          "share/postgresql/extension/dict_xsyn--1.0.sql",
+          "share/postgresql/extension/dict_xsyn.control",
+          "share/postgresql/tsearch_data/xsyn_sample.rules"
+        ],
+        "5.1": [
+          "lib/postgresql/bitcode/dict_xsyn.index.bc",
+          "lib/postgresql/bitcode/dict_xsyn/dict_xsyn.bc",
+          "lib/postgresql/dict_xsyn.so",
+          "share/postgresql/extension/dict_xsyn--1.0.sql",
+          "share/postgresql/extension/dict_xsyn.control",
+          "share/postgresql/tsearch_data/xsyn_sample.rules"
+        ]
+      },
       "ivorysql": {
         "3.0": [
           "lib/dict_xsyn.so",
@@ -178,6 +196,10 @@
   },
   "version": 1,
   "versions": {
+    "babelfish": [
+      "4.0",
+      "5.1"
+    ],
     "ivorysql": [
       "3.0",
       "4.0",
