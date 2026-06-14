@@ -27,6 +27,66 @@
         "spec": "<5.0/*"
       }
     ],
+    "test_overrides": {
+      "unaccent": {
+        "encoding": "UTF8"
+      },
+      "pgrowlocks": {
+        "load_extension": [
+          "pgrowlocks"
+        ]
+      },
+      "tcn": {
+        "load_extension": [
+          "tcn"
+        ]
+      },
+      "pltcl": {
+        "load_extension": [
+          "pltcl"
+        ]
+      },
+      "hstore_plpython": {
+        "load_extension": [
+          "hstore"
+        ]
+      },
+      "ltree_plpython": {
+        "load_extension": [
+          "ltree"
+        ]
+      },
+      "postgres_fdw": {
+        "isolation": {
+          "load_extension": [
+            "postgres_fdw"
+          ]
+        }
+      },
+      "sepgsql": {
+        "exclude": "SELinux shell harness; impractical in the hermetic sandbox"
+      },
+      "babelfishpg_money": {
+        "exclude": "tests live in the separate babelfish_extensions repo (contrib/babelfishpg_money/test/), merged into contrib/ only inside the build action; not present in @babelfish//<v>/src:dir, so out of single-source-tree harness scope"
+      },
+      "babelfishpg_tsql": {
+        "exclude": "tests live in babelfish_extensions (contrib/babelfishpg_tsql), build-action-merged only; also needs shared_preload_libraries='babelfishpg_tds, pg_stat_statements' + a Babelfish-initialized cluster"
+      }
+    },
+    "test": {
+      "*": {
+        "babelfishpg_money": {
+          "kind": "regress",
+          "tests": [
+            "aggregate",
+            "cast",
+            "comparison",
+            "overflow",
+            "index"
+          ]
+        }
+      }
+    },
     "introspect": {
       "4.0": {
         "barebones": "//catalog/babelfish/introspect:babelfish~4.0~barebones.json",
@@ -128,6 +188,7 @@
             "*": [
               "gettext",
               "libavahi-compat-libdnssd1",
+              "libc-bin",
               "libedit2",
               "libgssapi-krb5-2",
               "libicu72",
@@ -181,6 +242,20 @@
               "tcl",
               "tzdata",
               "zlib1g"
+            ]
+          }
+        }
+      },
+      "test": {
+        "debian": {
+          "12": {
+            "*": [
+              "libipc-run-perl"
+            ]
+          },
+          "13": {
+            "*": [
+              "libipc-run-perl"
             ]
           }
         }

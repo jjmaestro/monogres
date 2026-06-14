@@ -21,6 +21,7 @@
         "/src/contrib/basebackup_to_shell/Makefile",
         "/src/contrib/basic_archive/Makefile",
         "/src/contrib/bloom/Makefile",
+        "/src/contrib/bool_plperl/Makefile",
         "/src/contrib/btree_gin/Makefile",
         "/src/contrib/btree_gist/Makefile",
         "/src/contrib/citext/Makefile",
@@ -32,10 +33,12 @@
         "/src/contrib/file_fdw/Makefile",
         "/src/contrib/fuzzystrmatch/Makefile",
         "/src/contrib/hstore/Makefile",
+        "/src/contrib/hstore_plperl/Makefile",
         "/src/contrib/hstore_plpython/Makefile",
         "/src/contrib/intagg/Makefile",
         "/src/contrib/intarray/Makefile",
         "/src/contrib/isn/Makefile",
+        "/src/contrib/jsonb_plperl/Makefile",
         "/src/contrib/jsonb_plpython/Makefile",
         "/src/contrib/lo/Makefile",
         "/src/contrib/ltree/Makefile",
@@ -76,12 +79,25 @@
             "babelfishpg_common",
             "uuid-ossp"
         ],
+        "bool_plperl": [
+            "plperl",
+            "plperlu"
+        ],
         "earthdistance": [
             "cube"
+        ],
+        "hstore_plperl": [
+            "hstore",
+            "plperl",
+            "plperlu"
         ],
         "hstore_plpython": [
             "hstore",
             "plpython3u"
+        ],
+        "jsonb_plperl": [
+            "plperl",
+            "plperlu"
         ],
         "jsonb_plpython": [
             "plpython3u"
@@ -220,6 +236,13 @@
         "contrib/bloom/blutils.bc": "/babelfish/<PG_VERSION>/lib/postgresql/bitcode/bloom/blutils.bc",
         "contrib/bloom/blvacuum.bc": "/babelfish/<PG_VERSION>/lib/postgresql/bitcode/bloom/blvacuum.bc",
         "contrib/bloom/blvalidate.bc": "/babelfish/<PG_VERSION>/lib/postgresql/bitcode/bloom/blvalidate.bc",
+        "contrib/bool_plperl/bool_plperl--1.0.sql": "/babelfish/<PG_VERSION>/share/postgresql/extension/bool_plperl--1.0.sql",
+        "contrib/bool_plperl/bool_plperl.bc": "/babelfish/<PG_VERSION>/lib/postgresql/bitcode/bool_plperl/bool_plperl.bc",
+        "contrib/bool_plperl/bool_plperl.control": "/babelfish/<PG_VERSION>/share/postgresql/extension/bool_plperl.control",
+        "contrib/bool_plperl/bool_plperl.index.bc": "/babelfish/<PG_VERSION>/lib/postgresql/bitcode/bool_plperl.index.bc",
+        "contrib/bool_plperl/bool_plperl.so": "/babelfish/<PG_VERSION>/lib/postgresql/bool_plperl.so",
+        "contrib/bool_plperl/bool_plperlu--1.0.sql": "/babelfish/<PG_VERSION>/share/postgresql/extension/bool_plperlu--1.0.sql",
+        "contrib/bool_plperl/bool_plperlu.control": "/babelfish/<PG_VERSION>/share/postgresql/extension/bool_plperlu.control",
         "contrib/btree_gin/btree_gin--1.0--1.1.sql": "/babelfish/<PG_VERSION>/share/postgresql/extension/btree_gin--1.0--1.1.sql",
         "contrib/btree_gin/btree_gin--1.0.sql": "/babelfish/<PG_VERSION>/share/postgresql/extension/btree_gin--1.0.sql",
         "contrib/btree_gin/btree_gin--1.1--1.2.sql": "/babelfish/<PG_VERSION>/share/postgresql/extension/btree_gin--1.1--1.2.sql",
@@ -344,6 +367,13 @@
         "contrib/hstore/hstore_io.bc": "/babelfish/<PG_VERSION>/lib/postgresql/bitcode/hstore/hstore_io.bc",
         "contrib/hstore/hstore_op.bc": "/babelfish/<PG_VERSION>/lib/postgresql/bitcode/hstore/hstore_op.bc",
         "contrib/hstore/hstore_subs.bc": "/babelfish/<PG_VERSION>/lib/postgresql/bitcode/hstore/hstore_subs.bc",
+        "contrib/hstore_plperl/hstore_plperl--1.0.sql": "/babelfish/<PG_VERSION>/share/postgresql/extension/hstore_plperl--1.0.sql",
+        "contrib/hstore_plperl/hstore_plperl.bc": "/babelfish/<PG_VERSION>/lib/postgresql/bitcode/hstore_plperl/hstore_plperl.bc",
+        "contrib/hstore_plperl/hstore_plperl.control": "/babelfish/<PG_VERSION>/share/postgresql/extension/hstore_plperl.control",
+        "contrib/hstore_plperl/hstore_plperl.index.bc": "/babelfish/<PG_VERSION>/lib/postgresql/bitcode/hstore_plperl.index.bc",
+        "contrib/hstore_plperl/hstore_plperl.so": "/babelfish/<PG_VERSION>/lib/postgresql/hstore_plperl.so",
+        "contrib/hstore_plperl/hstore_plperlu--1.0.sql": "/babelfish/<PG_VERSION>/share/postgresql/extension/hstore_plperlu--1.0.sql",
+        "contrib/hstore_plperl/hstore_plperlu.control": "/babelfish/<PG_VERSION>/share/postgresql/extension/hstore_plperlu.control",
         "contrib/hstore_plpython/hstore_plpython.bc": "/babelfish/<PG_VERSION>/lib/postgresql/bitcode/hstore_plpython3/hstore_plpython.bc",
         "contrib/hstore_plpython/hstore_plpython3.so": "/babelfish/<PG_VERSION>/lib/postgresql/hstore_plpython3.so",
         "contrib/hstore_plpython/hstore_plpython3u--1.0.sql": "/babelfish/<PG_VERSION>/share/postgresql/extension/hstore_plpython3u--1.0.sql",
@@ -374,6 +404,13 @@
         "contrib/isn/isn.h": "/babelfish/<PG_VERSION>/include/postgresql/server/extension/isn/isn.h",
         "contrib/isn/isn.index.bc": "/babelfish/<PG_VERSION>/lib/postgresql/bitcode/isn.index.bc",
         "contrib/isn/isn.so": "/babelfish/<PG_VERSION>/lib/postgresql/isn.so",
+        "contrib/jsonb_plperl/jsonb_plperl--1.0.sql": "/babelfish/<PG_VERSION>/share/postgresql/extension/jsonb_plperl--1.0.sql",
+        "contrib/jsonb_plperl/jsonb_plperl.bc": "/babelfish/<PG_VERSION>/lib/postgresql/bitcode/jsonb_plperl/jsonb_plperl.bc",
+        "contrib/jsonb_plperl/jsonb_plperl.control": "/babelfish/<PG_VERSION>/share/postgresql/extension/jsonb_plperl.control",
+        "contrib/jsonb_plperl/jsonb_plperl.index.bc": "/babelfish/<PG_VERSION>/lib/postgresql/bitcode/jsonb_plperl.index.bc",
+        "contrib/jsonb_plperl/jsonb_plperl.so": "/babelfish/<PG_VERSION>/lib/postgresql/jsonb_plperl.so",
+        "contrib/jsonb_plperl/jsonb_plperlu--1.0.sql": "/babelfish/<PG_VERSION>/share/postgresql/extension/jsonb_plperlu--1.0.sql",
+        "contrib/jsonb_plperl/jsonb_plperlu.control": "/babelfish/<PG_VERSION>/share/postgresql/extension/jsonb_plperlu.control",
         "contrib/jsonb_plpython/jsonb_plpython.bc": "/babelfish/<PG_VERSION>/lib/postgresql/bitcode/jsonb_plpython3/jsonb_plpython.bc",
         "contrib/jsonb_plpython/jsonb_plpython3.so": "/babelfish/<PG_VERSION>/lib/postgresql/jsonb_plpython3.so",
         "contrib/jsonb_plpython/jsonb_plpython3u--1.0.sql": "/babelfish/<PG_VERSION>/share/postgresql/extension/jsonb_plpython3u--1.0.sql",
@@ -1246,6 +1283,8 @@
         "src/include/postgresql/server/pgstat.h": "/babelfish/<PG_VERSION>/include/postgresql/server/pgstat.h",
         "src/include/postgresql/server/pgtar.h": "/babelfish/<PG_VERSION>/include/postgresql/server/pgtar.h",
         "src/include/postgresql/server/pgtime.h": "/babelfish/<PG_VERSION>/include/postgresql/server/pgtime.h",
+        "src/include/postgresql/server/plperl.h": "/babelfish/<PG_VERSION>/include/postgresql/server/plperl.h",
+        "src/include/postgresql/server/plperl_system.h": "/babelfish/<PG_VERSION>/include/postgresql/server/plperl_system.h",
         "src/include/postgresql/server/plpgsql.h": "/babelfish/<PG_VERSION>/include/postgresql/server/plpgsql.h",
         "src/include/postgresql/server/plpy_cursorobject.h": "/babelfish/<PG_VERSION>/include/postgresql/server/plpy_cursorobject.h",
         "src/include/postgresql/server/plpy_elog.h": "/babelfish/<PG_VERSION>/include/postgresql/server/plpy_elog.h",
@@ -1326,6 +1365,7 @@
         "src/include/postgresql/server/postmaster/syslogger.h": "/babelfish/<PG_VERSION>/include/postgresql/server/postmaster/syslogger.h",
         "src/include/postgresql/server/postmaster/walsummarizer.h": "/babelfish/<PG_VERSION>/include/postgresql/server/postmaster/walsummarizer.h",
         "src/include/postgresql/server/postmaster/walwriter.h": "/babelfish/<PG_VERSION>/include/postgresql/server/postmaster/walwriter.h",
+        "src/include/postgresql/server/ppport.h": "/babelfish/<PG_VERSION>/include/postgresql/server/ppport.h",
         "src/include/postgresql/server/regex/regcustom.h": "/babelfish/<PG_VERSION>/include/postgresql/server/regex/regcustom.h",
         "src/include/postgresql/server/regex/regerrs.h": "/babelfish/<PG_VERSION>/include/postgresql/server/regex/regerrs.h",
         "src/include/postgresql/server/regex/regex.h": "/babelfish/<PG_VERSION>/include/postgresql/server/regex/regex.h",
@@ -2519,8 +2559,11 @@
         "src/lib/postgresql/pgxs/src/test/isolation/isolationtester": "/babelfish/<PG_VERSION>/lib/postgresql/pgxs/src/test/isolation/isolationtester",
         "src/lib/postgresql/pgxs/src/test/isolation/pg_isolation_regress": "/babelfish/<PG_VERSION>/lib/postgresql/pgxs/src/test/isolation/pg_isolation_regress",
         "src/lib/postgresql/pgxs/src/test/regress/pg_regress": "/babelfish/<PG_VERSION>/lib/postgresql/pgxs/src/test/regress/pg_regress",
+        "src/lib/postgresql/plperl.so": "/babelfish/<PG_VERSION>/lib/postgresql/plperl.so",
         "src/lib/postgresql/plpgsql.so": "/babelfish/<PG_VERSION>/lib/postgresql/plpgsql.so",
         "src/lib/postgresql/plpython3.so": "/babelfish/<PG_VERSION>/lib/postgresql/plpython3.so",
+        "src/lib/postgresql/pltcl.so": "/babelfish/<PG_VERSION>/lib/postgresql/pltcl.so",
+        "src/lib/postgresql/regress.so": "/babelfish/<PG_VERSION>/lib/postgresql/regress.so",
         "src/lib/postgresql/utf8_and_big5.so": "/babelfish/<PG_VERSION>/lib/postgresql/utf8_and_big5.so",
         "src/lib/postgresql/utf8_and_cyrillic.so": "/babelfish/<PG_VERSION>/lib/postgresql/utf8_and_cyrillic.so",
         "src/lib/postgresql/utf8_and_euc2004.so": "/babelfish/<PG_VERSION>/lib/postgresql/utf8_and_euc2004.so",
@@ -2555,8 +2598,10 @@
         "src/share/locale/cs/LC_MESSAGES/pg_upgrade-17.mo": "/babelfish/<PG_VERSION>/share/locale/cs/LC_MESSAGES/pg_upgrade-17.mo",
         "src/share/locale/cs/LC_MESSAGES/pg_waldump-17.mo": "/babelfish/<PG_VERSION>/share/locale/cs/LC_MESSAGES/pg_waldump-17.mo",
         "src/share/locale/cs/LC_MESSAGES/pgscripts-17.mo": "/babelfish/<PG_VERSION>/share/locale/cs/LC_MESSAGES/pgscripts-17.mo",
+        "src/share/locale/cs/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/cs/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/cs/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/cs/LC_MESSAGES/plpgsql-17.mo",
         "src/share/locale/cs/LC_MESSAGES/plpython-17.mo": "/babelfish/<PG_VERSION>/share/locale/cs/LC_MESSAGES/plpython-17.mo",
+        "src/share/locale/cs/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/cs/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/cs/LC_MESSAGES/psql-17.mo": "/babelfish/<PG_VERSION>/share/locale/cs/LC_MESSAGES/psql-17.mo",
         "src/share/locale/de/LC_MESSAGES/ecpg-17.mo": "/babelfish/<PG_VERSION>/share/locale/de/LC_MESSAGES/ecpg-17.mo",
         "src/share/locale/de/LC_MESSAGES/ecpglib6-17.mo": "/babelfish/<PG_VERSION>/share/locale/de/LC_MESSAGES/ecpglib6-17.mo",
@@ -2580,8 +2625,10 @@
         "src/share/locale/de/LC_MESSAGES/pg_waldump-17.mo": "/babelfish/<PG_VERSION>/share/locale/de/LC_MESSAGES/pg_waldump-17.mo",
         "src/share/locale/de/LC_MESSAGES/pg_walsummary-17.mo": "/babelfish/<PG_VERSION>/share/locale/de/LC_MESSAGES/pg_walsummary-17.mo",
         "src/share/locale/de/LC_MESSAGES/pgscripts-17.mo": "/babelfish/<PG_VERSION>/share/locale/de/LC_MESSAGES/pgscripts-17.mo",
+        "src/share/locale/de/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/de/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/de/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/de/LC_MESSAGES/plpgsql-17.mo",
         "src/share/locale/de/LC_MESSAGES/plpython-17.mo": "/babelfish/<PG_VERSION>/share/locale/de/LC_MESSAGES/plpython-17.mo",
+        "src/share/locale/de/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/de/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/de/LC_MESSAGES/postgres-17.mo": "/babelfish/<PG_VERSION>/share/locale/de/LC_MESSAGES/postgres-17.mo",
         "src/share/locale/de/LC_MESSAGES/psql-17.mo": "/babelfish/<PG_VERSION>/share/locale/de/LC_MESSAGES/psql-17.mo",
         "src/share/locale/el/LC_MESSAGES/ecpg-17.mo": "/babelfish/<PG_VERSION>/share/locale/el/LC_MESSAGES/ecpg-17.mo",
@@ -2603,8 +2650,10 @@
         "src/share/locale/el/LC_MESSAGES/pg_verifybackup-17.mo": "/babelfish/<PG_VERSION>/share/locale/el/LC_MESSAGES/pg_verifybackup-17.mo",
         "src/share/locale/el/LC_MESSAGES/pg_waldump-17.mo": "/babelfish/<PG_VERSION>/share/locale/el/LC_MESSAGES/pg_waldump-17.mo",
         "src/share/locale/el/LC_MESSAGES/pgscripts-17.mo": "/babelfish/<PG_VERSION>/share/locale/el/LC_MESSAGES/pgscripts-17.mo",
+        "src/share/locale/el/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/el/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/el/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/el/LC_MESSAGES/plpgsql-17.mo",
         "src/share/locale/el/LC_MESSAGES/plpython-17.mo": "/babelfish/<PG_VERSION>/share/locale/el/LC_MESSAGES/plpython-17.mo",
+        "src/share/locale/el/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/el/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/el/LC_MESSAGES/psql-17.mo": "/babelfish/<PG_VERSION>/share/locale/el/LC_MESSAGES/psql-17.mo",
         "src/share/locale/es/LC_MESSAGES/ecpg-17.mo": "/babelfish/<PG_VERSION>/share/locale/es/LC_MESSAGES/ecpg-17.mo",
         "src/share/locale/es/LC_MESSAGES/ecpglib6-17.mo": "/babelfish/<PG_VERSION>/share/locale/es/LC_MESSAGES/ecpglib6-17.mo",
@@ -2628,8 +2677,10 @@
         "src/share/locale/es/LC_MESSAGES/pg_waldump-17.mo": "/babelfish/<PG_VERSION>/share/locale/es/LC_MESSAGES/pg_waldump-17.mo",
         "src/share/locale/es/LC_MESSAGES/pg_walsummary-17.mo": "/babelfish/<PG_VERSION>/share/locale/es/LC_MESSAGES/pg_walsummary-17.mo",
         "src/share/locale/es/LC_MESSAGES/pgscripts-17.mo": "/babelfish/<PG_VERSION>/share/locale/es/LC_MESSAGES/pgscripts-17.mo",
+        "src/share/locale/es/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/es/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/es/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/es/LC_MESSAGES/plpgsql-17.mo",
         "src/share/locale/es/LC_MESSAGES/plpython-17.mo": "/babelfish/<PG_VERSION>/share/locale/es/LC_MESSAGES/plpython-17.mo",
+        "src/share/locale/es/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/es/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/es/LC_MESSAGES/postgres-17.mo": "/babelfish/<PG_VERSION>/share/locale/es/LC_MESSAGES/postgres-17.mo",
         "src/share/locale/es/LC_MESSAGES/psql-17.mo": "/babelfish/<PG_VERSION>/share/locale/es/LC_MESSAGES/psql-17.mo",
         "src/share/locale/fr/LC_MESSAGES/ecpg-17.mo": "/babelfish/<PG_VERSION>/share/locale/fr/LC_MESSAGES/ecpg-17.mo",
@@ -2654,8 +2705,10 @@
         "src/share/locale/fr/LC_MESSAGES/pg_waldump-17.mo": "/babelfish/<PG_VERSION>/share/locale/fr/LC_MESSAGES/pg_waldump-17.mo",
         "src/share/locale/fr/LC_MESSAGES/pg_walsummary-17.mo": "/babelfish/<PG_VERSION>/share/locale/fr/LC_MESSAGES/pg_walsummary-17.mo",
         "src/share/locale/fr/LC_MESSAGES/pgscripts-17.mo": "/babelfish/<PG_VERSION>/share/locale/fr/LC_MESSAGES/pgscripts-17.mo",
+        "src/share/locale/fr/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/fr/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/fr/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/fr/LC_MESSAGES/plpgsql-17.mo",
         "src/share/locale/fr/LC_MESSAGES/plpython-17.mo": "/babelfish/<PG_VERSION>/share/locale/fr/LC_MESSAGES/plpython-17.mo",
+        "src/share/locale/fr/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/fr/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/fr/LC_MESSAGES/postgres-17.mo": "/babelfish/<PG_VERSION>/share/locale/fr/LC_MESSAGES/postgres-17.mo",
         "src/share/locale/fr/LC_MESSAGES/psql-17.mo": "/babelfish/<PG_VERSION>/share/locale/fr/LC_MESSAGES/psql-17.mo",
         "src/share/locale/he/LC_MESSAGES/initdb-17.mo": "/babelfish/<PG_VERSION>/share/locale/he/LC_MESSAGES/initdb-17.mo",
@@ -2686,8 +2739,10 @@
         "src/share/locale/it/LC_MESSAGES/pg_verifybackup-17.mo": "/babelfish/<PG_VERSION>/share/locale/it/LC_MESSAGES/pg_verifybackup-17.mo",
         "src/share/locale/it/LC_MESSAGES/pg_waldump-17.mo": "/babelfish/<PG_VERSION>/share/locale/it/LC_MESSAGES/pg_waldump-17.mo",
         "src/share/locale/it/LC_MESSAGES/pgscripts-17.mo": "/babelfish/<PG_VERSION>/share/locale/it/LC_MESSAGES/pgscripts-17.mo",
+        "src/share/locale/it/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/it/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/it/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/it/LC_MESSAGES/plpgsql-17.mo",
         "src/share/locale/it/LC_MESSAGES/plpython-17.mo": "/babelfish/<PG_VERSION>/share/locale/it/LC_MESSAGES/plpython-17.mo",
+        "src/share/locale/it/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/it/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/it/LC_MESSAGES/postgres-17.mo": "/babelfish/<PG_VERSION>/share/locale/it/LC_MESSAGES/postgres-17.mo",
         "src/share/locale/it/LC_MESSAGES/psql-17.mo": "/babelfish/<PG_VERSION>/share/locale/it/LC_MESSAGES/psql-17.mo",
         "src/share/locale/ja/LC_MESSAGES/ecpg-17.mo": "/babelfish/<PG_VERSION>/share/locale/ja/LC_MESSAGES/ecpg-17.mo",
@@ -2712,8 +2767,10 @@
         "src/share/locale/ja/LC_MESSAGES/pg_waldump-17.mo": "/babelfish/<PG_VERSION>/share/locale/ja/LC_MESSAGES/pg_waldump-17.mo",
         "src/share/locale/ja/LC_MESSAGES/pg_walsummary-17.mo": "/babelfish/<PG_VERSION>/share/locale/ja/LC_MESSAGES/pg_walsummary-17.mo",
         "src/share/locale/ja/LC_MESSAGES/pgscripts-17.mo": "/babelfish/<PG_VERSION>/share/locale/ja/LC_MESSAGES/pgscripts-17.mo",
+        "src/share/locale/ja/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/ja/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/ja/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/ja/LC_MESSAGES/plpgsql-17.mo",
         "src/share/locale/ja/LC_MESSAGES/plpython-17.mo": "/babelfish/<PG_VERSION>/share/locale/ja/LC_MESSAGES/plpython-17.mo",
+        "src/share/locale/ja/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/ja/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/ja/LC_MESSAGES/postgres-17.mo": "/babelfish/<PG_VERSION>/share/locale/ja/LC_MESSAGES/postgres-17.mo",
         "src/share/locale/ja/LC_MESSAGES/psql-17.mo": "/babelfish/<PG_VERSION>/share/locale/ja/LC_MESSAGES/psql-17.mo",
         "src/share/locale/ka/LC_MESSAGES/ecpg-17.mo": "/babelfish/<PG_VERSION>/share/locale/ka/LC_MESSAGES/ecpg-17.mo",
@@ -2738,8 +2795,10 @@
         "src/share/locale/ka/LC_MESSAGES/pg_waldump-17.mo": "/babelfish/<PG_VERSION>/share/locale/ka/LC_MESSAGES/pg_waldump-17.mo",
         "src/share/locale/ka/LC_MESSAGES/pg_walsummary-17.mo": "/babelfish/<PG_VERSION>/share/locale/ka/LC_MESSAGES/pg_walsummary-17.mo",
         "src/share/locale/ka/LC_MESSAGES/pgscripts-17.mo": "/babelfish/<PG_VERSION>/share/locale/ka/LC_MESSAGES/pgscripts-17.mo",
+        "src/share/locale/ka/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/ka/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/ka/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/ka/LC_MESSAGES/plpgsql-17.mo",
         "src/share/locale/ka/LC_MESSAGES/plpython-17.mo": "/babelfish/<PG_VERSION>/share/locale/ka/LC_MESSAGES/plpython-17.mo",
+        "src/share/locale/ka/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/ka/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/ka/LC_MESSAGES/postgres-17.mo": "/babelfish/<PG_VERSION>/share/locale/ka/LC_MESSAGES/postgres-17.mo",
         "src/share/locale/ka/LC_MESSAGES/psql-17.mo": "/babelfish/<PG_VERSION>/share/locale/ka/LC_MESSAGES/psql-17.mo",
         "src/share/locale/ko/LC_MESSAGES/ecpg-17.mo": "/babelfish/<PG_VERSION>/share/locale/ko/LC_MESSAGES/ecpg-17.mo",
@@ -2764,8 +2823,10 @@
         "src/share/locale/ko/LC_MESSAGES/pg_waldump-17.mo": "/babelfish/<PG_VERSION>/share/locale/ko/LC_MESSAGES/pg_waldump-17.mo",
         "src/share/locale/ko/LC_MESSAGES/pg_walsummary-17.mo": "/babelfish/<PG_VERSION>/share/locale/ko/LC_MESSAGES/pg_walsummary-17.mo",
         "src/share/locale/ko/LC_MESSAGES/pgscripts-17.mo": "/babelfish/<PG_VERSION>/share/locale/ko/LC_MESSAGES/pgscripts-17.mo",
+        "src/share/locale/ko/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/ko/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/ko/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/ko/LC_MESSAGES/plpgsql-17.mo",
         "src/share/locale/ko/LC_MESSAGES/plpython-17.mo": "/babelfish/<PG_VERSION>/share/locale/ko/LC_MESSAGES/plpython-17.mo",
+        "src/share/locale/ko/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/ko/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/ko/LC_MESSAGES/postgres-17.mo": "/babelfish/<PG_VERSION>/share/locale/ko/LC_MESSAGES/postgres-17.mo",
         "src/share/locale/ko/LC_MESSAGES/psql-17.mo": "/babelfish/<PG_VERSION>/share/locale/ko/LC_MESSAGES/psql-17.mo",
         "src/share/locale/nb/LC_MESSAGES/pg_config-17.mo": "/babelfish/<PG_VERSION>/share/locale/nb/LC_MESSAGES/pg_config-17.mo",
@@ -2784,8 +2845,10 @@
         "src/share/locale/pl/LC_MESSAGES/pg_test_fsync-17.mo": "/babelfish/<PG_VERSION>/share/locale/pl/LC_MESSAGES/pg_test_fsync-17.mo",
         "src/share/locale/pl/LC_MESSAGES/pg_test_timing-17.mo": "/babelfish/<PG_VERSION>/share/locale/pl/LC_MESSAGES/pg_test_timing-17.mo",
         "src/share/locale/pl/LC_MESSAGES/pgscripts-17.mo": "/babelfish/<PG_VERSION>/share/locale/pl/LC_MESSAGES/pgscripts-17.mo",
+        "src/share/locale/pl/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/pl/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/pl/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/pl/LC_MESSAGES/plpgsql-17.mo",
         "src/share/locale/pl/LC_MESSAGES/plpython-17.mo": "/babelfish/<PG_VERSION>/share/locale/pl/LC_MESSAGES/plpython-17.mo",
+        "src/share/locale/pl/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/pl/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/pl/LC_MESSAGES/postgres-17.mo": "/babelfish/<PG_VERSION>/share/locale/pl/LC_MESSAGES/postgres-17.mo",
         "src/share/locale/pl/LC_MESSAGES/psql-17.mo": "/babelfish/<PG_VERSION>/share/locale/pl/LC_MESSAGES/psql-17.mo",
         "src/share/locale/pt_BR/LC_MESSAGES/ecpg-17.mo": "/babelfish/<PG_VERSION>/share/locale/pt_BR/LC_MESSAGES/ecpg-17.mo",
@@ -2804,12 +2867,16 @@
         "src/share/locale/pt_BR/LC_MESSAGES/pg_test_fsync-17.mo": "/babelfish/<PG_VERSION>/share/locale/pt_BR/LC_MESSAGES/pg_test_fsync-17.mo",
         "src/share/locale/pt_BR/LC_MESSAGES/pg_test_timing-17.mo": "/babelfish/<PG_VERSION>/share/locale/pt_BR/LC_MESSAGES/pg_test_timing-17.mo",
         "src/share/locale/pt_BR/LC_MESSAGES/pgscripts-17.mo": "/babelfish/<PG_VERSION>/share/locale/pt_BR/LC_MESSAGES/pgscripts-17.mo",
+        "src/share/locale/pt_BR/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/pt_BR/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/pt_BR/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/pt_BR/LC_MESSAGES/plpgsql-17.mo",
         "src/share/locale/pt_BR/LC_MESSAGES/plpython-17.mo": "/babelfish/<PG_VERSION>/share/locale/pt_BR/LC_MESSAGES/plpython-17.mo",
+        "src/share/locale/pt_BR/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/pt_BR/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/pt_BR/LC_MESSAGES/postgres-17.mo": "/babelfish/<PG_VERSION>/share/locale/pt_BR/LC_MESSAGES/postgres-17.mo",
         "src/share/locale/pt_BR/LC_MESSAGES/psql-17.mo": "/babelfish/<PG_VERSION>/share/locale/pt_BR/LC_MESSAGES/psql-17.mo",
         "src/share/locale/ro/LC_MESSAGES/pg_config-17.mo": "/babelfish/<PG_VERSION>/share/locale/ro/LC_MESSAGES/pg_config-17.mo",
+        "src/share/locale/ro/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/ro/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/ro/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/ro/LC_MESSAGES/plpgsql-17.mo",
+        "src/share/locale/ro/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/ro/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/ru/LC_MESSAGES/ecpg-17.mo": "/babelfish/<PG_VERSION>/share/locale/ru/LC_MESSAGES/ecpg-17.mo",
         "src/share/locale/ru/LC_MESSAGES/ecpglib6-17.mo": "/babelfish/<PG_VERSION>/share/locale/ru/LC_MESSAGES/ecpglib6-17.mo",
         "src/share/locale/ru/LC_MESSAGES/initdb-17.mo": "/babelfish/<PG_VERSION>/share/locale/ru/LC_MESSAGES/initdb-17.mo",
@@ -2832,8 +2899,10 @@
         "src/share/locale/ru/LC_MESSAGES/pg_waldump-17.mo": "/babelfish/<PG_VERSION>/share/locale/ru/LC_MESSAGES/pg_waldump-17.mo",
         "src/share/locale/ru/LC_MESSAGES/pg_walsummary-17.mo": "/babelfish/<PG_VERSION>/share/locale/ru/LC_MESSAGES/pg_walsummary-17.mo",
         "src/share/locale/ru/LC_MESSAGES/pgscripts-17.mo": "/babelfish/<PG_VERSION>/share/locale/ru/LC_MESSAGES/pgscripts-17.mo",
+        "src/share/locale/ru/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/ru/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/ru/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/ru/LC_MESSAGES/plpgsql-17.mo",
         "src/share/locale/ru/LC_MESSAGES/plpython-17.mo": "/babelfish/<PG_VERSION>/share/locale/ru/LC_MESSAGES/plpython-17.mo",
+        "src/share/locale/ru/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/ru/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/ru/LC_MESSAGES/postgres-17.mo": "/babelfish/<PG_VERSION>/share/locale/ru/LC_MESSAGES/postgres-17.mo",
         "src/share/locale/ru/LC_MESSAGES/psql-17.mo": "/babelfish/<PG_VERSION>/share/locale/ru/LC_MESSAGES/psql-17.mo",
         "src/share/locale/sv/LC_MESSAGES/ecpg-17.mo": "/babelfish/<PG_VERSION>/share/locale/sv/LC_MESSAGES/ecpg-17.mo",
@@ -2858,8 +2927,10 @@
         "src/share/locale/sv/LC_MESSAGES/pg_waldump-17.mo": "/babelfish/<PG_VERSION>/share/locale/sv/LC_MESSAGES/pg_waldump-17.mo",
         "src/share/locale/sv/LC_MESSAGES/pg_walsummary-17.mo": "/babelfish/<PG_VERSION>/share/locale/sv/LC_MESSAGES/pg_walsummary-17.mo",
         "src/share/locale/sv/LC_MESSAGES/pgscripts-17.mo": "/babelfish/<PG_VERSION>/share/locale/sv/LC_MESSAGES/pgscripts-17.mo",
+        "src/share/locale/sv/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/sv/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/sv/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/sv/LC_MESSAGES/plpgsql-17.mo",
         "src/share/locale/sv/LC_MESSAGES/plpython-17.mo": "/babelfish/<PG_VERSION>/share/locale/sv/LC_MESSAGES/plpython-17.mo",
+        "src/share/locale/sv/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/sv/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/sv/LC_MESSAGES/postgres-17.mo": "/babelfish/<PG_VERSION>/share/locale/sv/LC_MESSAGES/postgres-17.mo",
         "src/share/locale/sv/LC_MESSAGES/psql-17.mo": "/babelfish/<PG_VERSION>/share/locale/sv/LC_MESSAGES/psql-17.mo",
         "src/share/locale/ta/LC_MESSAGES/pg_config-17.mo": "/babelfish/<PG_VERSION>/share/locale/ta/LC_MESSAGES/pg_config-17.mo",
@@ -2881,8 +2952,10 @@
         "src/share/locale/tr/LC_MESSAGES/pg_upgrade-17.mo": "/babelfish/<PG_VERSION>/share/locale/tr/LC_MESSAGES/pg_upgrade-17.mo",
         "src/share/locale/tr/LC_MESSAGES/pg_waldump-17.mo": "/babelfish/<PG_VERSION>/share/locale/tr/LC_MESSAGES/pg_waldump-17.mo",
         "src/share/locale/tr/LC_MESSAGES/pgscripts-17.mo": "/babelfish/<PG_VERSION>/share/locale/tr/LC_MESSAGES/pgscripts-17.mo",
+        "src/share/locale/tr/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/tr/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/tr/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/tr/LC_MESSAGES/plpgsql-17.mo",
         "src/share/locale/tr/LC_MESSAGES/plpython-17.mo": "/babelfish/<PG_VERSION>/share/locale/tr/LC_MESSAGES/plpython-17.mo",
+        "src/share/locale/tr/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/tr/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/tr/LC_MESSAGES/postgres-17.mo": "/babelfish/<PG_VERSION>/share/locale/tr/LC_MESSAGES/postgres-17.mo",
         "src/share/locale/tr/LC_MESSAGES/psql-17.mo": "/babelfish/<PG_VERSION>/share/locale/tr/LC_MESSAGES/psql-17.mo",
         "src/share/locale/uk/LC_MESSAGES/ecpg-17.mo": "/babelfish/<PG_VERSION>/share/locale/uk/LC_MESSAGES/ecpg-17.mo",
@@ -2907,8 +2980,10 @@
         "src/share/locale/uk/LC_MESSAGES/pg_waldump-17.mo": "/babelfish/<PG_VERSION>/share/locale/uk/LC_MESSAGES/pg_waldump-17.mo",
         "src/share/locale/uk/LC_MESSAGES/pg_walsummary-17.mo": "/babelfish/<PG_VERSION>/share/locale/uk/LC_MESSAGES/pg_walsummary-17.mo",
         "src/share/locale/uk/LC_MESSAGES/pgscripts-17.mo": "/babelfish/<PG_VERSION>/share/locale/uk/LC_MESSAGES/pgscripts-17.mo",
+        "src/share/locale/uk/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/uk/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/uk/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/uk/LC_MESSAGES/plpgsql-17.mo",
         "src/share/locale/uk/LC_MESSAGES/plpython-17.mo": "/babelfish/<PG_VERSION>/share/locale/uk/LC_MESSAGES/plpython-17.mo",
+        "src/share/locale/uk/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/uk/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/uk/LC_MESSAGES/postgres-17.mo": "/babelfish/<PG_VERSION>/share/locale/uk/LC_MESSAGES/postgres-17.mo",
         "src/share/locale/uk/LC_MESSAGES/psql-17.mo": "/babelfish/<PG_VERSION>/share/locale/uk/LC_MESSAGES/psql-17.mo",
         "src/share/locale/vi/LC_MESSAGES/ecpg-17.mo": "/babelfish/<PG_VERSION>/share/locale/vi/LC_MESSAGES/ecpg-17.mo",
@@ -2921,8 +2996,10 @@
         "src/share/locale/vi/LC_MESSAGES/pg_test_fsync-17.mo": "/babelfish/<PG_VERSION>/share/locale/vi/LC_MESSAGES/pg_test_fsync-17.mo",
         "src/share/locale/vi/LC_MESSAGES/pg_test_timing-17.mo": "/babelfish/<PG_VERSION>/share/locale/vi/LC_MESSAGES/pg_test_timing-17.mo",
         "src/share/locale/vi/LC_MESSAGES/pg_waldump-17.mo": "/babelfish/<PG_VERSION>/share/locale/vi/LC_MESSAGES/pg_waldump-17.mo",
+        "src/share/locale/vi/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/vi/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/vi/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/vi/LC_MESSAGES/plpgsql-17.mo",
         "src/share/locale/vi/LC_MESSAGES/plpython-17.mo": "/babelfish/<PG_VERSION>/share/locale/vi/LC_MESSAGES/plpython-17.mo",
+        "src/share/locale/vi/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/vi/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/zh_CN/LC_MESSAGES/ecpg-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_CN/LC_MESSAGES/ecpg-17.mo",
         "src/share/locale/zh_CN/LC_MESSAGES/ecpglib6-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_CN/LC_MESSAGES/ecpglib6-17.mo",
         "src/share/locale/zh_CN/LC_MESSAGES/initdb-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_CN/LC_MESSAGES/initdb-17.mo",
@@ -2943,8 +3020,10 @@
         "src/share/locale/zh_CN/LC_MESSAGES/pg_verifybackup-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_CN/LC_MESSAGES/pg_verifybackup-17.mo",
         "src/share/locale/zh_CN/LC_MESSAGES/pg_waldump-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_CN/LC_MESSAGES/pg_waldump-17.mo",
         "src/share/locale/zh_CN/LC_MESSAGES/pgscripts-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_CN/LC_MESSAGES/pgscripts-17.mo",
+        "src/share/locale/zh_CN/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_CN/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/zh_CN/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_CN/LC_MESSAGES/plpgsql-17.mo",
         "src/share/locale/zh_CN/LC_MESSAGES/plpython-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_CN/LC_MESSAGES/plpython-17.mo",
+        "src/share/locale/zh_CN/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_CN/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/zh_CN/LC_MESSAGES/postgres-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_CN/LC_MESSAGES/postgres-17.mo",
         "src/share/locale/zh_CN/LC_MESSAGES/psql-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_CN/LC_MESSAGES/psql-17.mo",
         "src/share/locale/zh_TW/LC_MESSAGES/ecpg-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_TW/LC_MESSAGES/ecpg-17.mo",
@@ -2962,14 +3041,24 @@
         "src/share/locale/zh_TW/LC_MESSAGES/pg_test_timing-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_TW/LC_MESSAGES/pg_test_timing-17.mo",
         "src/share/locale/zh_TW/LC_MESSAGES/pg_verifybackup-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_TW/LC_MESSAGES/pg_verifybackup-17.mo",
         "src/share/locale/zh_TW/LC_MESSAGES/pg_waldump-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_TW/LC_MESSAGES/pg_waldump-17.mo",
+        "src/share/locale/zh_TW/LC_MESSAGES/plperl-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_TW/LC_MESSAGES/plperl-17.mo",
         "src/share/locale/zh_TW/LC_MESSAGES/plpgsql-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_TW/LC_MESSAGES/plpgsql-17.mo",
         "src/share/locale/zh_TW/LC_MESSAGES/plpython-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_TW/LC_MESSAGES/plpython-17.mo",
+        "src/share/locale/zh_TW/LC_MESSAGES/pltcl-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_TW/LC_MESSAGES/pltcl-17.mo",
         "src/share/locale/zh_TW/LC_MESSAGES/psql-17.mo": "/babelfish/<PG_VERSION>/share/locale/zh_TW/LC_MESSAGES/psql-17.mo",
         "src/share/postgresql/errcodes.txt": "/babelfish/<PG_VERSION>/share/postgresql/errcodes.txt",
+        "src/share/postgresql/extension/plperl--1.0.sql": "/babelfish/<PG_VERSION>/share/postgresql/extension/plperl--1.0.sql",
+        "src/share/postgresql/extension/plperl.control": "/babelfish/<PG_VERSION>/share/postgresql/extension/plperl.control",
+        "src/share/postgresql/extension/plperlu--1.0.sql": "/babelfish/<PG_VERSION>/share/postgresql/extension/plperlu--1.0.sql",
+        "src/share/postgresql/extension/plperlu.control": "/babelfish/<PG_VERSION>/share/postgresql/extension/plperlu.control",
         "src/share/postgresql/extension/plpgsql--1.0.sql": "/babelfish/<PG_VERSION>/share/postgresql/extension/plpgsql--1.0.sql",
         "src/share/postgresql/extension/plpgsql.control": "/babelfish/<PG_VERSION>/share/postgresql/extension/plpgsql.control",
         "src/share/postgresql/extension/plpython3u--1.0.sql": "/babelfish/<PG_VERSION>/share/postgresql/extension/plpython3u--1.0.sql",
         "src/share/postgresql/extension/plpython3u.control": "/babelfish/<PG_VERSION>/share/postgresql/extension/plpython3u.control",
+        "src/share/postgresql/extension/pltcl--1.0.sql": "/babelfish/<PG_VERSION>/share/postgresql/extension/pltcl--1.0.sql",
+        "src/share/postgresql/extension/pltcl.control": "/babelfish/<PG_VERSION>/share/postgresql/extension/pltcl.control",
+        "src/share/postgresql/extension/pltclu--1.0.sql": "/babelfish/<PG_VERSION>/share/postgresql/extension/pltclu--1.0.sql",
+        "src/share/postgresql/extension/pltclu.control": "/babelfish/<PG_VERSION>/share/postgresql/extension/pltclu.control",
         "src/share/postgresql/information_schema.sql": "/babelfish/<PG_VERSION>/share/postgresql/information_schema.sql",
         "src/share/postgresql/pg_hba.conf.sample": "/babelfish/<PG_VERSION>/share/postgresql/pg_hba.conf.sample",
         "src/share/postgresql/pg_ident.conf.sample": "/babelfish/<PG_VERSION>/share/postgresql/pg_ident.conf.sample",
@@ -3031,6 +3120,995 @@
             "id": "bin@run",
             "name": "postgres",
             "type": "executable"
+        }
+    ],
+    "test_suites": [
+        {
+            "kind": "regress",
+            "max_conc": 20,
+            "schedule": "parallel_schedule",
+            "slug": "regress",
+            "subtree": "src/test/regress",
+            "tests": [
+                "test_setup",
+                "boolean",
+                "char",
+                "name",
+                "varchar",
+                "text",
+                "int2",
+                "int4",
+                "int8",
+                "oid",
+                "float4",
+                "float8",
+                "bit",
+                "numeric",
+                "txid",
+                "uuid",
+                "enum",
+                "money",
+                "rangetypes",
+                "pg_lsn",
+                "regproc",
+                "strings",
+                "md5",
+                "numerology",
+                "point",
+                "lseg",
+                "line",
+                "box",
+                "path",
+                "polygon",
+                "circle",
+                "date",
+                "time",
+                "timetz",
+                "timestamp",
+                "timestamptz",
+                "interval",
+                "inet",
+                "macaddr",
+                "macaddr8",
+                "multirangetypes",
+                "geometry",
+                "horology",
+                "tstypes",
+                "regex",
+                "type_sanity",
+                "opr_sanity",
+                "misc_sanity",
+                "comments",
+                "expressions",
+                "unicode",
+                "xid",
+                "mvcc",
+                "database",
+                "copy",
+                "copyselect",
+                "copydml",
+                "insert",
+                "insert_conflict",
+                "create_function_c",
+                "create_misc",
+                "create_operator",
+                "create_procedure",
+                "create_table",
+                "create_type",
+                "create_schema",
+                "create_index",
+                "create_index_spgist",
+                "create_view",
+                "index_including",
+                "index_including_gist",
+                "create_aggregate",
+                "create_function_sql",
+                "create_cast",
+                "constraints",
+                "triggers",
+                "select",
+                "inherit",
+                "typed_table",
+                "vacuum",
+                "drop_if_exists",
+                "updatable_views",
+                "roleattributes",
+                "create_am",
+                "hash_func",
+                "errors",
+                "infinite_recurse",
+                "sanity_check",
+                "select_into",
+                "select_distinct",
+                "select_distinct_on",
+                "select_implicit",
+                "select_having",
+                "subselect",
+                "union",
+                "case",
+                "join",
+                "aggregates",
+                "transactions",
+                "random",
+                "portals",
+                "arrays",
+                "btree_index",
+                "hash_index",
+                "update",
+                "delete",
+                "namespace",
+                "prepared_xacts",
+                "brin",
+                "gin",
+                "gist",
+                "spgist",
+                "privileges",
+                "init_privs",
+                "security_label",
+                "collate",
+                "matview",
+                "lock",
+                "replica_identity",
+                "rowsecurity",
+                "object_address",
+                "tablesample",
+                "groupingsets",
+                "drop_operator",
+                "password",
+                "identity",
+                "generated",
+                "join_hash",
+                "brin_bloom",
+                "brin_multi",
+                "create_table_like",
+                "alter_generic",
+                "alter_operator",
+                "misc",
+                "async",
+                "dbsize",
+                "merge",
+                "misc_functions",
+                "sysviews",
+                "tsrf",
+                "tid",
+                "tidscan",
+                "tidrangescan",
+                "collate.utf8",
+                "collate.icu.utf8",
+                "incremental_sort",
+                "create_role",
+                "rules",
+                "psql",
+                "psql_crosstab",
+                "amutils",
+                "stats_ext",
+                "collate.linux.utf8",
+                "collate.windows.win1252",
+                "select_parallel",
+                "write_parallel",
+                "vacuum_parallel",
+                "publication",
+                "subscription",
+                "select_views",
+                "portals_p2",
+                "foreign_key",
+                "cluster",
+                "dependency",
+                "guc",
+                "bitmapops",
+                "combocid",
+                "tsearch",
+                "tsdicts",
+                "foreign_data",
+                "window",
+                "xmlmap",
+                "functional_deps",
+                "advisory_lock",
+                "indirect_toast",
+                "equivclass",
+                "json",
+                "jsonb",
+                "json_encoding",
+                "jsonpath",
+                "jsonpath_encoding",
+                "jsonb_jsonpath",
+                "sqljson",
+                "sqljson_queryfuncs",
+                "sqljson_jsontable",
+                "plancache",
+                "limit",
+                "plpgsql",
+                "copy2",
+                "temp",
+                "domain",
+                "rangefuncs",
+                "prepare",
+                "conversion",
+                "truncate",
+                "alter_table",
+                "sequence",
+                "polymorphism",
+                "rowtypes",
+                "returning",
+                "largeobject",
+                "with",
+                "xml",
+                "partition_join",
+                "partition_prune",
+                "reloptions",
+                "hash_part",
+                "indexing",
+                "partition_aggregate",
+                "partition_info",
+                "tuplesort",
+                "explain",
+                "compression",
+                "memoize",
+                "stats",
+                "predicate",
+                "oidjoins",
+                "event_trigger",
+                "event_trigger_login",
+                "fast_default",
+                "serializable",
+                "tablespace",
+                "babel_5343_returning"
+            ]
+        },
+        {
+            "kind": "isolation",
+            "schedule": "isolation_schedule",
+            "slug": "isolation",
+            "subtree": "src/test/isolation",
+            "tests": [
+                "read-only-anomaly",
+                "read-only-anomaly-2",
+                "read-only-anomaly-3",
+                "read-write-unique",
+                "read-write-unique-2",
+                "read-write-unique-3",
+                "read-write-unique-4",
+                "simple-write-skew",
+                "receipt-report",
+                "temporal-range-integrity",
+                "project-manager",
+                "classroom-scheduling",
+                "total-cash",
+                "referential-integrity",
+                "ri-trigger",
+                "partial-index",
+                "two-ids",
+                "multiple-row-versions",
+                "index-only-scan",
+                "predicate-lock-hot-tuple",
+                "update-conflict-out",
+                "deadlock-simple",
+                "deadlock-hard",
+                "deadlock-soft",
+                "deadlock-soft-2",
+                "deadlock-parallel",
+                "detach-partition-concurrently-1",
+                "detach-partition-concurrently-2",
+                "detach-partition-concurrently-3",
+                "detach-partition-concurrently-4",
+                "fk-contention",
+                "fk-deadlock",
+                "fk-deadlock2",
+                "fk-partitioned-1",
+                "fk-partitioned-2",
+                "fk-snapshot",
+                "subxid-overflow",
+                "eval-plan-qual",
+                "eval-plan-qual-trigger",
+                "inplace-inval",
+                "intra-grant-inplace",
+                "intra-grant-inplace-db",
+                "lock-update-delete",
+                "lock-update-traversal",
+                "inherit-temp",
+                "temp-schema-cleanup",
+                "insert-conflict-do-nothing",
+                "insert-conflict-do-nothing-2",
+                "insert-conflict-do-update",
+                "insert-conflict-do-update-2",
+                "insert-conflict-do-update-3",
+                "insert-conflict-specconflict",
+                "merge-insert-update",
+                "merge-delete",
+                "merge-update",
+                "merge-match-recheck",
+                "merge-join",
+                "delete-abort-savept",
+                "delete-abort-savept-2",
+                "aborted-keyrevoke",
+                "multixact-no-deadlock",
+                "multixact-no-forget",
+                "lock-committed-update",
+                "lock-committed-keyupdate",
+                "update-locked-tuple",
+                "reindex-concurrently",
+                "reindex-concurrently-toast",
+                "reindex-schema",
+                "propagate-lock-delete",
+                "tuplelock-conflict",
+                "tuplelock-update",
+                "tuplelock-upgrade-no-deadlock",
+                "tuplelock-partition",
+                "freeze-the-dead",
+                "nowait",
+                "nowait-2",
+                "nowait-3",
+                "nowait-4",
+                "nowait-5",
+                "skip-locked",
+                "skip-locked-2",
+                "skip-locked-3",
+                "skip-locked-4",
+                "drop-index-concurrently-1",
+                "multiple-cic",
+                "alter-table-1",
+                "alter-table-2",
+                "alter-table-3",
+                "alter-table-4",
+                "create-trigger",
+                "sequence-ddl",
+                "async-notify",
+                "vacuum-no-cleanup-lock",
+                "timeouts",
+                "vacuum-concurrent-drop",
+                "vacuum-conflict",
+                "vacuum-skip-locked",
+                "stats",
+                "horizons",
+                "predicate-hash",
+                "predicate-gist",
+                "predicate-gin",
+                "partition-concurrent-attach",
+                "partition-drop-index-locking",
+                "partition-key-update-1",
+                "partition-key-update-2",
+                "partition-key-update-3",
+                "partition-key-update-4",
+                "plpgsql-toast",
+                "cluster-conflict",
+                "cluster-conflict-partition",
+                "truncate-conflict",
+                "serializable-parallel",
+                "serializable-parallel-2",
+                "serializable-parallel-3",
+                "matview-write-skew",
+                "lock-nowait"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "plpgsql",
+            "subtree": "src/pl/plpgsql/src",
+            "tests": [
+                "plpgsql_array",
+                "plpgsql_cache",
+                "plpgsql_call",
+                "plpgsql_control",
+                "plpgsql_copy",
+                "plpgsql_domain",
+                "plpgsql_misc",
+                "plpgsql_record",
+                "plpgsql_simple",
+                "plpgsql_transaction",
+                "plpgsql_trap",
+                "plpgsql_trigger",
+                "plpgsql_varprops"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "plperl",
+            "subtree": "src/pl/plperl",
+            "tests": [
+                "plperl_setup",
+                "plperl",
+                "plperl_lc",
+                "plperl_trigger",
+                "plperl_shared",
+                "plperl_elog",
+                "plperl_util",
+                "plperl_init",
+                "plperlu",
+                "plperl_array",
+                "plperl_call",
+                "plperl_transaction",
+                "plperl_env"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "pltcl",
+            "subtree": "src/pl/tcl",
+            "tests": [
+                "pltcl_setup",
+                "pltcl_queries",
+                "pltcl_trigger",
+                "pltcl_call",
+                "pltcl_start_proc",
+                "pltcl_subxact",
+                "pltcl_unicode",
+                "pltcl_transaction"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "plpython",
+            "subtree": "src/pl/plpython",
+            "tests": [
+                "plpython_schema",
+                "plpython_populate",
+                "plpython_test",
+                "plpython_do",
+                "plpython_global",
+                "plpython_import",
+                "plpython_spi",
+                "plpython_newline",
+                "plpython_void",
+                "plpython_call",
+                "plpython_params",
+                "plpython_setof",
+                "plpython_record",
+                "plpython_trigger",
+                "plpython_types",
+                "plpython_error",
+                "plpython_ereport",
+                "plpython_unicode",
+                "plpython_quote",
+                "plpython_composite",
+                "plpython_subtransaction",
+                "plpython_transaction",
+                "plpython_drop"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "amcheck",
+            "subtree": "contrib/amcheck",
+            "tests": [
+                "check",
+                "check_btree",
+                "check_heap"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "babelfishpg_money",
+            "subtree": "contrib/babelfishpg_money",
+            "tests": [
+                "echo",
+                "aggregate",
+                "cast",
+                "comparison",
+                "overflow"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "babelfishpg_tsql",
+            "subtree": "contrib/babelfishpg_tsql",
+            "tests": [
+                "test/babel_like"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "basic_archive",
+            "subtree": "contrib/basic_archive",
+            "temp_config_srcrel": "contrib/basic_archive/basic_archive.conf",
+            "tests": [
+                "basic_archive"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "bloom",
+            "subtree": "contrib/bloom",
+            "tests": [
+                "bloom"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "bool_plperl",
+            "subtree": "contrib/bool_plperl",
+            "tests": [
+                "bool_plperl",
+                "bool_plperlu"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "btree_gin",
+            "subtree": "contrib/btree_gin",
+            "tests": [
+                "install_btree_gin",
+                "int2",
+                "int4",
+                "int8",
+                "float4",
+                "float8",
+                "money",
+                "oid",
+                "timestamp",
+                "timestamptz",
+                "time",
+                "timetz",
+                "date",
+                "interval",
+                "macaddr",
+                "macaddr8",
+                "inet",
+                "cidr",
+                "text",
+                "varchar",
+                "char",
+                "bytea",
+                "bit",
+                "varbit",
+                "numeric",
+                "enum",
+                "uuid",
+                "name",
+                "bool",
+                "bpchar"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "btree_gist",
+            "subtree": "contrib/btree_gist",
+            "tests": [
+                "init",
+                "int2",
+                "int4",
+                "int8",
+                "float4",
+                "float8",
+                "cash",
+                "oid",
+                "timestamp",
+                "timestamptz",
+                "time",
+                "timetz",
+                "date",
+                "interval",
+                "macaddr",
+                "macaddr8",
+                "inet",
+                "cidr",
+                "text",
+                "varchar",
+                "char",
+                "bytea",
+                "bit",
+                "varbit",
+                "numeric",
+                "uuid",
+                "not_equal",
+                "enum",
+                "bool",
+                "partitions"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "citext",
+            "subtree": "contrib/citext",
+            "tests": [
+                "create_index_acl",
+                "citext",
+                "citext_utf8"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "cube",
+            "subtree": "contrib/cube",
+            "tests": [
+                "cube",
+                "cube_sci"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "dblink",
+            "subtree": "contrib/dblink",
+            "tests": [
+                "dblink"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "dict_int",
+            "subtree": "contrib/dict_int",
+            "tests": [
+                "dict_int"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "dict_xsyn",
+            "subtree": "contrib/dict_xsyn",
+            "tests": [
+                "dict_xsyn"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "earthdistance",
+            "subtree": "contrib/earthdistance",
+            "tests": [
+                "earthdistance"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "file_fdw",
+            "subtree": "contrib/file_fdw",
+            "tests": [
+                "file_fdw"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "fuzzystrmatch",
+            "subtree": "contrib/fuzzystrmatch",
+            "tests": [
+                "fuzzystrmatch",
+                "fuzzystrmatch_utf8"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "hstore",
+            "subtree": "contrib/hstore",
+            "tests": [
+                "hstore",
+                "hstore_utf8"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "hstore_plperl",
+            "subtree": "contrib/hstore_plperl",
+            "tests": [
+                "hstore_plperl",
+                "hstore_plperlu",
+                "create_transform"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "hstore_plpython",
+            "subtree": "contrib/hstore_plpython",
+            "tests": [
+                "hstore_plpython"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "intarray",
+            "subtree": "contrib/intarray",
+            "tests": [
+                "_int"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "isn",
+            "subtree": "contrib/isn",
+            "tests": [
+                "isn"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "jsonb_plperl",
+            "subtree": "contrib/jsonb_plperl",
+            "tests": [
+                "jsonb_plperl",
+                "jsonb_plperlu"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "jsonb_plpython",
+            "subtree": "contrib/jsonb_plpython",
+            "tests": [
+                "jsonb_plpython"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "lo",
+            "subtree": "contrib/lo",
+            "tests": [
+                "lo"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "ltree",
+            "subtree": "contrib/ltree",
+            "tests": [
+                "ltree"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "ltree_plpython",
+            "subtree": "contrib/ltree_plpython",
+            "tests": [
+                "ltree_plpython"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "pageinspect",
+            "subtree": "contrib/pageinspect",
+            "tests": [
+                "page",
+                "btree",
+                "brin",
+                "gin",
+                "gist",
+                "hash",
+                "checksum",
+                "oldextversions"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "passwordcheck",
+            "subtree": "contrib/passwordcheck",
+            "tests": [
+                "passwordcheck"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "pg_buffercache",
+            "subtree": "contrib/pg_buffercache",
+            "tests": [
+                "pg_buffercache"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "pg_freespacemap",
+            "subtree": "contrib/pg_freespacemap",
+            "temp_config_srcrel": "contrib/pg_freespacemap/pg_freespacemap.conf",
+            "tests": [
+                "pg_freespacemap"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "pg_stat_statements",
+            "subtree": "contrib/pg_stat_statements",
+            "temp_config_srcrel": "contrib/pg_stat_statements/pg_stat_statements.conf",
+            "tests": [
+                "select",
+                "dml",
+                "cursors",
+                "utility",
+                "level_tracking",
+                "planning",
+                "user_activity",
+                "wal",
+                "entry_timestamp",
+                "extended",
+                "cleanup",
+                "oldextversions"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "pg_surgery",
+            "subtree": "contrib/pg_surgery",
+            "tests": [
+                "heap_surgery"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "pg_trgm",
+            "subtree": "contrib/pg_trgm",
+            "tests": [
+                "pg_trgm",
+                "pg_word_trgm",
+                "pg_strict_word_trgm"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "pg_visibility",
+            "subtree": "contrib/pg_visibility",
+            "tests": [
+                "pg_visibility"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "pg_walinspect",
+            "subtree": "contrib/pg_walinspect",
+            "temp_config_srcrel": "contrib/pg_walinspect/walinspect.conf",
+            "tests": [
+                "pg_walinspect",
+                "oldextversions"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "pgcrypto",
+            "subtree": "contrib/pgcrypto",
+            "tests": [
+                "init",
+                "md5",
+                "sha1",
+                "hmac-md5",
+                "hmac-sha1",
+                "blowfish",
+                "rijndael",
+                "sha2",
+                "des",
+                "3des",
+                "cast5",
+                "crypt-des",
+                "crypt-md5",
+                "crypt-blowfish",
+                "crypt-xdes",
+                "pgp-armor",
+                "pgp-decrypt",
+                "pgp-encrypt",
+                "pgp-encrypt-md5",
+                "pgp-pubkey-decrypt",
+                "pgp-pubkey-encrypt",
+                "pgp-info"
+            ]
+        },
+        {
+            "kind": "isolation",
+            "slug": "pgrowlocks",
+            "subtree": "contrib/pgrowlocks",
+            "tests": [
+                "pgrowlocks"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "pgstattuple",
+            "subtree": "contrib/pgstattuple",
+            "tests": [
+                "pgstattuple"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "postgres_fdw",
+            "subtree": "contrib/postgres_fdw",
+            "tests": [
+                "postgres_fdw",
+                "query_cancel"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "seg",
+            "subtree": "contrib/seg",
+            "tests": [
+                "security",
+                "seg",
+                "partition"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "tablefunc",
+            "subtree": "contrib/tablefunc",
+            "tests": [
+                "tablefunc"
+            ]
+        },
+        {
+            "kind": "isolation",
+            "slug": "tcn",
+            "subtree": "contrib/tcn",
+            "tests": [
+                "tcn"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "test_decoding",
+            "subtree": "contrib/test_decoding",
+            "temp_config_srcrel": "contrib/test_decoding/logical.conf",
+            "tests": [
+                "ddl",
+                "xact",
+                "rewrite",
+                "toast",
+                "permissions",
+                "decoding_in_xact",
+                "decoding_into_rel",
+                "binary",
+                "prepared",
+                "replorigin",
+                "time",
+                "messages",
+                "spill",
+                "slot",
+                "truncate",
+                "stream",
+                "stats",
+                "twophase",
+                "twophase_stream"
+            ]
+        },
+        {
+            "kind": "isolation",
+            "slug": "test_decoding",
+            "subtree": "contrib/test_decoding",
+            "temp_config_srcrel": "contrib/test_decoding/logical.conf",
+            "tests": [
+                "mxact",
+                "delayed_startup",
+                "ondisk_startup",
+                "concurrent_ddl_dml",
+                "oldest_xmin",
+                "snapshot_transfer",
+                "subxact_without_top",
+                "concurrent_stream",
+                "twophase_snapshot",
+                "slot_creation_error",
+                "catalog_change_snapshot",
+                "skip_snapshot_restore"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "tsm_system_rows",
+            "subtree": "contrib/tsm_system_rows",
+            "tests": [
+                "tsm_system_rows"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "tsm_system_time",
+            "subtree": "contrib/tsm_system_time",
+            "tests": [
+                "tsm_system_time"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "unaccent",
+            "subtree": "contrib/unaccent",
+            "tests": [
+                "unaccent"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "uuid-ossp",
+            "subtree": "contrib/uuid-ossp",
+            "tests": [
+                "uuid_ossp"
+            ]
+        },
+        {
+            "kind": "regress",
+            "slug": "xml2",
+            "subtree": "contrib/xml2",
+            "tests": [
+                "xml2"
+            ]
         }
     ]
 }
