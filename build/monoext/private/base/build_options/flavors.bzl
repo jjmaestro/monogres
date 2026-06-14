@@ -52,6 +52,7 @@ FLAVORS = {
         build_options = _babelfish_build_options,
         build_system = _babelfish_build_system,
         pg_base_version = _babelfish_pg_base_version,
+        test = True,
     ),
     "ivorysql": struct(
         OPTION_SETS = _ivory_OPTION_SETS,
