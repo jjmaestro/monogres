@@ -1,0 +1,41 @@
+# Downstream exercise of the generated test suites (rendered into @pg +
+# @pg_ext): run a representative slice as real hermetic pg_regress /
+# pg_isolation_regress suites, the same way the base + ext consumers exercise
+# the build targets. Every suite target data-deps the same `@pg//{v}/{opt}:tar`
+# + runtime sysroot the base consumer already builds, so this piggy-backs on the
+# example artifacts (no extra PG build) while exercising the test codegen, the
+# harness, and the full runtime-closure run end to end, from a downstream
+# consumer's point of view.
+#
+# Hermetic is the default (.bazelrc `build --config=hermetic-linux-<arch>`), so
+# `bazel test //...` runs these in the empty-chroot sandbox with no extra flags.
+
+load("@pg//:all.bzl", "DEFAULT_VERSION", "OPTION_SETS")
+
+# The default (version, option_set) the base consumer already builds; reusing it
+# keeps this a pure piggy-back (no extra :tar build). all.bzl exports no
+# DEFAULT_OPTION_SET symbol; the project defines the default as OPTION_SETS[-1].
+_V = DEFAULT_VERSION
+
+_OPT = OPTION_SETS[-1]
+
+test_suite(
+    name = "pg_tests",
+    tests = [
+        # Core regress + isolation: every (version, option_set) emits these,
+        # source-mirrored under the `tests/` namespace (src/test/{regress,
+        # isolation}).
+        "@pg//{v}/{opt}/tests/test/regress:regress".format(
+            opt = _OPT,
+            v = _V,
+        ),
+        "@pg//{v}/{opt}/tests/test/isolation:isolation".format(
+            opt = _OPT,
+            v = _V,
+        ),
+        # A representative contrib suite: option-set-invariant, in the
+        # extensions hub, runs against the default option set's :tar (the one
+        # the base consumer already builds).
+        "@pg_ext//contrib/cube/{v}/tests:regress".format(v = _V),
+    ],
+)
