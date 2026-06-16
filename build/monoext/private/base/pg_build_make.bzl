@@ -52,9 +52,33 @@ Tool provenance (all hermetic, no host dependencies):
 - Python is the hermetic rules_python interpreter (same one the Meson path
   passes as `PYTHON`), with a `sitecustomize.py` shim fixing up
   python-build-standalone's `/install`-prefixed sysconfig vars.
-- plpython's libpython probes are answered from the sysroot's Debian python
-  (libpython3-dev is in every flavor's buildtime closure) through the
-  sitecustomize shim; the driver interpreter only relays the facts.
+
+Cross-compile (`--config=hermetic-linux-cross-<target>`):
+
+The exec/target split above is the design that makes cross work: tools that RUN
+come from the EXEC tree, material that is read/compiled/linked comes from the
+TARGET tree, and no TARGET-arch binary is ever executed. The pieces that encode
+this:
+
+- `./configure` receives `--build=<exec triple> --host=<target triple>` (the
+  Debian multiarch tuples double as GNU triples), so autoconf routes
+  run-the-test-program probes to their non-executing cross fallbacks.
+- CC stays the planted wrapper: it selects a host-runnable adapter clang by
+  `uname -m` and passes `--target=` for its sysroot's arch when the two differ.
+  CXX and LLVM_CONFIG come from the EXEC-config @llvm_sysroot tree (persistent
+  paths; ships lld), CXX with explicit `--target` + `--sysroot` against the
+  TARGET tree. Links pin `-fuse-ld=lld` via LDFLAGS (multi-target, EXEC-arch;
+  link contexts only, so compile-only invocations stay warning-clean for
+  autoconf's warning-parsing probes).
+- plpython's libpython probes are answered from the TARGET sysroot's Debian
+  python (libpython3-dev is in every flavor's buildtime closure) through the
+  sitecustomize shim; the EXEC interpreter only relays the facts.
+- The overlay PGXS pass never executes the staged TARGET-arch `pg_config`:
+  install paths are read from the generated `pg_config_paths.h` and passed as
+  make command-line overrides that outrank `Makefile.global`'s `$(shell
+  $(PG_CONFIG) ...)` assignments.
+- `zic` never runs at install: `system_tzdata` is a project-default build
+  option, so PG skips compiling its own timezone database.
 """
 
 load("//monoext/private/base:toolchain.bzl", "pg_template_variable_info")
@@ -361,13 +385,23 @@ def _pg_build_make_genrule(
             EXEC_SYSROOT_DIR="$$(sh "$$EXEC_SYSROOT_SETUP" \\
                 "$$SYSROOT_TAR" "$$EXEC_SYSROOT_TAR" "$$BSDTAR")"
 
-            # Debian multiarch dirname for the TARGET arch, derived from the
-            # sysroot tree (the apt resolver materializes exactly one
-            # `<cpu>-linux-gnu/` dir for the build's target arch). NOT
-            # `$$(uname -m)-linux-gnu`: that reports the HOST arch, which
-            # breaks cross-compiled builds.
-            TARGET_MULTIARCH="$$(ls "$$SYSROOT_DIR/usr/lib" \\
-                | grep -E '^(x86_64|aarch64)-linux-gnu$$' | head -1)"
+            # Debian multiarch dirname for the TARGET arch, from
+            # `$(LIBC_SYSROOT_MULTIARCH)` (the target-config libc sysroot's
+            # tuple; `toolchains` make-variables resolve in TARGET config). A
+            # pure arch fact, identical across the same-snapshot target
+            # sysroots, so it names the per-PG sysroot's lib dir too.
+            TARGET_MULTIARCH="$(LIBC_SYSROOT_MULTIARCH)"
+
+            # EXEC-arch twin, from `$(LIBC_SYSROOT_EXEC_MULTIARCH)` (the
+            # exec-config libc sysroot's tuple). For native builds it matches
+            # TARGET_MULTIARCH; under cross-compile they differ, and the
+            # comparison doubles as the cross-detection flag. The multiarch
+            # strings are also valid GNU triples (config.sub and clang both
+            # canonicalize `<cpu>-linux-gnu`), so `--build`/`--host`/
+            # `--target` below reuse them directly.
+            EXEC_MULTIARCH="$(LIBC_SYSROOT_EXEC_MULTIARCH)"
+            CROSS_COMPILING=0
+            [ "$$TARGET_MULTIARCH" = "$$EXEC_MULTIARCH" ] || CROSS_COMPILING=1
 
             # @perl_sysroot tree root: 3x dirname of the perl binary's execroot
             # path (.../usr/bin/perl -> .../usr/bin -> .../usr -> root). Same
@@ -385,7 +419,8 @@ def _pg_build_make_genrule(
             mkdir -p /usr/bin 2>/dev/null || true
             ln -sf "$$PERL_SYSROOT_DIR/usr/bin/perl" /usr/bin/perl
 
-            export SYSROOT_DIR EXEC_SYSROOT_DIR TARGET_MULTIARCH PERL_SYSROOT_DIR
+            export SYSROOT_DIR EXEC_SYSROOT_DIR PERL_SYSROOT_DIR
+            export TARGET_MULTIARCH EXEC_MULTIARCH CROSS_COMPILING
         }}
 
         # Helper: split an EXTRAS entry shaped
@@ -471,9 +506,10 @@ def _pg_build_make_genrule(
             #
             # The babelfish make-build links against this static lib, so the
             # resulting `babelfishpg_tsql.so` has no external
-            # libantlr4-runtime runtime dep. The compiler is the sysroot's
-            # clang++ pointed at the per-PG sysroot (libc + libstdc++ headers
-            # live there), same as `run_configure`'s CXX.
+            # libantlr4-runtime runtime dep. The compiler is the EXEC-config
+            # @llvm_sysroot clang++ (it must RUN here) targeting the per-PG
+            # TARGET sysroot via explicit `--target` + `--sysroot` (libc +
+            # libstdc++ headers live there), same as `run_configure`'s CXX.
             local antlr_src_dir="$$1"
             local out_dir="$$2"
 
@@ -493,8 +529,9 @@ def _pg_build_make_genrule(
             # Compile each .cpp to .o, then archive into libantlr4-runtime.a
             # (two-step because we want a static archive, not a shared
             # object).
-            local cxx="$$SYSROOT_DIR/usr/lib/llvm-$$LLVM_MAJOR/bin/clang++"
+            local cxx="$$LLVM_EXEC_BIN_DIR/clang++"
             local cxx_flags=(
+                "--target=$$TARGET_MULTIARCH"
                 "--sysroot=$$SYSROOT_DIR"
                 "-std=c++17" "-fPIC" "-O2" "-fvisibility=hidden"
                 "-Wno-deprecated" "-Wno-attributes"
@@ -582,8 +619,28 @@ def _pg_build_make_genrule(
             # - `java` -> the sysroot's actual java binary (debs are
             #   extracted without running update-alternatives, so
             #   `/usr/bin/java` doesn't exist).
-            # - Define `cmake := <sysroot cmake>` near the top so the
-            #   existing `cd antlr && $$(cmake) .` step works.
+            # - Define `cmake := <env-pinned exec cmake>` near the top so
+            #   the existing `cd antlr && $$(cmake) .` step works. The env
+            #   prefix pins CC/CXX to the EXEC tree's clang/clang++ (the
+            #   binaries that must RUN here; without the pin cmake's PATH
+            #   discovery finds the same exec clang++ but compiles for the
+            #   exec arch) and seeds CFLAGS/CXXFLAGS with `--target` +
+            #   `--sysroot` so the generated parser objects in
+            #   `libantlr_tsql.a` are TARGET-arch against TARGET headers.
+            #   The contrib's CMakeLists appends its own additions to
+            #   `CMAKE_<LANG>_FLAGS`, so the env-seeded flags survive. For
+            #   native builds the exec tree is a symlink to the target tree
+            #   and `--target` matches the default; clang++'s driver-relative
+            #   GCC-installation discovery (which resolved libstdc++ headers
+            #   from the tree around the binary) is replaced by the
+            #   equivalent explicit `--sysroot`. Under cross-compile the env
+            #   prefix also seeds `LDFLAGS='-fuse-ld=lld'` (cmake folds it
+            #   into CMAKE_EXE_LINKER_FLAGS): the project itself only
+            #   archives a static lib, but cmake's compiler ABI check LINKS
+            #   a test executable, and clang's default `ld` search would
+            #   find the EXEC tree's single-target GNU ld, which cannot
+            #   emit target-arch executables ("unrecognised emulation
+            #   mode").
             # - `PG_CXXFLAGS += -std=c++17` (antlr4-runtime 4.13.2 needs it).
             # - `PG_CFLAGS += -fcommon`: allows the multiple tentative
             #   definitions babelfish carries
@@ -596,12 +653,17 @@ def _pg_build_make_genrule(
             # because the Makefile uses `PG_CFLAGS += ...` for its own
             # additions, and command-line vars can't be appended to from
             # within the Makefile.
+            local cmake_ldflags=""
+            if [ "$$CROSS_COMPILING" = "1" ]; then
+                cmake_ldflags="LDFLAGS='-fuse-ld=lld' "
+            fi
+
             local makefile="$$subdir/Makefile"
             sed -i \\
                 -e "s|^export ANTLR4_RUNTIME_INCLUDE_DIR=.*|export ANTLR4_RUNTIME_INCLUDE_DIR=$$antlr_runtime_dir/include/antlr4-runtime|" \\
                 -e "s|^export ANTLR4_RUNTIME_LIB_DIR=.*|export ANTLR4_RUNTIME_LIB_DIR=$$antlr_runtime_dir/lib|" \\
                 -e "s|^export ANTLR4_JAVA_BIN=.*|export ANTLR4_JAVA_BIN=$$java_bin|" \\
-                -e "1icmake := $$EXEC_SYSROOT_DIR/usr/bin/cmake" \\
+                -e "1icmake := CC='$$LLVM_EXEC_BIN_DIR/clang' CXX='$$LLVM_EXEC_BIN_DIR/clang++' CFLAGS='--target=$$TARGET_MULTIARCH --sysroot=$$SYSROOT_DIR' CXXFLAGS='--target=$$TARGET_MULTIARCH --sysroot=$$SYSROOT_DIR' $${{cmake_ldflags}}$$EXEC_SYSROOT_DIR/usr/bin/cmake" \\
                 -e "1iPG_CXXFLAGS += -std=c++17" \\
                 -e "1iPG_CFLAGS += -fcommon" \\
                 "$$makefile"
@@ -698,6 +760,70 @@ def _pg_build_make_genrule(
                 "$$iface"
         }}
 
+        _set_pgxs_path_overrides() {{
+            # Populate the PGXS_PATH_OVERRIDES global array with
+            # `<var>=<staged path>` make command-line overrides for every
+            # install-path variable PGXS resolves via
+            # `$$(shell $$(PG_CONFIG) --<query>)` in `Makefile.global`'s
+            # PGXS block. Command-line variables outrank the `:=`
+            # assignments (GNU make origin precedence) and make skips the
+            # overridden assignments without expanding them, so the staged
+            # `pg_config` is never executed. That matters under
+            # cross-compile, where the staged binary is a TARGET-arch ELF
+            # the build host cannot run; the install paths are static facts
+            # about the configured tree, served as data instead.
+            #
+            # The values come from `src/port/pg_config_paths.h`, generated
+            # during the PG build: its `#define` literals are exactly the
+            # strings `pg_config` would print, minus the argv0-relative
+            # prefix relocation that prepending `$$installdir` reproduces
+            # (`make install DESTDIR=$$installdir` staged the tree at
+            # `$$installdir<configured path>`). `includedir_internal` and
+            # `PGXS` are derived (pkgincludedir + `/internal`, pkglibdir +
+            # `/pgxs/src/makefiles/pgxs.mk`) the same way `pg_config`
+            # computes them.
+            local workdir="$$1"
+            local installdir="$$2"
+
+            local paths_h="$$workdir/src/port/pg_config_paths.h"
+            if [ ! -f "$$paths_h" ]; then
+                echo "_set_pgxs_path_overrides: $$paths_h not found" >&2
+                return 1
+            fi
+
+            PGXS_PATH_OVERRIDES=()
+            local spec mk_var macro value pkglibdir="" pkgincludedir=""
+            for spec in \\
+                bindir:PGBINDIR \\
+                datadir:PGSHAREDIR \\
+                sysconfdir:SYSCONFDIR \\
+                libdir:LIBDIR \\
+                pkglibdir:PKGLIBDIR \\
+                includedir:INCLUDEDIR \\
+                pkgincludedir:PKGINCLUDEDIR \\
+                includedir_server:INCLUDEDIRSERVER \\
+                localedir:LOCALEDIR \\
+                mandir:MANDIR \\
+                docdir:DOCDIR; do
+                mk_var="$${{spec%%:*}}"
+                macro="$${{spec##*:}}"
+                value="$$(sed -n "s|^#define $$macro[[:space:]]*\\"\\(.*\\)\\"|\\1|p" "$$paths_h" | head -1)"
+                if [ -z "$$value" ]; then
+                    echo "_set_pgxs_path_overrides: $$macro not found in $$paths_h" >&2
+                    return 1
+                fi
+                PGXS_PATH_OVERRIDES+=("$$mk_var=$$installdir$$value")
+                case "$$mk_var" in
+                    pkglibdir) pkglibdir="$$value" ;;
+                    pkgincludedir) pkgincludedir="$$value" ;;
+                esac
+            done
+            PGXS_PATH_OVERRIDES+=(
+                "includedir_internal=$$installdir$$pkgincludedir/internal"
+                "PGXS=$$installdir$$pkglibdir/pgxs/src/makefiles/pgxs.mk"
+            )
+        }}
+
         pgxs_install_extras() {{
             # Post-install PGXS pass for overlay contribs (auto-discovered).
             # The PG fork installs first via `make install[-world-bin]`, then
@@ -731,6 +857,11 @@ def _pg_build_make_genrule(
                 echo "pgxs_install_extras: pg_config not found at $$pg_config" >&2
                 return 1
             fi
+
+            # Install-path facts for the PGXS make invocations below, served
+            # statically (the staged pg_config is never executed; under
+            # cross-compile it cannot be). Sets PGXS_PATH_OVERRIDES.
+            _set_pgxs_path_overrides "$$workdir" "$$installdir" || return $$?
 
             # Build the antlr4 runtime once, lazily — only when a contrib in
             # the extras list actually needs it. Checks the *unfiltered*
@@ -800,6 +931,7 @@ def _pg_build_make_genrule(
                                 USE_PGXS=1 \\
                                 PG_CONFIG="$$pg_config" \\
                                 PG_SRC="$$workdir" \\
+                                "$${{PGXS_PATH_OVERRIDES[@]}}" \\
                                 antlr/libantlr_tsql.a || return $$?
                             ;;
                     esac
@@ -808,13 +940,10 @@ def _pg_build_make_genrule(
                     # overlay's PGXS Makefiles can resolve `-I$$(PG_SRC)`
                     # includes against PG-internal headers.
                     #
-                    # Note: no `DESTDIR` is passed. PGXS resolves install
-                    # paths via `pg_config --libdir` / `--sharedir` / etc.,
-                    # which at runtime use argv[0]-relative computation — so
-                    # the staged pg_config (at
-                    # $$installdir$$prefix/bin/pg_config) reports paths that
-                    # already include $$installdir as their prefix. Adding
-                    # DESTDIR=$$installdir would double-prefix the
+                    # Note: no `DESTDIR` is passed. The PGXS_PATH_OVERRIDES
+                    # values already carry `$$installdir` as their prefix
+                    # (see `_set_pgxs_path_overrides`); adding
+                    # `DESTDIR=$$installdir` on top would double-prefix the
                     # destinations and the install would land outside the
                     # expected staging subtree.
                     # shellcheck disable=SC2086
@@ -825,6 +954,7 @@ def _pg_build_make_genrule(
                         USE_PGXS=1 \\
                         PG_CONFIG="$$pg_config" \\
                         PG_SRC="$$workdir" \\
+                        "$${{PGXS_PATH_OVERRIDES[@]}}" \\
                         install || return $$?
                 done
             done
@@ -838,6 +968,19 @@ def _pg_build_make_genrule(
             # carry llvm-config plus the planted clang wrapper; `find`-style
             # probes with no env-var override (msgfmt for nls, tclsh for tcl,
             # pkg-config) resolve via PATH.
+            #
+            # Under cross-compile the TARGET tree's bin dirs are dropped from
+            # PATH entirely: they hold target-arch ELFs (including Debian
+            # binutils under triplet-prefixed names like
+            # `aarch64-linux-gnu-ld`, which clang's `<triple>-<tool>` program
+            # search would otherwise pick up). A target-arch ELF must never
+            # execute on the build machine; keeping the dirs off PATH makes
+            # a tool that is genuinely missing from the EXEC tree fail loud
+            # ("not found") instead of risking silent emulation on hosts
+            # with a qemu binfmt_misc handler registered (where the kernel
+            # transparently runs foreign-arch ELFs and a violation would
+            # otherwise never surface). For native builds the two trees are
+            # the same and the extra entries are harmless duplicates.
             # @perl_sysroot's usr/bin FIRST so `perl` / `prove` resolve to the
             # perl toolchain (ABI-locked with the per-PG libperl-dev), mirroring
             # pg_build.bzl's PATH ordering. Then the EXEC per-PG sysroot bins.
@@ -845,9 +988,13 @@ def _pg_build_make_genrule(
                 "$$PERL_SYSROOT_DIR/usr/bin"
                 "$$EXEC_SYSROOT_DIR/usr/bin"
                 "$$EXEC_SYSROOT_DIR/usr/lib/llvm-$$LLVM_MAJOR/bin"
-                "$$SYSROOT_DIR/usr/bin"
-                "$$SYSROOT_DIR/usr/lib/llvm-$$LLVM_MAJOR/bin"
             )
+            if [ "$$CROSS_COMPILING" != "1" ]; then
+                path+=(
+                    "$$SYSROOT_DIR/usr/bin"
+                    "$$SYSROOT_DIR/usr/lib/llvm-$$LLVM_MAJOR/bin"
+                )
+            fi
             export PATH="$$(IFS=:; echo "$${{path[*]}}"):$$PATH"
 
             # The sysroot ELFs (make, bison, perl, llvm-config, clang++, ...)
@@ -856,9 +1003,16 @@ def _pg_build_make_genrule(
             # plants; LD_LIBRARY_PATH covers the rest (read-only chroot paths
             # where the symlink plant is best-effort, and the llvm-14 private
             # lib dir which is not under a multiarch root).
+            #
+            # EXEC entries use `$$EXEC_MULTIARCH`: the tools that RUN are
+            # EXEC-arch ELFs and their NEEDED libs live in the EXEC tree's
+            # own multiarch dirs. The chroot symlink plant only covers the
+            # TARGET tree, so under cross-compile these entries are the only
+            # path through which exec tools find libc and friends. TARGET
+            # entries follow for runtime tool loads against the per-PG tree.
             local ld_library_path=(
-                "$$EXEC_SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH"
-                "$$EXEC_SYSROOT_DIR/lib/$$TARGET_MULTIARCH"
+                "$$EXEC_SYSROOT_DIR/usr/lib/$$EXEC_MULTIARCH"
+                "$$EXEC_SYSROOT_DIR/lib/$$EXEC_MULTIARCH"
                 "$$EXEC_SYSROOT_DIR/usr/lib/llvm-$$LLVM_MAJOR/lib"
                 "$$SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH"
                 "$$SYSROOT_DIR/lib/$$TARGET_MULTIARCH"
@@ -895,18 +1049,19 @@ def _pg_build_make_genrule(
             # Perl from the @perl_sysroot toolchain (PERL_SYSROOT_DIR), identical
             # to pg_build.bzl: one perl across both build systems. PERL5LIB lists
             # the Config_overrides.pm dir first, then @perl_sysroot's module dirs
-            # under the sysroot multiarch, then the vendor `usr/share/perl5`
-            # carrying IPC::Run for the `configure --enable-tap-tests` gate.
-            # PERL5OPT loads the shim so plperl's `ExtUtils::Embed::ldopts` emits
-            # `-L<per-PG sysroot>/usr/lib/<target-arch>/perl/<V>/CORE -lperl`
-            # (PERL_DEBIAN_ARCHLIB) instead of @perl_sysroot's compiled-in HOST
-            # path; the per-PG libperl-dev / libperl5.36 keep the plperl lifecycle
-            # on a single perl 5.36 ABI.
+            # under the EXEC-arch multiarch (the interpreter runs on the build
+            # machine and @perl_sysroot's multiarch == $$EXEC_MULTIARCH), then the
+            # vendor `usr/share/perl5` carrying IPC::Run for the
+            # `configure --enable-tap-tests` gate. PERL5OPT loads the shim so
+            # plperl's `ExtUtils::Embed::ldopts` emits `-L<per-PG sysroot>/usr/lib/
+            # <target-arch>/perl/<V>/CORE -lperl` (PERL_DEBIAN_ARCHLIB) instead of
+            # @perl_sysroot's compiled-in HOST path; the per-PG libperl-dev /
+            # libperl5.36 keep the plperl lifecycle on a single perl 5.36 ABI.
             export PERL="$$PERL_SYSROOT_DIR/usr/bin/perl"
             local perl5lib=(
                 "$$(dirname "$$EXT_BUILD_ROOT/{perl_config_overrides}")"
-                "$$PERL_SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/perl-base"
-                "$$PERL_SYSROOT_DIR/usr/lib/$$TARGET_MULTIARCH/perl/$$PERL_VERSION"
+                "$$PERL_SYSROOT_DIR/usr/lib/$$EXEC_MULTIARCH/perl-base"
+                "$$PERL_SYSROOT_DIR/usr/lib/$$EXEC_MULTIARCH/perl/$$PERL_VERSION"
                 "$$PERL_SYSROOT_DIR/usr/share/perl/$$PERL_VERSION"
                 "$$PERL_SYSROOT_DIR/usr/share/perl5"
             )
@@ -928,6 +1083,19 @@ def _pg_build_make_genrule(
             # GNU make from the sysroot (see module docstring: RFCC's
             # bootstrapped make cannot run inside the hermetic chroot).
             MAKE_BIN="$$EXEC_SYSROOT_DIR/usr/bin/make"
+
+            # EXEC-config @llvm_sysroot bin dir: the C++ compiler and
+            # llvm-config that RUN during the build. Distinct from the
+            # per-PG sysroot's llvm tree on two counts: the path is
+            # persistent (install-base bind mount, so the strings configure
+            # bakes into Makefile.global survive sandbox teardown with no
+            # scrubbing), and the tree ships lld (`ld.lld` next to
+            # `clang++`), which the per-PG closure does not carry and which
+            # cross links require. Same source the Meson path's cross-file
+            # pins `llvm-config` from. The files ride in via the
+            # `llvm_sysroot_exec_dir` entry in the genrule's `toolchains`.
+            LLVM_EXEC_BIN_DIR="$$EXT_BUILD_ROOT/$(LLVM_SYSROOT_EXEC_DIR)/usr/lib/llvm-$$LLVM_MAJOR/bin"
+            export LLVM_EXEC_BIN_DIR
 
             # Parallelism: the hermetic chroot has no `nproc` (busybox mount
             # manifest), but /proc is always mounted.
@@ -962,8 +1130,8 @@ def _pg_build_make_genrule(
             # python's `sysconfig` (LIBDIR, LDLIBRARY, LIBPL, INCLUDEPY,
             # LDVERSION; PG 15's python.m4 is pure-sysconfig). That
             # interpreter is the rules_python build driver and is not what
-            # plpython links; the facts the build needs describe the
-            # sysroot's Debian python. When `PG_PYTHON_TARGET_SYSROOT`,
+            # plpython links; the facts the build needs describe the TARGET
+            # Debian python. When `PG_PYTHON_TARGET_SYSROOT`,
             # `PG_PYTHON_TARGET_MULTIARCH` and `PG_PYTHON_TARGET_VERSION` are
             # exported (see `run_configure`), the shim rewrites the
             # embed-relevant vars to that sysroot's Debian python paths
@@ -1015,7 +1183,7 @@ if _sr and _ma:
         sys.stderr.write(
             "sitecustomize: PG_PYTHON_TARGET_SYSROOT set but %s is missing;"
             " sysconfig vars left untouched (libpython probes will report"
-            " driver-interpreter paths)\\n" % _includepy
+            " exec-arch paths)\\n" % _includepy
         )
 PY_SHIM_EOF
         }}
@@ -1067,13 +1235,24 @@ PY_SHIM_EOF
             echo "# $$(date) - run_configure"
 
             # The C compiler is the planted @libc_sysroot clang wrapper (see
-            # module docstring). The C++ compiler (only exercised by
-            # `--with-llvm`, for the JIT support library) is the sysroot's
-            # clang++ pointed at the same per-PG sysroot — the buildtime
-            # closure carries libc6-dev and libstdc++-12-dev, so libc + C++
-            # stdlib headers and crt objects all resolve inside the tree.
+            # module docstring). The wrapper handles the exec-vs-target arch
+            # split internally: it selects a host-runnable adapter clang by
+            # `uname -m` and passes `--target=<triple>` for the sysroot's
+            # arch when the two differ, so this CC string is correct in both
+            # native and cross-compile builds (and stays correct when baked
+            # into Makefile.global for downstream PGXS consumers).
+            #
+            # The C++ compiler (only exercised by `--with-llvm`, for the JIT
+            # support library) is the EXEC-config @llvm_sysroot clang++ (an
+            # ELF that must RUN here; the TARGET tree's copy is a
+            # target-arch ELF under cross-compile) pointed at the per-PG
+            # TARGET sysroot via explicit `--target` + `--sysroot`: the
+            # buildtime closure carries libc6-dev and libstdc++-12-dev, so
+            # libc + C++ stdlib headers and crt objects all resolve inside
+            # the target tree. For native builds `--target` matches clang's
+            # default, so codegen is unchanged.
             local cc="$$SYSROOT_DIR/usr/lib/llvm-$$LLVM_MAJOR/bin/clang"
-            local cxx="$$SYSROOT_DIR/usr/lib/llvm-$$LLVM_MAJOR/bin/clang++ --sysroot=$$SYSROOT_DIR"
+            local cxx="$$LLVM_EXEC_BIN_DIR/clang++ --target=$$TARGET_MULTIARCH --sysroot=$$SYSROOT_DIR"
 
             # `-O2` first: PG's configure only applies its default
             # optimization level when CFLAGS is unset; a CFLAGS env that
@@ -1120,33 +1299,69 @@ PY_SHIM_EOF
                 "-Wl,-rpath-link=$$SYSROOT_DIR/usr/lib/llvm-$$LLVM_MAJOR/lib"
             )
 
-            # llvm tooling for `--with-llvm`: CLANG is the planted wrapper,
-            # used at make time to emit JIT bitcode (`.bc`) — the wrapper
-            # bakes `--sysroot=<libc_sysroot>` exactly like the Meson-built
-            # `Makefile.global`'s CLANG does. llvm-config + clang++ use the
-            # TARGET tree's `$$SYSROOT_DIR/usr/lib/llvm-<N>/bin/` paths (not
-            # the EXEC aliases, which are the same files for native builds):
-            # configure bakes these strings into the installed
-            # `lib/pgxs/src/Makefile.global`, and `scrub_install_tree` rewrites
-            # exactly the `/sysroot/usr/lib/llvm-<N>/bin` shape to the
-            # persistent @llvm_sysroot path that PGXS extension sandboxes can
-            # resolve after this action's sandbox is gone.
-            local llvm_config="$$SYSROOT_DIR/usr/lib/llvm-$$LLVM_MAJOR/bin/llvm-config"
+            # Cross links need an explicit linker: clang's default
+            # `<triple>-ld`/`ld` search would find either the TARGET tree's
+            # triplet-prefixed binutils (target-arch ELFs that must never
+            # execute on the build machine) or a single-target build-arch
+            # `ld` that cannot link target objects. lld is multi-target and
+            # EXEC-arch (it sits next to LLVM_EXEC_BIN_DIR's clang++ and the
+            # adapter clang the planted wrapper execs). The flag lives in
+            # LDFLAGS, not in the CC/CXX strings: link contexts only, so
+            # compile-only invocations don't draw "argument unused during
+            # compilation" warnings (autoconf probes that parse compiler
+            # warnings, like the undeclared-functions check, break on that
+            # noise). Baked into Makefile.global's LDFLAGS, downstream PGXS
+            # extension links inherit it.
+            if [ "$$CROSS_COMPILING" = "1" ]; then
+                ldflags+=("-fuse-ld=lld")
+            fi
 
+            # llvm tooling for `--with-llvm`: CLANG is the planted wrapper,
+            # used at make time to emit JIT bitcode (`.bc`); the wrapper
+            # bakes `--sysroot=<libc_sysroot>` exactly like the Meson-built
+            # `Makefile.global`'s CLANG does. llvm-config RUNS many times
+            # during configure and make, so it must be an EXEC-arch binary
+            # (the TARGET tree's copy is a target-arch ELF under
+            # cross-compile); it comes from the EXEC-config @llvm_sysroot
+            # (see LLVM_EXEC_BIN_DIR), the same source the Meson path pins
+            # in its cross-file. Its version and flag output are identical
+            # across arches (same APT snapshot); the lib paths it reports
+            # point at its own tree, so `run_configure`'s LDFLAGS put the
+            # TARGET tree's llvm lib dir on the search path ahead of them
+            # and the linker resolves `-lLLVM-<N>` against the target arch.
+            # configure bakes these strings (and the LLVM_BINPATH that PGXS
+            # extension installs run `llvm-lto` from) into the installed
+            # `lib/pgxs/src/Makefile.global`; the @llvm_sysroot path is
+            # persistent (install-base bind mount), so they survive sandbox
+            # teardown with no scrubbing.
+            local llvm_config="$$LLVM_EXEC_BIN_DIR/llvm-config"
+
+            # autoconf cross-compile signaling: `--host` is the GNU triple
+            # the binaries will RUN on (the TARGET arch), `--build` is where
+            # this configure is RUNNING. When the two differ, autoconf sets
+            # `cross_compiling=yes`, which routes AC_TRY_RUN-style probes to
+            # their non-executing fallbacks instead of running target-arch
+            # test binaries. Passed unconditionally: for native builds the
+            # aliases are equal and configure behaves exactly as if neither
+            # was given (same convention as `pgxs_build.bzl`). The Debian
+            # multiarch tuples double as the triples; config.sub
+            # canonicalizes them.
+            #
             # plpython libpython facts: PG's `python.m4` discovers the
             # libpython link/include paths by querying the RUNNING python's
             # `sysconfig`. That interpreter is the rules_python build driver;
             # it drives configure but is not what plpython links. The facts
-            # plpython needs are static properties of the sysroot's Debian
+            # plpython needs are static properties of the TARGET Debian
             # python: its version is `PYTHON_VERSION` from the release
             # profile and libpython3-dev is in every flavor's buildtime
             # closure. Serve them through the sitecustomize shim (see
-            # `set_up_python_shim`) by exporting the sysroot, its multiarch,
-            # and the python version; the shim rewrites the embed-relevant
-            # config vars to that sysroot's Debian python. Exported (not
-            # configure-local) so make-time python invocations see the same
-            # answers. plpython then links the release's Debian python and
-            # never the driver interpreter.
+            # `set_up_python_shim`) by exporting the target sysroot, its
+            # multiarch, and the target python version; the shim rewrites the
+            # embed-relevant config vars to that sysroot's Debian python.
+            # Exported (not configure-local) so make-time python invocations
+            # see the same answers. Set unconditionally: for a native build
+            # the target sysroot is the build sysroot, so plpython links the
+            # release's Debian python and never the driver interpreter.
             export PG_PYTHON_TARGET_SYSROOT="$$SYSROOT_DIR"
             export PG_PYTHON_TARGET_MULTIARCH="$$TARGET_MULTIARCH"
             export PG_PYTHON_TARGET_VERSION="$$PYTHON_VERSION"
@@ -1160,6 +1375,11 @@ PY_SHIM_EOF
             # BISON/FLEX/M4/PERL/PKG_CONFIG/... are exported globals from
             # `set_up_build_env` — configure reads them from the environment
             # and bakes them into `Makefile.global`.
+            # On failure, surface `config.log`: the autoconf probe that broke
+            # and its exact compiler/linker invocation live only there (the
+            # configure stdout says little more than "cannot create
+            # executables"). Same convention as `pgxs_build.bzl`.
+            local configure_rc=0
             (
                 cd "$$workdir" \\
                 && CC="$$cc" \\
@@ -1171,8 +1391,17 @@ PY_SHIM_EOF
                     LDFLAGS="$${{ldflags[*]}}" \\
                     PYTHON="$$python_bin" \\
                     PYTHONPATH="$$python_shim_dir" \\
-                    ./configure "$${{configure_args[@]}}"
-            ) || return $$?
+                    ./configure "$${{configure_args[@]}}" \\
+                        --build="$$EXEC_MULTIARCH" \\
+                        --host="$$TARGET_MULTIARCH"
+            ) || configure_rc=$$?
+
+            if [ "$$configure_rc" -ne 0 ]; then
+                echo "=== configure failed (rc=$$configure_rc); dumping config.log ==="
+                cat "$$workdir/config.log" 2>&1 || echo "(config.log unreadable)"
+                echo "=== end config.log ==="
+                return "$$configure_rc"
+            fi
 
             scrub_pg_config_h "$$workdir"
         }}
@@ -1274,10 +1503,12 @@ PY_SHIM_EOF
             # clang` wrapper symlink (word-anchored) to the persistent
             # @libc_sysroot wrapper via `$(LIBC_SYSROOT_DIR)`.
             # Step 3 rewrites the remaining action-time
-            # `/sysroot/usr/lib/llvm-<N>/bin` tool paths (llvm-config,
-            # clang++) to the persistent @llvm_sysroot bin dir via
-            # `$(LLVM_SYSROOT_DIR)` (same Debian llvm-14 binaries, same APT
-            # snapshot).
+            # `/sysroot/usr/lib/llvm-<N>/bin` tool paths to the persistent
+            # @llvm_sysroot bin dir via `$(LLVM_SYSROOT_DIR)` (same Debian
+            # llvm-14 binaries, same APT snapshot). The CXX / LLVM_CONFIG /
+            # LLVM_BINPATH strings need no rewrite: they are baked from
+            # `LLVM_EXEC_BIN_DIR`, which is a persistent @llvm_sysroot path
+            # to begin with.
             local installdir="$$1"
 
             echo "# $$(date) - scrub_install_tree"
@@ -1634,12 +1865,20 @@ PY_SHIM_EOF
             # chroot), so the wrapper's exec target and --sysroot tree must be
             # declared inputs to exist there.
             "@bazel_tools//tools/cpp:current_cc_toolchain",
-            # `$(LIBC_SYSROOT_DIR)` / `$(LLVM_SYSROOT_DIR)` make variables for
+            # `$(LIBC_SYSROOT_DIR)` / `$(LLVM_SYSROOT_DIR)` /
+            # `$(LLVM_SYSROOT_EXEC_DIR)` make variables for
             # `scrub_install_tree`'s Makefile.global rewrite (persistent bzlmod
             # repo paths resolved at analysis time; never appearing in
-            # human-authored source).
+            # human-authored source). The `_exec_` instances resolve in EXEC
+            # config, so the rewritten tool paths point at binaries that run on
+            # the machine performing a downstream PGXS build. `libc_sysroot_dir`
+            # / `libc_sysroot_exec_dir` also supply `$(LIBC_SYSROOT_MULTIARCH)`
+            # / `$(LIBC_SYSROOT_EXEC_MULTIARCH)`, the TARGET / EXEC arch tuples
+            # reused for `--host` / `--build`.
             "@monogres//toolchains/libc_sysroot:libc_sysroot_dir",
+            "@monogres//toolchains/libc_sysroot:libc_sysroot_exec_dir",
             "@monogres//toolchains/llvm_sysroot:llvm_sysroot_dir",
+            "@monogres//toolchains/llvm_sysroot:llvm_sysroot_exec_dir",
         ],
         visibility = ["//visibility:public"],
     )
