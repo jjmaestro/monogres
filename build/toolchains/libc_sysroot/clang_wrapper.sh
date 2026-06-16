@@ -9,16 +9,60 @@
 # Wrapper lives at:
 #   <external>/<libc_sysroot>/<distro>/<version>/<arch>/usr/lib/llvm-14/bin/clang
 # Five dirnames from $real reach the per-arch sysroot root (passed to clang as
-# --sysroot=); four more reach bazel's external/ dir. The arch (`amd64` /
-# `arm64`) is the basename of $sysroot; it selects the matching exec-arch
-# `cc_toolchain_layout` adapter repo (`@llvm_toolchain_<arch>`), whose `bin/`
-# carries the Debian-sourced clang hardlinked from `@llvm_sysroot`.
+# --sysroot=); four more reach bazel's external/ dir.
+#
+# The sysroot's arch (`amd64` / `arm64`, the basename of $sysroot) is the
+# TARGET arch: the arch of the headers/libs in the tree, i.e. what this
+# invocation compiles FOR. The arch the wrapper is RUNNING on (the EXEC arch)
+# is the kernel's `uname -m`. The two split independently:
+#
+# - The exec'd clang binary must be an EXEC-arch ELF, so the
+#   `cc_toolchain_layout` adapter repo (`@llvm_toolchain_<arch>`, whose `bin/`
+#   carries the Debian-sourced clang hardlinked from the matching
+#   `@llvm_sysroot` tree) is selected by the EXEC arch. Debian's clang is a
+#   native cross-compiler (all LLVM targets enabled), so one host binary
+#   serves every target arch.
+# - When the two arches differ (cross-compile), clang needs an explicit
+#   `--target=` for the sysroot's arch; bare clang defaults to the arch it
+#   runs on and would emit EXEC-arch code against TARGET-arch headers/libs.
+#   When they match (native), no flag is passed and clang's default triple
+#   applies, keeping native invocations byte-identical to a plain
+#   `clang --sysroot=...` call.
 real=$(readlink -f "${0}")
 sysroot=$(dirname "$(dirname "$(dirname "$(dirname "$(dirname "${real}")")")")")
 external=$(dirname "$(dirname "$(dirname "$(dirname "${sysroot}")")")")
-arch=$(basename "${sysroot}")
+target_arch=$(basename "${sysroot}")
 
-# The clang to exec lives in the `cc_toolchain_layout` adapter repo for that
+exec_machine=$(uname -m)
+case "${exec_machine}" in
+    x86_64) exec_arch=amd64 ;;
+    aarch64) exec_arch=arm64 ;;
+    *)
+        echo "clang_wrapper: unsupported exec arch '${exec_machine}'" >&2
+        exit 1
+        ;;
+esac
+
+target_flag=
+if [ "${target_arch}" != "${exec_arch}" ]; then
+    case "${target_arch}" in
+        amd64) target_flag=--target=x86_64-linux-gnu ;;
+        arm64) target_flag=--target=aarch64-linux-gnu ;;
+        *)
+            echo "clang_wrapper: unsupported sysroot arch '${target_arch}'" >&2
+            exit 1
+            ;;
+    esac
+fi
+
+# No linker selection here: the wrapper serves compile-only invocations (JIT
+# bitcode `-c`) as well as links, and a link-only flag would draw "argument
+# unused during compilation" warnings that confuse autoconf probes which
+# parse compiler warnings. Cross link invocations carry `-fuse-ld=lld` via
+# the LDFLAGS their build system passes (`pg_build_make` bakes it into
+# `Makefile.global` under cross-compile).
+#
+# The clang to exec lives in the `cc_toolchain_layout` adapter repo for the EXEC
 # arch, whose directory under `external/` is its CANONICAL repo name. The only
 # part of that name we choose is the apparent name it ends with, the one this
 # repo is declared under; everything before it Bazel derives, and derives
@@ -42,7 +86,7 @@ arch=$(basename "${sysroot}")
 # An unmatched glob stays literal in POSIX sh, so the `-x` test fails and the
 # empty `clang` reports it rather than exec'ing a pattern.
 clang=
-for candidate in "${external}"/*"llvm_toolchain_${arch}"/bin/clang; do
+for candidate in "${external}"/*"llvm_toolchain_${exec_arch}"/bin/clang; do
     if [ -x "${candidate}" ]; then
         clang="${candidate}"
         break
@@ -50,9 +94,11 @@ for candidate in "${external}"/*"llvm_toolchain_${arch}"/bin/clang; do
 done
 
 if [ -z "${clang}" ]; then
-    echo "clang_wrapper: no llvm_toolchain_${arch}/bin/clang under" \
+    echo "clang_wrapper: no llvm_toolchain_${exec_arch}/bin/clang under" \
         "${external}" >&2
     exit 1
 fi
 
-exec "${clang}" --sysroot="${sysroot}" "$@"
+# ${target_flag:+...} expands to nothing for native invocations, so no empty
+# argument is passed.
+exec "${clang}" ${target_flag:+"${target_flag}"} --sysroot="${sysroot}" "$@"
