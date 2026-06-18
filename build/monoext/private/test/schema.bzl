@@ -396,6 +396,19 @@ def _suite_info_classify(entries):
         schedule = schedule,
         category = category,
         subtree = entries[0].subtree,
+        # The external-extension `--inputdir` (the suite's REGRESS_OPTS
+        # `--inputdir`, joined with the ext source root by the harness); only a
+        # `metadata.test_ext` regress decl sets it, so "" for every core/contrib
+        # suite (which resolve their srcdir from the subtree instead).
+        inputdir = "",
+        # A suite whose --temp-config .conf or expected/ dir lives in its own
+        # source tree (external `metadata.test_ext` regress decls); "" for every
+        # core/contrib suite, which carry neither.
+        temp_config = "",
+        expecteddir = "",
+        # The shared_preload_libraries an external regress suite needs but ships
+        # no .conf for; empty for every core/contrib suite.
+        preload = [],
         # Per-.pl basenames (the part after the suite slug in each entry name,
         # e.g. `recovery/001_stream_rep` -> `001_stream_rep`); the TAP renderer
         # emits one target per .pl. Meaningful for TAP, harmless otherwise.
@@ -522,6 +535,20 @@ def _suite_decl_to_info(slug, decl):
         # renderer mirrors the source tree exactly like the meson path. "" for a
         # subtree-less decl, which keeps the category-based layout.
         subtree = subtree,
+        # The external-extension `--inputdir` (REGRESS_OPTS `--inputdir`, e.g.
+        # pgvector's `test`), joined with the ext source root by the harness.
+        # Only an external `metadata.test_ext` regress decl sets it; "" for the
+        # make/oracle introspect.
+        inputdir = decl.get("inputdir", ""),
+        # An external regress suite whose --temp-config .conf lives in its own
+        # source tree (relative to --ext-srcdir, e.g. pgaudit.conf) and/or whose
+        # expected/ dir sits outside its --inputdir (pg_qualstats keeps sql
+        # under test/ but expected/ at the source root). "" for the make/oracle
+        # introspect.
+        temp_config = decl.get("temp_config", ""),
+        expecteddir = decl.get("expecteddir", ""),
+        # The shared_preload_libraries the suite needs but ships no .conf for.
+        preload = decl.get("preload", []),
         # Per-.pl basenames for a TAP suite (its `tests` IS the .pl list); the
         # TAP renderer emits one target per .pl. Empty for non-TAP.
         pl_names = tests if is_tap else [],

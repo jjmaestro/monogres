@@ -12,7 +12,12 @@ load("//monoext/private/ext:contrib.bzl", "write_contrib_extension")
 load("//monoext/private/ext:external.bzl", "write_extension_package")
 load("//monoext/private/ext:schema.bzl", _ExtSchema = "schema")
 load("//monoext/private/pkgs:schema.bzl", _PkgsSchema = "schema")
-load("//monoext/private/test:introspect.bzl", "INTROSPECT_ATTRS", "render_contrib_tests")
+load(
+    "//monoext/private/test:introspect.bzl",
+    "INTROSPECT_ATTRS",
+    "render_contrib_tests",
+    "render_external_ext_tests",
+)
 load("//platforms:targets.bzl", "ARCH_CPU")
 
 # ---------------------------------------------------------------------------
@@ -211,6 +216,18 @@ def _impl(rctx):
     # no-op when the introspect is empty.
     render_contrib_tests(rctx, rctx.attr.base_flavor, rctx.attr.build_repo)
 
+    # The external-extension test introspect: a smoke CREATE EXTENSION
+    # exit-check plus the extension's own upstream regress suites, under
+    # `<ext>/<ext_v>/<base_v>/tests`. A no-op when no external declares
+    # `metadata.test_ext`.
+    render_external_ext_tests(
+        rctx,
+        rctx.attr.base_flavor,
+        rctx.attr.build_repo,
+        external_entries,
+        json.decode(rctx.attr.external_test_meta),
+    )
+
 _ATTRS = dict(
     archs = attr.string_list(mandatory = True),
     catalog = attr.label(mandatory = True),
@@ -223,6 +240,10 @@ _ATTRS = dict(
     # The flavor's OPTION_SETS (JSON list); the contrib introspect runs against
     # the last (default) option set's install tree.
     option_sets = attr.string(default = "[]"),
+    # `{ext_name: metadata.test_ext}` (JSON) for the external extensions; drives
+    # the external test introspect (smoke + upstream regress) rendered alongside
+    # the builds. Empty when no external declares a `test_ext` block.
+    external_test_meta = attr.string(default = "{}"),
     # The test-introspect attrs (filled by `introspect.introspect_payload`,
     # pointing at the base hub). The extensions hub now renders the contrib
     # suites alongside the extension builds.

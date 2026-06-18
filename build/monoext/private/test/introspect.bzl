@@ -26,7 +26,12 @@ reused whole.
 
 load("//monoext/private:repo_names.bzl", "bind")
 load("//monoext/private/base/build_options:flavors.bzl", "FLAVORS")
-load("//monoext/private/test:suites.bzl", "write_ext_test_version", "write_test_version")
+load(
+    "//monoext/private/test:suites.bzl",
+    "write_ext_test_version",
+    "write_external_ext_test_entry",
+    "write_test_version",
+)
 
 # Flavors that opt into the test lane by setting `test = True` on their FLAVORS
 # entry, once the `+test` introspect variant is generated and committed. That
@@ -277,3 +282,63 @@ def render_contrib_tests(rctx, flavor, build_repo):
                 {},
             ).get(default_option_set),
         )
+
+def render_external_ext_tests(rctx, flavor, build_repo, external_entries, ext_test_meta):
+    """Render the external-extension test introspect (the `@{name}_ext` slice).
+
+    Parallel to `render_contrib_tests`, but driven by the catalog
+    `metadata.test_ext` (not the PG introspect): per external entry, per
+    (ext_version, base_version) target, read the base hub's install tree +
+    runtime sysroot for that base version and delegate to
+    `write_external_ext_test_entry`, which writes
+    `<ext>/<ext_v>/<base_v>/tests`. A no-op for an entry with no `test_ext`.
+
+    Args:
+        rctx: the extensions hub repo-rule context (reads the introspect attrs,
+            writes the generated `<ext>/<ext_v>/<base_v>/tests` BUILD files).
+        flavor: the base flavor slug (e.g. `"postgres"`).
+        build_repo: repo holding the harness scripts + bsdtar toolchain.
+        external_entries: the list of `ExtExternalEntry` decoded in
+            `ext/hub.bzl`, each carrying pre-qualified `targets` (artifact /
+            source / deps labels).
+        ext_test_meta: `{ext_name: metadata.test_ext}` threaded from the catalog
+            via the `external_test_meta` repo-rule attr.
+    """
+    c = _decode(rctx)
+    if not c.option_sets:
+        return
+    default_option_set = c.option_sets[-1]
+    for entry in external_entries:
+        test_ext = ext_test_meta.get(entry.name)
+        if not test_ext:
+            continue
+        for target in entry.targets:
+            base_v = target.base_version.version
+            pg_tar = c.pg_tars.get(base_v, {}).get(default_option_set)
+            runtime_tar = c.runtime_tars.get(base_v)
+
+            # An external is only built against base versions the base hub also
+            # builds; skip defensively if the introspect lacks this base
+            # version.
+            if not pg_tar or not runtime_tar:
+                continue
+
+            # The artifact target is a genrule with two outputs (`<base_v>.tar`
+            # + `<base_v>.log`), so reference the tar output FILE (target name +
+            # `.tar`) for the single-rloc `--overlay-tar`; the bare `:base_v`
+            # label would expand to both files.
+            write_external_ext_test_entry(
+                rctx,
+                ext_name = entry.name,
+                ext_version = target.version,
+                base_version = base_v,
+                flavor = flavor,
+                build_repo = build_repo,
+                default_option_set = default_option_set,
+                pg_tar = pg_tar,
+                runtime_tar = runtime_tar,
+                overlay_tar = target.artifact + ".tar",
+                ext_srcdir = target.source.dir,
+                ext_runtime_tar = target.deps.runtime.sysroot_tar,
+                test_ext = test_ext,
+            )

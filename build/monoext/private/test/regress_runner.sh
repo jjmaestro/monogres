@@ -98,6 +98,8 @@ mode="regress"
 overlay_tars=""
 ext_srcdir=""
 ext_inputdir=""
+ext_temp_config=""
+ext_expecteddir=""
 ext_names=""
 preload_libs=""
 cascade=""
@@ -187,6 +189,12 @@ while [ "$#" -gt 0 ]; do
       [ -n "$d" ] && ext_srcdir="$d"
       shift 2 ;;
     --ext-inputdir) ext_inputdir="$2"; shift 2 ;;
+    # External regress: a --temp-config .conf inside the extension's OWN source
+    # tree (relative to --ext-srcdir, e.g. pgaudit.conf), and an --expecteddir
+    # override (relative to --ext-srcdir) for a suite that keeps expected/ outside
+    # its --inputdir (pg_qualstats: sql under test/, expected/ at the source root).
+    --ext-temp-config) ext_temp_config="$2"; shift 2 ;;
+    --ext-expecteddir) ext_expecteddir="$2"; shift 2 ;;
     # External smoke lane: the extension name(s) to CREATE EXTENSION (repeatable;
     # the catalog dir is not always the extension name, e.g. pgvector -> vector),
     # the libraries to put in shared_preload_libraries before boot (repeatable,
@@ -437,7 +445,10 @@ if [ -z "$suite" ] || [ "$suite" = "regress" ] || [ "$suite" = "isolation" ]; th
   else
     srcdir="$srcroot/src/test/regress"
   fi
-else
+elif [ -z "$ext_srcdir" ]; then
+  # An external extension supplies its own source via --ext-srcdir (resolved
+  # below), so it does not use this PG-tree name-based srcdir guess.
+  #
   # contrib, test-module, PL-language, and the per-component TAP suites
   # (src/bin/<tool>, src/test/recovery, ...) bring their own sql|specs|t +
   # expected and run with CWD there. pg_regress reads its inputs from
@@ -492,6 +503,28 @@ if [ -n "$inputdir_rel" ]; then
 elif [ -n "$ext_srcdir" ]; then
   srcdir="$ext_srcdir${ext_inputdir:+/$ext_inputdir}"
   run_cwd="$srcdir"
+fi
+
+# External extension --temp-config: a .conf in the extension's own source tree
+# (its REGRESS_OPTS --temp-config, e.g. pgaudit.conf or regress/age_regression.conf),
+# named relative to --ext-srcdir and resolved to an absolute path so it holds
+# regardless of the run CWD.
+if [ -n "$ext_temp_config" ] && [ -n "$ext_srcdir" ]; then
+  temp_config="$ext_srcdir/$ext_temp_config"
+  [ -f "$temp_config" ] || { echo "ERROR: --ext-temp-config '$ext_temp_config' not found under ext source root" >&2; exit 1; }
+fi
+
+# External regress shared_preload_libraries: a suite that needs a preload but
+# ships no --temp-config .conf (pg_qualstats / pg_stat_kcache need
+# pg_stat_statements + themselves). Synthesize a minimal overlay; when the suite
+# ALSO named a --temp-config, prepend it so both apply.
+if [ -n "$preload_libs" ] && [ "$kind" = "regress" ]; then
+  gen_tc="${TEST_TMPDIR:?}/ext-preload.conf"
+  : > "$gen_tc"
+  [ -n "$temp_config" ] && cat "$temp_config" >> "$gen_tc"
+  csv="$(echo "$preload_libs" | sed 's/^ *//; s/  */, /g')"
+  printf "shared_preload_libraries = '%s'\n" "$csv" >> "$gen_tc"
+  temp_config="$gen_tc"
 fi
 
 # regress.so is captured into the install tree's pkglibdir by pg_build's
@@ -773,6 +806,37 @@ fi
 # ---- invocation ----
 OUT="${TEST_UNDECLARED_OUTPUTS_DIR:-$TEST_TMPDIR/out}/${suite:-$kind}"
 mkdir -p "$OUT"
+
+# ---- external regress: upstream's working directory, made writable ----
+# `make installcheck` runs pg_regress from the extension's source ROOT, with
+# --inputdir naming a subdir of it, so a test's relative paths are rooted at that
+# root and not at the suite dir: age's `\! cp -r regress/age_load/data ...` reads
+# through it, and pgvector's `\copy ... 'results/vector.bin'` writes into the
+# `results/` pg_regress creates beside it.
+#
+# Neither resolves here as-is. Our source root is a read-only runfiles tree, and
+# --outputdir points somewhere else entirely so Bazel can collect a failure's
+# diffs. So mirror the root entry by entry as symlinks into a writable dir, point
+# its `results` at the real outputdir, and run from there: relative reads reach
+# the source, relative writes land where they are collectable, and the suite sees
+# the layout its author wrote it against.
+if [ -n "$ext_srcdir" ] && [ "$kind" = "regress" ]; then
+  EXTROOT="$TEST_TMPDIR/extroot-${suite:-$kind}"
+  rm -rf "$EXTROOT"
+  # pg_regress creates <outputdir>/results itself, but only if absent, so
+  # pre-creating it to hang the symlink off is safe.
+  mkdir -p "$EXTROOT" "$OUT/results"
+  for __e in "$ext_srcdir"/*; do
+    [ -e "$__e" ] || continue
+    case "$(basename "$__e")" in
+      results) ;;
+      *) ln -sfn "$__e" "$EXTROOT/" ;;
+    esac
+  done
+  ln -sfn "$OUT/results" "$EXTROOT/results"
+  run_cwd="$EXTROOT"
+fi
+
 TMPINST="$TEST_TMPDIR/inst-${suite:-$kind}"
 # Short socket dir: the runfiles/TEST_TMPDIR paths exceed sun_path (107).
 SOCK="$(mktemp -d /tmp/pgr.XXXXXX 2>/dev/null || mktemp -d)"
@@ -793,6 +857,15 @@ set -- \
 # PG16+ reads expected/ via --expecteddir; point it at the source tree's
 # expected/ so it resolves regardless of where <inputdir> ends up.
 expecteddir="$srcdir"
+# An external suite may keep expected/ outside its --inputdir (pg_qualstats: sql
+# under test/, expected/ at the source root); --ext-expecteddir repoints it,
+# relative to --ext-srcdir ("." = the source root).
+if [ -n "$ext_expecteddir" ] && [ -n "$ext_srcdir" ]; then
+  case "$ext_expecteddir" in
+    .) expecteddir="$ext_srcdir" ;;
+    *) expecteddir="$ext_srcdir/$ext_expecteddir" ;;
+  esac
+fi
 if "$runner" --help 2>&1 | grep -q -- '--expecteddir'; then
   set -- "$@" --expecteddir="$expecteddir"
 fi

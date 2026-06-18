@@ -1251,6 +1251,330 @@ def write_ext_test_version(
             ),
         )
 
+# ---------------------------------------------------------------------------
+# External (non-contrib) extension test introspect.
+#
+# An external extension is built as a standalone PGXS artifact tar (the overlay)
+# against a base PG, so its suites run against the BASE hub's install tree with
+# the artifact overlaid onto a writable copy of PGROOT (the harness
+# `--overlay-tar` lane). Two golden-free tiers against the fork-independent
+# upstream: a smoke CREATE EXTENSION exit-check (the always-on floor) and the
+# extension's own upstream pg_regress suite(s). Rendered into `@{name}_ext`
+# under `<ext>/<ext_v>/<base_v>/tests`, parallel to the contrib packages.
+# ---------------------------------------------------------------------------
+
+def _ext_rlocs(
+        build_repo,
+        pg_tar,
+        runtime_tar,
+        overlay_tar,
+        ext_srcdir = None,
+        ext_runtime_tar = None):
+    """Assemble the external-lane runfiles arg strings + the `data` list.
+
+    Unlike `_rlocs` (core/contrib), the external lane ships NO PG source tree
+    (smoke reads none; a regress suite reads the extension's OWN source via
+    `--ext-srcdir`) and NO `test` deps sysroot (no TAP), but adds the extension
+    artifact tar (`--overlay-tar`), optionally the extension source-tree root
+    (`--ext-srcdir`, a single tree artifact), and optionally the extension's
+    runtime-deps sysroot tar (`--ext-runtime-from`, absent for an extension with
+    no third-party runtime deps).
+
+    Args:
+        build_repo: build repo holding the harness scripts + bsdtar toolchain.
+        pg_tar: the BASE hub install-tree label (`@{name}//<base_v>/<opt>:tar`);
+            supplies initdb / pg_regress / the postmaster.
+        runtime_tar: the base runtime sysroot tar (closure base).
+        overlay_tar: the extension artifact tar
+            (`@{name}_ext//<ext>/<ext_v>/<base_v>:<base_v>`).
+        ext_srcdir: the extension source-tree root
+            (`@{name}_ext//<ext>/<ext_v>:dir`), or None (smoke needs no source).
+        ext_runtime_tar: the extension runtime-deps sysroot tar
+            (`@{name}_ext//<ext>/<ext_v>/deps/runtime:sysroot_tar`), or None.
+
+    Returns a struct of arg strings + the `data` list.
+    """
+    f = bind(build = build_repo)
+    closure_setup = f("@{build}//monoext/private/test:closure_setup.sh")
+    sysroot_lib = f("@{build}//monoext/private/base:sysroot_lib.sh")
+    runner_srcs = f("@{build}//monoext/private/test:regress_runner.sh")
+    bsdtar = "@bsd_tar_toolchains//:resolved_toolchain"
+    runfiles = "@bazel_tools//tools/bash/runfiles"
+
+    data = [
+        runner_srcs,
+        closure_setup,
+        sysroot_lib,
+        runtime_tar,
+        pg_tar,
+        overlay_tar,
+        bsdtar,
+        runfiles,
+    ]
+    if ext_srcdir:
+        data.append(ext_srcdir)
+    if ext_runtime_tar:
+        data.append(ext_runtime_tar)
+
+    return struct(
+        runner = runner_srcs,
+        closure_setup = _rloc(closure_setup),
+        sysroot_lib = _rloc(sysroot_lib),
+        bsdtar = _rloc(bsdtar),
+        runtime_tar = _rloc(runtime_tar),
+        # The base install tree is a directory tree: pass EVERY file
+        # (`rlocationpaths`, plural) so the harness locates bin/initdb, as the
+        # core lane does. The artifact tar + source tree are single file/tree
+        # artifacts the harness resolves with a single rloc.
+        pg_tar = "$(rlocationpaths %s)" % pg_tar,
+        overlay_tar = _rloc(overlay_tar),
+        ext_srcdir = _rloc(ext_srcdir) if ext_srcdir else None,
+        ext_runtime_tar = _rloc(ext_runtime_tar) if ext_runtime_tar else None,
+        data = data,
+    )
+
+def _ext_positionals(rlocs):
+    """Return the runfiles positionals shared by the external test targets.
+
+    The `$1`-`$4` closure args plus the base install tree, common to the smoke
+    and regress external `sh_test`s.
+    """
+    return [
+        rlocs.closure_setup,
+        rlocs.sysroot_lib,
+        rlocs.bsdtar,
+        rlocs.runtime_tar,
+        rlocs.pg_tar,
+    ]
+
+def _ext_test_build(targets):
+    """Render an external extension's `<ext>/<ext_v>/<base_v>/tests/BUILD.bazel`.
+
+    sh_test load + package + the suite targets. No `:psql` dev target (the base
+    hub already exposes one per (version, option_set)).
+    """
+    parts = [
+        Star.load_("@rules_shell//shell:sh_test.bzl", "sh_test"),
+        Star.package(default_visibility = ["//visibility:public"]),
+    ] + targets
+    return Star.file(header = _HEADER, *parts)
+
+def _smoke_test(base_version, flavor, default_option_set, rlocs, ext_name, smoke):
+    """Render the `:smoke` `sh_test` for one (ext, ext_v, base_v).
+
+    The always-on floor: `--kind smoke` boots a temp instance off the overlaid
+    tree and runs CREATE EXTENSION for each name. The extension name defaults to
+    the catalog dir name; `smoke.extensions` overrides it (pgvector -> vector).
+    `smoke.preload` populates shared_preload_libraries; `smoke.cascade` adds
+    CASCADE. An explicit empty `smoke.extensions` returns None (no smoke
+    target): the extension has no CREATE EXTENSION entry point, e.g. an
+    output-plugin-only ext whose *.control ships no install script.
+    """
+    if "extensions" in smoke and not smoke["extensions"]:
+        return None
+    extensions = smoke.get("extensions") or [ext_name]
+    preload = smoke.get("preload", [])
+    cascade = smoke.get("cascade", False)
+
+    args = _ext_positionals(rlocs) + [
+        "--kind",
+        "smoke",
+        "--overlay-tar",
+        rlocs.overlay_tar,
+    ]
+    if rlocs.ext_runtime_tar:
+        args += ["--ext-runtime-from", rlocs.ext_runtime_tar]
+    args += [
+        "--version",
+        base_version,
+        "--flavor",
+        flavor,
+        "--option-set",
+        default_option_set,
+    ]
+    for e in extensions:
+        args += ["--ext-name", e]
+    for lib in preload:
+        args += ["--preload", lib]
+    if cascade:
+        args.append("--cascade")
+
+    return Star.igen(Star.fn("sh_test", **dict(
+        name = "smoke",
+        srcs = [rlocs.runner],
+        args = args,
+        data = rlocs.data,
+        size = "medium",
+        tags = [_TAG_REGRESS, "smoke", "external"],
+        env_inherit = _ENV_INHERIT,
+    )))
+
+def _ext_regress_test(
+        target_name,
+        base_version,
+        flavor,
+        default_option_set,
+        info,
+        rlocs):
+    """Render one external upstream `pg_regress` suite `sh_test`.
+
+    The extension's own suite (from `metadata.test_ext.test`), run against the
+    overlaid tree with `--ext-srcdir`/`--ext-inputdir` pointing pg_regress at
+    the extension's own `sql/`+`expected/`. Golden-free against the
+    fork-independent upstream: the `.out` files ship with the extension source.
+    """
+    args = _ext_positionals(rlocs)
+    if rlocs.ext_runtime_tar:
+        args += ["--ext-runtime-from", rlocs.ext_runtime_tar]
+    args += [
+        "--kind",
+        info.kind,
+        "--suite",
+        info.slug,
+        "--overlay-tar",
+        rlocs.overlay_tar,
+        "--ext-srcdir",
+        rlocs.ext_srcdir,
+    ]
+    if info.inputdir:
+        args += ["--ext-inputdir", info.inputdir]
+    args += [
+        "--version",
+        base_version,
+        "--flavor",
+        flavor,
+        "--option-set",
+        default_option_set,
+    ]
+    args += _repeated_flag("--tests", info.test_names)
+    if info.dbname:
+        args += ["--dbname", info.dbname]
+    for ext in info.load_extensions:
+        args += ["--regress-opt", "--load-extension=%s" % ext]
+
+    # Locale/encoding: a suite that names an encoding (e.g. age's UTF-8) manages
+    # its own locale, so pass it through; otherwise force the C locale upstream
+    # `make installcheck` runs under (LC_ALL=C), like the core regress lane.
+    if info.encoding:
+        args += ["--regress-opt", "--encoding=%s" % info.encoding]
+    else:
+        args += ["--regress-opt", "--no-locale"]
+
+    # The suite's own --temp-config (a .conf in the extension source tree), any
+    # shared_preload_libraries it needs but ships no .conf for, and an
+    # expected/-dir override for a suite that keeps expected/ outside
+    # --inputdir.
+    if info.temp_config:
+        args += ["--ext-temp-config", info.temp_config]
+    for lib in info.preload:
+        args += ["--preload", lib]
+    if info.expecteddir:
+        args += ["--ext-expecteddir", info.expecteddir]
+
+    return Star.igen(Star.fn("sh_test", **dict(
+        name = target_name,
+        srcs = [rlocs.runner],
+        args = args,
+        data = rlocs.data,
+        size = "medium",
+        tags = [_TAG_REGRESS, "external"],
+        env_inherit = _ENV_INHERIT,
+    )))
+
+def write_external_ext_test_entry(
+        rctx,
+        ext_name,
+        ext_version,
+        base_version,
+        flavor,
+        build_repo,
+        default_option_set,
+        pg_tar,
+        runtime_tar,
+        overlay_tar,
+        ext_srcdir,
+        ext_runtime_tar,
+        test_ext):
+    """Render the external-extension test package for one (ext, ext_v, base_v).
+
+    Writes `<ext>/<ext_v>/<base_v>/tests/BUILD.bazel` into `@{name}_ext` with a
+    `:smoke` target (when `test_ext.smoke` is present) plus one regress target
+    per `test_ext.test` suite. A no-op when `test_ext` declares neither.
+
+    Args:
+        rctx: the `ext_repo` repo-rule context.
+        ext_name: the extension (catalog dir) name.
+        ext_version: the extension version string.
+        base_version: the base PG version the artifact was built against.
+        flavor: the base flavor slug (e.g. `"postgres"`).
+        build_repo: repo holding the harness scripts + bsdtar toolchain.
+        default_option_set: the base hub option set the artifact matches.
+        pg_tar: the base install-tree label (default option set).
+        runtime_tar: the base runtime sysroot tar label.
+        overlay_tar: the extension artifact tar label.
+        ext_srcdir: the extension source-tree root label.
+        ext_runtime_tar: the extension runtime-deps sysroot tar label, or None.
+        test_ext: the extension's `metadata.test_ext` dict (`smoke` + `test`).
+    """
+    targets = []
+
+    smoke = test_ext.get("smoke")
+    if smoke != None:
+        smoke_rlocs = _ext_rlocs(
+            build_repo,
+            pg_tar,
+            runtime_tar,
+            overlay_tar,
+            ext_runtime_tar = ext_runtime_tar,
+        )
+        smoke_target = _smoke_test(
+            base_version = base_version,
+            flavor = flavor,
+            default_option_set = default_option_set,
+            rlocs = smoke_rlocs,
+            ext_name = ext_name,
+            smoke = smoke,
+        )
+        if smoke_target:
+            targets.append(smoke_target)
+
+    # The upstream pg_regress suites (version-spec-keyed, reusing the make-path
+    # introspect decoder); each runs against the extension's own source tree.
+    groups = _TestSchema.suites_from_metadata_test(
+        test_ext.get("test", {}),
+        base_version,
+    )
+    if groups:
+        reg_rlocs = _ext_rlocs(
+            build_repo,
+            pg_tar,
+            runtime_tar,
+            overlay_tar,
+            ext_srcdir = ext_srcdir,
+            ext_runtime_tar = ext_runtime_tar,
+        )
+        for slug in sorted(groups):
+            for info in groups[slug]:
+                # Externals render regress suites only (smoke covers load; the
+                # multi-cluster integration kind is a later tier).
+                if info.kind != _TestSchema.KIND_REGRESS:
+                    continue
+                targets.append(_ext_regress_test(
+                    target_name = slug,
+                    base_version = base_version,
+                    flavor = flavor,
+                    default_option_set = default_option_set,
+                    info = info,
+                    rlocs = reg_rlocs,
+                ))
+
+    if not targets:
+        return
+    rctx.file(
+        "%s/%s/%s/tests/BUILD.bazel" % (ext_name, ext_version, base_version),
+        _ext_test_build(targets),
+    )
+
 # Exposed for unit tests (mirrors the `testing = struct(...)` in base/ext).
 testing = struct(
     _repeated_flag = _repeated_flag,
@@ -1263,4 +1587,7 @@ testing = struct(
     _write_category_pkg = _write_category_pkg,
     _write_mirrored_suites = _write_mirrored_suites,
     _rlocs = _rlocs,
+    _ext_rlocs = _ext_rlocs,
+    _smoke_test = _smoke_test,
+    _ext_regress_test = _ext_regress_test,
 )

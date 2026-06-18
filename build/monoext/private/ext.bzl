@@ -225,6 +225,16 @@ def create_ext(
 
     entries |= _build_contrib(contrib, hub_name, base_flavor)
 
+    # The external extensions' `metadata.test_ext` (the smoke + upstream regress
+    # introspect), threaded to the hub so it renders the external test packages
+    # under `<ext>/<ext_v>/<base_v>/tests` alongside the builds. Keyed by
+    # extension name; extensions that declare no `test_ext` are dropped.
+    external_test_meta = {
+        n: e.metadata["test_ext"]
+        for n, e in external.items()
+        if e.metadata.get("test_ext")
+    }
+
     # Per-base-version buildtime VersionDeps for the layered `_base/<base_v>`
     # packages: every PGXS extension built against a given base version sees
     # that version's buildtime sysroot as `-idirafter` / `-L` overlay.
@@ -250,6 +260,7 @@ def create_ext(
         locks = locks,
         build_repo = build_repo,
         base_versions_deps = json.encode(base_versions_deps),
+        external_test_meta = json.encode(external_test_meta),
         **introspect_payload(base_hub_name, base_data)
     )
 
