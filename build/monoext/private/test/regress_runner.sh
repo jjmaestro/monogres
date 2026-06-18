@@ -24,7 +24,7 @@
 #       `bin/initdb` => install-tree root (PGROOT); a dir containing
 #       `src/test/regress/parallel_schedule` => source-tree root.
 #     - --flag value selectors:
-#         --kind regress|isolation|tap|setup   (default: regress)
+#         --kind regress|isolation|tap|setup|smoke   (default: regress)
 #         --suite <name>                        (outputdir subdir + log banner)
 #         --schedule <basename>                 (schedule file under the srcdir)
 #         --tests <name>                        (inline test list, repeatable; alt
@@ -32,6 +32,16 @@
 #         --dlpath-from <rloc>                  (rloc of a regress.so dir => --dlpath)
 #         --max-conc <N>                        (--max-concurrent-tests)
 #         --version|--flavor|--option-set <v>   (informational)
+#       external-extension lane (overlay a separately-built PGXS extension onto
+#       a writable copy of PGROOT, then test it):
+#         --overlay-tar <rloc>                  (extension artifact tar; repeatable)
+#         --ext-srcdir <rloc> / --ext-inputdir  (the extension's own source root +
+#                                                its REGRESS --inputdir subdir)
+#         --ext-runtime-from <rloc>             (the extension's runtime-deps tar,
+#                                                layered onto the closure; repeatable)
+#         --ext-name <name>                     (smoke: CREATE EXTENSION; repeatable)
+#         --preload <lib> / --cascade           (smoke: shared_preload_libraries +
+#                                                CREATE EXTENSION ... CASCADE)
 #
 # Env: REGRESS_INITDB_TEMPLATE=1 (PG17+) => use the installed initdb template;
 #      0/unset (PG16) => pg_regress runs initdb itself. TEST_UNDECLARED_OUTPUTS_DIR
@@ -88,6 +98,10 @@ mode="regress"
 overlay_tars=""
 ext_srcdir=""
 ext_inputdir=""
+ext_names=""
+preload_libs=""
+cascade=""
+ext_runtime_tars=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -173,6 +187,20 @@ while [ "$#" -gt 0 ]; do
       [ -n "$d" ] && ext_srcdir="$d"
       shift 2 ;;
     --ext-inputdir) ext_inputdir="$2"; shift 2 ;;
+    # External smoke lane: the extension name(s) to CREATE EXTENSION (repeatable;
+    # the catalog dir is not always the extension name, e.g. pgvector -> vector),
+    # the libraries to put in shared_preload_libraries before boot (repeatable,
+    # e.g. citus), CASCADE on the CREATE EXTENSION, and the rloc of the
+    # extension's own runtime-deps sysroot tar (repeatable) layered onto the
+    # closure so its .so resolves its NEEDED third-party libs (citus: libcurl,
+    # liblz4, libssl, libzstd). --ext-runtime-from also rides the regress lane.
+    --ext-name) ext_names="$ext_names $2"; shift 2 ;;
+    --preload) preload_libs="$preload_libs $2"; shift 2 ;;
+    --cascade) cascade="1"; shift ;;
+    --ext-runtime-from)
+      t="$(rlocation "$2" 2>/dev/null || true)"
+      if [ -n "$t" ]; then ext_runtime_tars="$ext_runtime_tars $t"; fi
+      shift 2 ;;
     --*) echo "WARN: ignoring unknown flag $1" >&2; shift 2 ;;
     *)
       r="$(rlocation "$1" 2>/dev/null || true)"
@@ -223,8 +251,9 @@ esac
 
 [ -n "$initdb" ] || { echo "ERROR: bin/initdb not found among install-tree runfiles" >&2; exit 1; }
 # The external-extension lane reads its source from --ext-srcdir, not the PG
-# src tree, so only require a PG srcroot when no --ext-srcdir was given.
-if [ -z "$ext_srcdir" ]; then
+# src tree (and the smoke lane reads no source at all), so require a PG srcroot
+# only for the core/contrib lane: no --ext-srcdir and not the smoke kind.
+if [ -z "$ext_srcdir" ] && [ "$kind" != "smoke" ]; then
   [ -n "$srcroot" ] || { echo "ERROR: source tree (src/test/regress/parallel_schedule) not found" >&2; exit 1; }
 fi
 
@@ -304,6 +333,78 @@ if [ -n "$overlay_tars" ]; then
   done
   echo "   overlaid $(printf '%s' "$overlay_tars" | wc -w) extension tar(s) onto a writable PGROOT" >&2
   PGROOT="$MERGED"
+fi
+
+# ---- smoke kind: golden-free CREATE EXTENSION exit-check (external lane) ----
+# The always-on floor for every external extension: boot a throwaway temp
+# instance off the (overlaid) install tree and run CREATE EXTENSION for each
+# --ext-name under ON_ERROR_STOP, so a broken build/install/load (a missing .so,
+# an unsatisfied dlopen, a bad .control/.sql) surfaces as a non-zero exit. No
+# expected output, one cluster, no pg_regress. Self-contained like the psql dev
+# mode above, but sandboxed: the runtime closure is reached through the chroot's
+# standard lib paths (closure_setup's default chroot mode), with the extension's
+# OWN runtime deps (--ext-runtime-from) layered on so its .so resolves its NEEDED
+# third-party libraries.
+if [ "$kind" = "smoke" ]; then
+  [ -n "$ext_names" ] || { echo "ERROR: smoke kind needs at least one --ext-name" >&2; exit 1; }
+  export LC_ALL=C LANG=C
+  CLOSURE="${TEST_TMPDIR:?TEST_TMPDIR unset}/closure"
+  # shellcheck disable=SC2086  # intentional word-split: space-separated ext runtime rlocs
+  multiarch="$(bash "$closure_setup" "$sysroot_lib" "$bsdtar" "$CLOSURE" "$runtime_tar" $ext_runtime_tars)"
+
+  # locale data: initdb runs glibc `locale -a` against the compiled-in absolute
+  # /usr/lib/locale to seed pg_collation, so bridge the closure's locale dir
+  # there (the regress lane runs the identical bridge below).
+  if [ -d "$CLOSURE/usr/lib/locale" ] && [ ! -e /usr/lib/locale ]; then
+    mkdir -p /usr/lib 2>/dev/null || true
+    ln -s "$CLOSURE/usr/lib/locale" /usr/lib/locale 2>/dev/null || true
+  fi
+
+  # PG was built rpath=false: bridge its own client libs (libpq.so.5, ...) from
+  # PGROOT/lib into the chroot's multiarch path so a dlopen'd extension module
+  # that links them (e.g. citus -> libpq) resolves. `-f` so PG's client libs WIN
+  # over a same-named lib the runtime closure may carry: a Debian client lib
+  # (e.g. libpq5) can be older than PG's own, and a PG binary would otherwise
+  # load it and die on a missing newer symbol. PG's client libs are
+  # version-locked to its own binaries, so they are authoritative.
+  pg_libdst="/usr/lib/$multiarch"
+  mkdir -p "$pg_libdst" 2>/dev/null || true
+  for src in "$PGROOT"/lib/*.so*; do
+    [ -e "$src" ] || continue
+    dst="$pg_libdst/$(basename "$src")"
+    ln -sf "$src" "$dst" 2>/dev/null || true
+  done
+
+  SMOKE_DATA="$TEST_TMPDIR/smoke-data"
+  # Short socket dir: the runfiles/TEST_TMPDIR paths exceed sun_path (107).
+  SOCK="$(mktemp -d /tmp/pgr.XXXXXX 2>/dev/null || mktemp -d)"
+  # Stop the postmaster cleanly before the sandbox tears down the datadir (an
+  # unwaited stop lets the WAL writer PANIC on the vanishing pg_wal).
+  trap '"$PGROOT/bin/pg_ctl" -D "$SMOKE_DATA" -m fast -w stop >/dev/null 2>&1 || true' EXIT INT TERM
+  "$PGROOT/bin/initdb" -D "$SMOKE_DATA" --no-locale -U postgres >&2
+  pg_opts="-k '$SOCK' -p 5432 -c listen_addresses=''"
+  if [ -n "$preload_libs" ]; then
+    # space-separated lib names -> a single shared_preload_libraries CSV.
+    csv="$(printf '%s' "$preload_libs" | tr -s ' ' ',' | sed 's/^,//; s/,$//')"
+    pg_opts="$pg_opts -c shared_preload_libraries='$csv'"
+  fi
+  "$PGROOT/bin/pg_ctl" -D "$SMOKE_DATA" -o "$pg_opts" -w start >&2
+  echo "== smoke v=${version:-?}/${flavor:-?}/${optset:-?} exts=$ext_names cascade=${cascade:-0} ==" >&2
+  casc=""
+  [ -n "$cascade" ] && casc=" CASCADE"
+  rc=0
+  # shellcheck disable=SC2086  # intentional word-split: space-separated ext names
+  for e in $ext_names; do
+    echo "== smoke: CREATE EXTENSION $e$casc ==" >&2
+    if ! PGHOST="$SOCK" PGPORT=5432 "$PGROOT/bin/psql" -U postgres -d postgres \
+        -v ON_ERROR_STOP=1 -c "CREATE EXTENSION \"$e\"$casc;"; then
+      echo "ERROR: CREATE EXTENSION $e failed" >&2
+      rc=1
+      break
+    fi
+  done
+  [ "$rc" = 0 ] && echo "OK: smoke ${ext_names} passed" >&2
+  exit "$rc"
 fi
 
 # Runner by kind. The pgxs test infra installs under a flavor-dependent dir
@@ -404,10 +505,11 @@ fi
 # ---- runtime closure (test-execution analog of sysroot_setup.sh) ----
 export LC_ALL=C LANG=C
 CLOSURE="${TEST_TMPDIR:?TEST_TMPDIR unset}/closure"
-# The TAP lane passes a `test` deps sysroot tar (IPC::Run); closure_setup.sh is
-# additive and multi-tar, so layer it onto the runtime closure when present.
-# shellcheck disable=SC2086  # intentional: ${test_tar:+...} expands to 0 or 1 arg
-multiarch="$(bash "$closure_setup" "$sysroot_lib" "$bsdtar" "$CLOSURE" "$runtime_tar" ${test_tar:+"$test_tar"})"
+# The TAP lane passes a `test` deps sysroot tar (IPC::Run), and an external
+# regress suite passes its extension's runtime-deps tar(s); closure_setup.sh is
+# additive and multi-tar, so layer either onto the runtime closure when present.
+# shellcheck disable=SC2086  # intentional: ${test_tar:+...} 0/1 arg + ext runtime word-split
+multiarch="$(bash "$closure_setup" "$sysroot_lib" "$bsdtar" "$CLOSURE" "$runtime_tar" ${test_tar:+"$test_tar"} $ext_runtime_tars)"
 
 # tzdata: PG is built --with-system-tzdata=/usr/share/zoneinfo, so pg_regress
 # reads whatever timezone database lives there at run time. The runtime closure
