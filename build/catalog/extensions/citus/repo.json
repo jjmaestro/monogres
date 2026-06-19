@@ -36,6 +36,14 @@
         "extensions": ["citus"],
         "preload": ["citus"],
         "cascade": true
+      },
+      "test": {
+        "*": {
+          "fullsuite": {
+            "kind": "manual",
+            "note": "citus pg_regress_multi.pl + mitmproxy; non-hermetic, run by hand"
+          }
+        }
       }
     },
     "deps": {
