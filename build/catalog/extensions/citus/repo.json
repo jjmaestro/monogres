@@ -42,6 +42,12 @@
           "fullsuite": {
             "kind": "manual",
             "note": "citus pg_regress_multi.pl + mitmproxy; non-hermetic, run by hand"
+          },
+          "integration": {
+            "kind": "integration",
+            "preload": ["citus"],
+            "num_clusters": 2,
+            "assertion_script": "//catalog/extensions/citus/tests:integration.sh"
           }
         }
       }
