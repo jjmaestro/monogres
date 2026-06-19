@@ -74,6 +74,7 @@
   "extensions": [
     "citus",
     "noset",
+    "pgvector",
     "sslutils"
   ],
   "version": 1
