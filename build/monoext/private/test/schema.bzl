@@ -30,6 +30,13 @@ KIND_REGRESS = "regress"
 KIND_TAP = "tap"
 KIND_SETUP = "setup"
 
+# External-extension tier-3 marker (NOT a real pg_regress runner kind): a
+# `metadata.test_ext` suite that is not hermetically runnable (e.g. citus's
+# pg_regress_multi + mitmproxy). It renders a tagged placeholder instead of a
+# real target. Never produced by the introspect classifier; only by a catalog
+# `kind: manual` external decl.
+KIND_MANUAL = "manual"
+
 # Schedule basename per kind. Only `regress`/`isolation` carry a `--schedule
 # …_schedule` token; contrib `pg_regress` groups list inline test names instead.
 # The harness resolves the real path from the installed/source tree; the
@@ -448,14 +455,14 @@ def _group_by_suite(raw_tests):
 # kind precedence rank, shared by the per-group reduction and the primary-kind
 # pick. Highest rank is the PRIMARY kind for a slug (keeps the bare
 # `<opt>.<slug>` name); lower-ranked kinds get a `.<kind>` suffix.
-_KIND_RANK = {KIND_TAP: 0, KIND_SETUP: 1, KIND_REGRESS: 2, KIND_ISOLATION: 3}
+_KIND_RANK = {KIND_MANUAL: -1, KIND_TAP: 0, KIND_SETUP: 1, KIND_REGRESS: 2, KIND_ISOLATION: 3}
 
 # Emit order of a slug's per-kind SuiteInfos: the first kind PRESENT is the
 # PRIMARY (bare `<opt>.<slug>` name); the rest get a `.<kind>` suffix. regress
 # is primary so a dual-kind contrib renders `<opt>.<slug>` (regress) +
 # `<opt>.<slug>.isolation`; a pure-isolation slug (core `isolation`) still gets
 # the bare name.
-_KINDS_BY_RANK = [KIND_REGRESS, KIND_ISOLATION, KIND_SETUP, KIND_TAP]
+_KINDS_BY_RANK = [KIND_REGRESS, KIND_ISOLATION, KIND_SETUP, KIND_TAP, KIND_MANUAL]
 
 def _partition_by_kind(entries):
     """Split a slug's `TestEntry`s into `{kind: [TestEntry, ...]}` (order preserved)."""
@@ -739,6 +746,7 @@ schema = struct(
     KIND_REGRESS = KIND_REGRESS,
     KIND_TAP = KIND_TAP,
     KIND_SETUP = KIND_SETUP,
+    KIND_MANUAL = KIND_MANUAL,
     CAT_CORE = CAT_CORE,
     CAT_PL = CAT_PL,
     CAT_MODULE = CAT_MODULE,

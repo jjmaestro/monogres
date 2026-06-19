@@ -1606,6 +1606,23 @@ def _ext_tap_test(
         env_inherit = _ENV_INHERIT,
     )))
 
+def _manual_placeholder_test(target_name, build_repo):
+    """Render a tier-3 non-hermetic external suite placeholder `sh_test`.
+
+    A `kind: manual` external decl declares a suite that is not hermetically
+    runnable (e.g. citus's pg_regress_multi + mitmproxy). The placeholder is
+    tagged `manual` + `non-hermetic` so `bazel test //...` skips it; an explicit
+    run fails via the stub. It carries no runfiles closure (it never boots PG).
+    """
+    f = bind(build = build_repo)
+    placeholder = f("@{build}//monoext/private/test:manual_placeholder.sh")
+    return Star.igen(Star.fn("sh_test", **dict(
+        name = target_name,
+        srcs = [placeholder],
+        args = [target_name],
+        tags = ["manual", "non-hermetic", "external"],
+    )))
+
 def write_external_ext_test_entry(
         rctx,
         ext_name,
@@ -1703,6 +1720,13 @@ def write_external_ext_test_entry(
                         default_option_set = default_option_set,
                         info = info,
                         rlocs = reg_rlocs,
+                    ))
+                elif info.kind == _TestSchema.KIND_MANUAL:
+                    # Tier-3: a non-hermetic suite, declared only as a tagged
+                    # placeholder (no hermetic runner; run by hand).
+                    targets.append(_manual_placeholder_test(
+                        target_name = slug,
+                        build_repo = build_repo,
                     ))
                 elif info.kind == _TestSchema.KIND_TAP:
                     # The extension's own PostgreSQL::Test TAP suite: one target
