@@ -16,6 +16,11 @@
     }
   },
   "metadata": {
+    "test_ext": {
+      "smoke": {
+        "extensions": ["sslutils"]
+      }
+    },
     "deps": {
       "buildtime": {
         "debian": {

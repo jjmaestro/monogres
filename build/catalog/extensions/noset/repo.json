@@ -24,6 +24,20 @@
         "0.3.0": ">=14",
         "0.2.0": ">=12, <14"
       }
+    },
+    "test_ext": {
+      "smoke": {
+        "extensions": ["noset"]
+      },
+      "test": {
+        "*": {
+          "regress": {
+            "kind": "regress",
+            "tests": ["noset"],
+            "temp_config": "noset.conf"
+          }
+        }
+      }
     }
   }
 }

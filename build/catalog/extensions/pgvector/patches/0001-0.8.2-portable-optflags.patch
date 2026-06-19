@@ -1,0 +1,29 @@
+From b5ff2806f7dd9abb0b069cc25a606337a85bd58b Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Wed, 17 Jun 2026 00:35:45 +0000
+Subject: [PATCH] patch: drop the default -march=native from OPTFLAGS
+
+pgvector defaults `OPTFLAGS` to `-march=native`, which bakes the build host's
+CPU into the artifact and so makes the build non-reproducible, and emits an x86
+flag even when the target is arm64. The Makefile sanctions `OPTFLAGS=""` for
+portability, so make that the default.
+
+The remaining auto-vectorization flags in `PG_CFLAGS` (`-ftree-vectorize` and
+friends) are CPU-portable and stay, as does the existing Darwin arm64 guard.
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 8bedb89..75b71b3 100644
+--- a/Makefile
++++ b/Makefile
+@@ -12,7 +12,7 @@ REGRESS = $(patsubst test/sql/%.sql,%,$(TESTS))
+ REGRESS_OPTS = --inputdir=test --load-extension=$(EXTENSION)
+ 
+ # To compile for portability, run: make OPTFLAGS=""
+-OPTFLAGS = -march=native
++OPTFLAGS =
+ 
+ # Mac ARM doesn't always support -march=native
+ ifeq ($(shell uname -s), Darwin)
