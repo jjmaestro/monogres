@@ -1623,6 +1623,70 @@ def _manual_placeholder_test(target_name, build_repo):
         tags = ["manual", "non-hermetic", "external"],
     )))
 
+def _integration_test(
+        target_name,
+        base_version,
+        flavor,
+        default_option_set,
+        info,
+        build_repo,
+        pg_tar,
+        runtime_tar,
+        overlay_tar,
+        ext_runtime_tar):
+    """Render one external multi-cluster integration `sh_test`.
+
+    Boots `info.num_clusters` clusters off the overlaid tree (each on a
+    127.0.0.1 TCP port, with `info.preload` in shared_preload_libraries) and
+    runs the catalog-provided assertion script against them. The assertion
+    script is a build-repo-relative `//...` label resolved into the target's
+    runfiles. No `--ext-srcdir` (the assertion script is the test, not a
+    pg_regress suite). Sized `large` (multi-cluster).
+    """
+    asrt = info.assertion_script
+    asrt_label = ("@%s%s" % (build_repo, asrt)) if asrt.startswith(
+        "//",
+    ) else asrt
+
+    rlocs = _ext_rlocs(
+        build_repo,
+        pg_tar,
+        runtime_tar,
+        overlay_tar,
+        ext_runtime_tar = ext_runtime_tar,
+    )
+    args = _ext_positionals(rlocs)
+    args += _ext_runtime_args(rlocs)
+    args += [
+        "--kind",
+        info.kind,
+        "--suite",
+        info.slug,
+    ] + _overlay_args(rlocs) + [
+        "--assertion-script",
+        "$(rlocationpath %s)" % asrt_label,
+        "--num-clusters",
+        str(info.num_clusters),
+        "--version",
+        base_version,
+        "--flavor",
+        flavor,
+        "--option-set",
+        default_option_set,
+    ]
+    for lib in info.preload:
+        args += ["--preload", lib]
+
+    return Star.igen(Star.fn("sh_test", **dict(
+        name = target_name,
+        srcs = [rlocs.runner],
+        args = args,
+        data = rlocs.data + [asrt_label],
+        size = "large",
+        tags = [_TAG_REGRESS, "integration", "external"],
+        env_inherit = _ENV_INHERIT,
+    )))
+
 def write_external_ext_test_entry(
         rctx,
         ext_name,
@@ -1728,6 +1792,20 @@ def write_external_ext_test_entry(
                         target_name = slug,
                         build_repo = build_repo,
                     ))
+                elif info.kind == _TestSchema.KIND_INTEGRATION:
+                    # Tier-2: a multi-cluster assertion suite.
+                    targets.append(_integration_test(
+                        target_name = slug,
+                        base_version = base_version,
+                        flavor = flavor,
+                        default_option_set = default_option_set,
+                        info = info,
+                        build_repo = build_repo,
+                        pg_tar = pg_tar,
+                        runtime_tar = runtime_tar,
+                        overlay_tar = overlay_tar,
+                        ext_runtime_tar = ext_runtime_tar,
+                    ))
                 elif info.kind == _TestSchema.KIND_TAP:
                     # The extension's own PostgreSQL::Test TAP suite: one target
                     # per `.pl`. Needs the PG source tree (PostgreSQL::Test) +
@@ -1781,4 +1859,6 @@ testing = struct(
     _smoke_test = _smoke_test,
     _ext_regress_test = _ext_regress_test,
     _ext_tap_test = _ext_tap_test,
+    _manual_placeholder_test = _manual_placeholder_test,
+    _integration_test = _integration_test,
 )

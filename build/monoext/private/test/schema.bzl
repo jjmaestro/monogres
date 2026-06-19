@@ -37,6 +37,12 @@ KIND_SETUP = "setup"
 # `kind: manual` external decl.
 KIND_MANUAL = "manual"
 
+# External-extension multi-cluster marker: a `metadata.test_ext` suite that
+# boots N clusters on 127.0.0.1 and hands them to an assertion script (e.g.
+# citus distributing a table across workers). Only a catalog `kind: integration`
+# external decl produces it.
+KIND_INTEGRATION = "integration"
+
 # Schedule basename per kind. Only `regress`/`isolation` carry a `--schedule
 # …_schedule` token; contrib `pg_regress` groups list inline test names instead.
 # The harness resolves the real path from the installed/source tree; the
@@ -430,8 +436,11 @@ def _suite_info_classify(entries):
         # its tests then name by that relative path. "" for every core/contrib
         # suite, which take the harness-private instance.
         temp_instance = "",
-        # The shared_preload_libraries an external regress suite needs but ships
-        # no .conf for; empty for every core/contrib suite.
+        # External integration-suite fields (a `metadata.test_ext` integration
+        # decl): the assertion script label, the cluster count, and the
+        # shared_preload_libraries to set. Empty/default for every other suite.
+        assertion_script = "",
+        num_clusters = 1,
         preload = [],
         # Per-.pl basenames (the part after the suite slug in each entry name,
         # e.g. `recovery/001_stream_rep` -> `001_stream_rep`); the TAP renderer
@@ -455,14 +464,21 @@ def _group_by_suite(raw_tests):
 # kind precedence rank, shared by the per-group reduction and the primary-kind
 # pick. Highest rank is the PRIMARY kind for a slug (keeps the bare
 # `<opt>.<slug>` name); lower-ranked kinds get a `.<kind>` suffix.
-_KIND_RANK = {KIND_MANUAL: -1, KIND_TAP: 0, KIND_SETUP: 1, KIND_REGRESS: 2, KIND_ISOLATION: 3}
+_KIND_RANK = {
+    KIND_MANUAL: -1,
+    KIND_TAP: 0,
+    KIND_SETUP: 1,
+    KIND_REGRESS: 2,
+    KIND_ISOLATION: 3,
+    KIND_INTEGRATION: 4,
+}
 
 # Emit order of a slug's per-kind SuiteInfos: the first kind PRESENT is the
 # PRIMARY (bare `<opt>.<slug>` name); the rest get a `.<kind>` suffix. regress
 # is primary so a dual-kind contrib renders `<opt>.<slug>` (regress) +
 # `<opt>.<slug>.isolation`; a pure-isolation slug (core `isolation`) still gets
 # the bare name.
-_KINDS_BY_RANK = [KIND_REGRESS, KIND_ISOLATION, KIND_SETUP, KIND_TAP, KIND_MANUAL]
+_KINDS_BY_RANK = [KIND_REGRESS, KIND_ISOLATION, KIND_SETUP, KIND_TAP, KIND_INTEGRATION, KIND_MANUAL]
 
 def _partition_by_kind(entries):
     """Split a slug's `TestEntry`s into `{kind: [TestEntry, ...]}` (order preserved)."""
@@ -589,7 +605,11 @@ def _suite_decl_to_info(slug, decl):
         # into `regress/instance/data`, because a backend resolves a relative
         # path against PGDATA) only resolves if the instance lands there.
         temp_instance = decl.get("temp_instance", ""),
-        # The shared_preload_libraries the suite needs but ships no .conf for.
+        # External integration-suite fields (a `metadata.test_ext` integration
+        # decl): the assertion script label, the cluster count, and the
+        # shared_preload_libraries to set. Defaults for every other decl.
+        assertion_script = decl.get("assertion_script", ""),
+        num_clusters = decl.get("num_clusters", 1),
         preload = decl.get("preload", []),
         # Per-.pl basenames for a TAP suite (its `tests` IS the .pl list); the
         # TAP renderer emits one target per .pl. Empty for non-TAP.
@@ -747,6 +767,7 @@ schema = struct(
     KIND_TAP = KIND_TAP,
     KIND_SETUP = KIND_SETUP,
     KIND_MANUAL = KIND_MANUAL,
+    KIND_INTEGRATION = KIND_INTEGRATION,
     CAT_CORE = CAT_CORE,
     CAT_PL = CAT_PL,
     CAT_MODULE = CAT_MODULE,

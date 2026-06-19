@@ -24,7 +24,7 @@
 #       `bin/initdb` => install-tree root (PGROOT); a dir containing
 #       `src/test/regress/parallel_schedule` => source-tree root.
 #     - --flag value selectors:
-#         --kind regress|isolation|tap|setup|smoke   (default: regress)
+#         --kind regress|isolation|tap|setup|smoke|integration  (default: regress)
 #         --suite <name>                        (outputdir subdir + log banner)
 #         --schedule <basename>                 (schedule file under the srcdir)
 #         --tests <name>                        (inline test list, repeatable; alt
@@ -42,6 +42,10 @@
 #         --ext-name <name>                     (smoke: CREATE EXTENSION; repeatable)
 #         --preload <lib> / --cascade           (smoke: shared_preload_libraries +
 #                                                CREATE EXTENSION ... CASCADE)
+#         --assertion-script <rloc>             (integration: script handed the
+#                                                booted clusters; its rc is the verdict)
+#         --num-clusters <N>                    (integration: clusters to boot on
+#                                                127.0.0.1, ports PGPORT_0..N-1)
 #
 # Env: REGRESS_INITDB_TEMPLATE=1 (PG17+) => use the installed initdb template;
 #      0/unset (PG16) => pg_regress runs initdb itself. TEST_UNDECLARED_OUTPUTS_DIR
@@ -106,6 +110,8 @@ ext_names=""
 preload_libs=""
 cascade=""
 ext_runtime_tars=""
+assertion_script=""
+num_clusters=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -218,6 +224,13 @@ while [ "$#" -gt 0 ]; do
       t="$(rlocation "$2" 2>/dev/null || true)"
       if [ -n "$t" ]; then ext_runtime_tars="$ext_runtime_tars $t"; fi
       shift 2 ;;
+    # integration lane: the assertion script (rloc) handed the booted clusters,
+    # and how many clusters to boot.
+    --assertion-script)
+      a="$(rlocation "$2" 2>/dev/null || true)"
+      if [ -n "$a" ]; then assertion_script="$a"; fi
+      shift 2 ;;
+    --num-clusters) num_clusters="$2"; shift 2 ;;
     --*) echo "WARN: ignoring unknown flag $1" >&2; shift 2 ;;
     *)
       r="$(rlocation "$1" 2>/dev/null || true)"
@@ -267,12 +280,17 @@ case "$suite" in
 esac
 
 [ -n "$initdb" ] || { echo "ERROR: bin/initdb not found among install-tree runfiles" >&2; exit 1; }
-# The external-extension lane reads its source from --ext-srcdir, not the PG
-# src tree (and the smoke lane reads no source at all), so require a PG srcroot
-# only for the core/contrib lane: no --ext-srcdir and not the smoke kind.
-if [ -z "$ext_srcdir" ] && [ "$kind" != "smoke" ]; then
-  [ -n "$srcroot" ] || { echo "ERROR: source tree (src/test/regress/parallel_schedule) not found" >&2; exit 1; }
-fi
+# The external regress lane reads its source from --ext-srcdir, and the smoke /
+# integration lanes read no PG source at all, so require a PG srcroot only for
+# the core/contrib lane (no --ext-srcdir and not an external boot kind).
+case "$kind" in
+  smoke | integration) ;;
+  *)
+    if [ -z "$ext_srcdir" ]; then
+      [ -n "$srcroot" ] || { echo "ERROR: source tree (src/test/regress/parallel_schedule) not found" >&2; exit 1; }
+    fi
+    ;;
+esac
 
 # An introspect-derived --temp-config names a .conf in the suite's OWN source
 # subtree (it rides the PG :src tree); resolve it against the located source root
@@ -422,6 +440,90 @@ if [ "$kind" = "smoke" ]; then
   done
   [ "$rc" = 0 ] && echo "OK: smoke ${ext_names} passed" >&2
   exit "$rc"
+fi
+
+# ---- integration kind: multi-cluster assertion (external lane) ----
+# Boot N independent clusters off the (overlaid) install tree, each on its own
+# 127.0.0.1 TCP port, then hand them to an assertion script (the extension's own
+# cross-cluster test, e.g. citus distributing a table across workers). Golden-
+# free: the assertion script runs under ON_ERROR_STOP and its exit code is the
+# verdict. Self-contained and sandboxed like the smoke lane; the private netns
+# gives each test action its own loopback, so a deterministic port offset needs
+# no bind probe.
+if [ "$kind" = "integration" ]; then
+  [ -n "$assertion_script" ] || { echo "ERROR: integration kind needs --assertion-script" >&2; exit 1; }
+  n="${num_clusters:-1}"
+  export LC_ALL=C LANG=C
+  CLOSURE="${TEST_TMPDIR:?TEST_TMPDIR unset}/closure"
+  # shellcheck disable=SC2086  # intentional word-split: space-separated ext runtime rlocs
+  multiarch="$(bash "$closure_setup" "$sysroot_lib" "$bsdtar" "$CLOSURE" "$runtime_tar" $ext_runtime_tars)"
+
+  # locale + PG client-lib bridges (see the regress lane for the rationale).
+  if [ -d "$CLOSURE/usr/lib/locale" ] && [ ! -e /usr/lib/locale ]; then
+    mkdir -p /usr/lib 2>/dev/null || true
+    ln -s "$CLOSURE/usr/lib/locale" /usr/lib/locale 2>/dev/null || true
+  fi
+  pg_libdst="/usr/lib/$multiarch"
+  mkdir -p "$pg_libdst" 2>/dev/null || true
+  for src in "$PGROOT"/lib/*.so*; do
+    [ -e "$src" ] || continue
+    dst="$pg_libdst/$(basename "$src")"
+    [ -e "$dst" ] && continue
+    ln -s "$src" "$dst" 2>/dev/null || true
+  done
+  # Cross-cluster connections go by host (citus_add_node host=127.0.0.1), so
+  # pin localhost and give 127.0.0.1 a files-only resolution.
+  [ -e /etc/hosts ] || printf '127.0.0.1 localhost\n' > /etc/hosts 2>/dev/null || true
+  [ -e /etc/nsswitch.conf ] || printf 'hosts: files\n' > /etc/nsswitch.conf 2>/dev/null || true
+
+  preload_csv=""
+  if [ -n "$preload_libs" ]; then
+    preload_csv="$(printf '%s' "$preload_libs" | tr -s ' ' ',' | sed 's/^,//; s/,$//')"
+  fi
+
+  # Deterministic free-port base: a private netns per action means no collision,
+  # so derive a stable offset from BASHPID rather than probing for a free port.
+  port_base=$((20000 + (BASHPID % 20000)))
+  datadirs=()
+  ports=()
+  # Stop every started cluster cleanly before the sandbox tears down the
+  # datadirs (an unwaited stop lets a WAL writer PANIC on the vanishing pg_wal).
+  # shellcheck disable=SC2329  # invoked via the trap below, not directly
+  _stop_all() {
+    [ "${#datadirs[@]}" -gt 0 ] || return 0
+    local d
+    for d in "${datadirs[@]}"; do
+      "$PGROOT/bin/pg_ctl" -D "$d" -m fast -w stop >/dev/null 2>&1 || true
+    done
+  }
+  trap _stop_all EXIT INT TERM
+
+  for ((i = 0; i < n; i++)); do
+    d="$TEST_TMPDIR/cluster-$i"
+    p=$((port_base + i))
+    sock="$(mktemp -d /tmp/pgr.XXXXXX 2>/dev/null || mktemp -d)"
+    "$PGROOT/bin/initdb" -D "$d" --no-locale -U postgres >&2
+    datadirs+=("$d")
+    ports+=("$p")
+    pg_opts="-k '$sock' -p $p -c listen_addresses='127.0.0.1'"
+    [ -n "$preload_csv" ] && pg_opts="$pg_opts -c shared_preload_libraries='$preload_csv'"
+    "$PGROOT/bin/pg_ctl" -D "$d" -o "$pg_opts" -w start >&2
+  done
+
+  # The assertion script reaches the clusters over TCP via these: PGHOST +
+  # PGPORT_0..N-1 (PGPORT_0 is the conventional coordinator), PGPORTS (the
+  # space-separated list), NUM_CLUSTERS, and bin/ on PATH.
+  export PGROOT
+  export PATH="$PGROOT/bin:$PATH"
+  export NUM_CLUSTERS="$n"
+  export PGHOST="127.0.0.1"
+  export PGPORTS="${ports[*]}"
+  for i in "${!ports[@]}"; do
+    export "PGPORT_$i=${ports[$i]}"
+  done
+  echo "== integration suite=${suite:-?} clusters=$n ports=${ports[*]} v=${version:-?}/${flavor:-?} ==" >&2
+  bash "$assertion_script"
+  exit $?
 fi
 
 # Runner by kind. The pgxs test infra installs under a flavor-dependent dir
