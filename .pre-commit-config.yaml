@@ -13,6 +13,7 @@ exclude: >-
     .*\.(patch|diff)$
     |.*\.lock$
     |.*/introspect/.*\.json$
+    |.*/config_headers/.*\.h$
     |rbe/auth/.*\.json$
   )$
 repos:
