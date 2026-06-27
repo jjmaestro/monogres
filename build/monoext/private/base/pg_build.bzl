@@ -622,13 +622,16 @@ find "$$BUILD_TMPDIR" \\( -path '*/src/test/modules/*' \\
 # native cc_* overlay can consume them. `meson setup` emits pg_config.h,
 # pg_config_os.h, and pg_config_ext.h from feature detection and
 # pg_config_paths.h from the prefix_distro paths, all via configure_file() under
-# `$$BUILD_TMPDIR/src/include/`. No build target produces them, so they are
-# absent from the introspect JSON: they are the one residue the overlay needs
-# that the JSON cannot carry. Appended to the introspect postfix only (the
-# production :tar build is unchanged); a regen writer copies them into the
-# committed seed next to the introspect JSON. pg_config_paths.h embeds
-# prefix_distro (/postgres/<version>), matching the :tar install root, so
-# pg_config reports identical paths from the native build.
+# `$$BUILD_TMPDIR/src/include/`; ecpg_config.h is the same residue for the ecpg
+# client interface, configured under `src/interfaces/ecpg/include/`. No build
+# target produces them, so they are absent from the introspect JSON: they are
+# the one residue the overlay needs that the JSON cannot carry. Appended to the
+# introspect postfix only (the production :tar build is unchanged); a regen
+# writer copies them into the committed seed next to the introspect JSON.
+# pg_config_paths.h embeds prefix_distro (/postgres/<version>), matching the
+# :tar install root, so pg_config reports identical paths from the native build.
+# Every header lands flat in config_headers/, on every target's include path via
+# pg_config_headers (includes=["config_headers"]).
 _CONFIG_HEADERS_CAPTURE = """
 mkdir -p "$$INSTALLDIR/config_headers"
 for __h in pg_config.h pg_config_os.h pg_config_ext.h pg_config_paths.h; do
@@ -636,6 +639,9 @@ for __h in pg_config.h pg_config_os.h pg_config_ext.h pg_config_paths.h; do
         2>/dev/null | head -1)
     if [ -n "$$__f" ]; then cp -f "$$__f" "$$INSTALLDIR/config_headers/"; fi
 done
+__e=$$(find "$$BUILD_TMPDIR" -path '*/src/interfaces/ecpg/include/*' \\
+    -name ecpg_config.h -type f 2>/dev/null | head -1)
+if [ -n "$$__e" ]; then cp -f "$$__e" "$$INSTALLDIR/config_headers/"; fi
 """
 
 def _pg_build_meson(

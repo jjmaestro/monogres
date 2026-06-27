@@ -904,6 +904,26 @@ def render_overlay(introspect, version, option_set, packages, src_prefix = ""):
                 want.append(p)
         module_specs.append((target, static_srcs, gen_srcs))
 
+    # Codegen input closure: a genrule may consume a generated source as its
+    # input (the ecpg preprocessor grammar is generated -- bison reads
+    # preproc.y, which the perl parse.pl emits from the backend gram.y and the
+    # ecpg addon files), so pull in the producer of every generated codegen
+    # input until the set is closed (Starlark has no while loop; the bound is a
+    # safe over-count).
+    for _ in range(1000):
+        added = False
+        for t in list(want):
+            for s in t["target_sources"][0]["sources"]:
+                if "introspect.build_tmpdir/" not in s:
+                    continue
+                p = producer.get(rel_out(s))
+                if p and p["id"] not in want_ids:
+                    want_ids[p["id"]] = True
+                    want.append(p)
+                    added = True
+        if not added:
+            break
+
     # Render the codegen genrules into their packages; collect their header-like
     # outputs (real headers plus the textually-included node bodies) into
     # pg_generated_headers, and the produced-output set for the install tree.

@@ -20,12 +20,11 @@ DEFERRED_LIBS = [
     "libpgcommon_shlib_config_info",
 ]
 
-# Installed executables not rendered as frontends: ecpg needs the ecpg
-# preprocessor codegen (its own phase). Every other installed executable is a
-# frontend, including the regress drivers.
-DEFERRED_EXES = [
-    "ecpg",
-]
+# Installed executables all render as frontends, including the ecpg preprocessor
+# (its grammar is generated: bison reads preproc.y, which the perl parse.pl
+# emits from the backend gram.y and the ecpg addon files) and the regress
+# drivers.
+DEFERRED_EXES = []
 
 # Shared modules held back past the core module phase. Contrib modules are
 # deferred wholesale by their `defined_in` (see `_is_contrib`).
