@@ -48,8 +48,12 @@ def _is_contrib(defined_in):
     """Whether a target is defined under contrib/ (deferred wholesale)."""
     return "/gh/contrib/" in defined_in
 
+def _module_so_name(target):
+    """A shared module's output .so basename (the rendered cc_binary name)."""
+    return target["filename"][0].rsplit("/", 1)[-1]
+
 def overlay_layout(introspect):
-    """Map the introspect to the overlay package layout.
+    """Map the introspect to the overlay package layout and its public facade.
 
     Collects the source directories that own a rendered target: a static library
     (minus DEFERRED_LIBS), an installed executable (minus DEFERRED_EXES), or a
@@ -57,26 +61,59 @@ def overlay_layout(introspect):
     of its targets. The renderer's deferrals are mirrored so the package set
     matches what the overlay builds.
 
+    `facade` is the per-package public-target map the hub aliases under
+    `@<hub>//<v>/<opt>/cc/`: the named libs / executables / modules (a lib with
+    no compiled sources is skipped, as the renderer skips it) plus the shared
+    libpq variants the renderer emits beside the static libpq. It mirrors
+    render.bzl's selection (KEEP IN SYNC); the internal targets the renderer
+    also emits (the header libs, the cc_imports, the per-package :hdrs /
+    :textual / :include, the codegen genrules, the JIT bitcode) are deliberately
+    absent.
+
     Args:
         introspect: the decoded introspect JSON for one (version, option_set).
 
     Returns:
-        A struct with `packages`: the sorted list of target-owning directories.
+        A struct with `packages` (sorted target-owning directories) and `facade`
+        ({package: sorted public target names}).
     """
     packages = {}
+    facade = {}
     for t in introspect["targets"]:
         type_ = t["type"]
         name = t["name"]
+        tname = None
         if type_ == "static library":
             if name in DEFERRED_LIBS:
                 continue
+            ts = t["target_sources"][0]
+            if ts.get("sources") or ts.get("generated_sources"):
+                tname = name
         elif type_ == "executable":
             if not t.get("installed") or name in DEFERRED_EXES:
                 continue
+            tname = name
         elif type_ == "shared module":
             if name in DEFERRED_MODULES or _is_contrib(t["defined_in"]):
                 continue
+            tname = _module_so_name(t)
         else:
             continue
-        packages[pkg_of(t["defined_in"])] = True
-    return struct(packages = sorted(packages.keys()))
+        pkg = pkg_of(t["defined_in"])
+        packages[pkg] = True
+        if tname:
+            facade.setdefault(pkg, {})[tname] = True
+
+    # The shared libpq (libpq_shared cc_library + libpq_so cc_shared_library)
+    # the renderer emits beside the static libpq, in the libpq package.
+    for t in introspect["targets"]:
+        if t["name"] == "libpq" and t["type"] == "shared library":
+            lp = facade.setdefault(pkg_of(t["defined_in"]), {})
+            lp["libpq_shared"] = True
+            lp["libpq_so"] = True
+            break
+
+    return struct(
+        packages = sorted(packages.keys()),
+        facade = {p: sorted(facade[p].keys()) for p in sorted(facade.keys())},
+    )

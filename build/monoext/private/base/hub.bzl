@@ -10,7 +10,12 @@ to per-version lazy repos).
 load("@starlark_utils//starlark:starlark.bzl", Star = "starlark")
 load("//monoext/private/base:introspect.bzl", "write_introspect")
 load("//monoext/private/base:schema.bzl", _BaseSchema = "schema")
-load("//monoext/private/base:versions.bzl", "write_base_version")
+load(
+    "//monoext/private/base:versions.bzl",
+    "write_base_version",
+    "write_cc_facade",
+)
+load("//monoext/private/cc_overlay:layout.bzl", "overlay_layout")
 load("//monoext/private/pkgs:schema.bzl", _PkgsSchema = "schema")
 load(
     "//monoext/private/test:introspect.bzl",
@@ -118,6 +123,23 @@ def _impl(rctx):
     # with no `+test` introspect variant).
     render_core_tests(rctx, rctx.attr.flavor, rctx.attr.build_repo)
 
+    # The native cc_* overlay alias facade under `<v>/<opt>/cc/`: one BUILD per
+    # overlay package aliasing its public targets into `@<hub>_cc_<v>_<set>`.
+    # Driven by the SAME overlay_layout the overlay repo uses (both decode the
+    # one committed introspect JSON), so the facade and the overlay cannot
+    # drift. Empty for flavors / scopes with no overlay.
+    cc_overlay_repos = json.decode(rctx.attr.cc_overlay_repos)
+    for label, key in rctx.attr.cc_introspect_jsons.items():
+        version, option_set = key.split("~")
+        layout = overlay_layout(json.decode(rctx.read(label)))
+        write_cc_facade(
+            rctx,
+            version,
+            option_set,
+            layout.facade,
+            cc_overlay_repos[key],
+        )
+
 _ATTRS = dict(
     archs = attr.string_list(mandatory = True),
     entries = attr.string_dict(mandatory = True),
@@ -137,6 +159,14 @@ _ATTRS = dict(
               "Baked into `CFG.name` in the generated `all.bzl`.",
         default = "postgres",
     ),
+    # The native cc_* overlay alias facade. `cc_introspect_jsons` maps each
+    # scoped overlay's committed (production) introspect JSON to its
+    # `"<version>~<option_set>"` key, declared as a label_keyed_string_dict so
+    # `rctx.read` can decode it and run `overlay_layout`. `cc_overlay_repos` is
+    # JSON `{"<version>~<option_set>": overlay_repo_apparent_name}`, the alias
+    # targets. Both empty for flavors / scopes with no overlay.
+    cc_introspect_jsons = attr.label_keyed_string_dict(default = {}),
+    cc_overlay_repos = attr.string(default = "{}"),
     # The test-introspect attrs (`+test` introspect labels + per-(v,opt) label
     # maps + overrides + the `introspect_jsons` content dict), filled by
     # `introspect.introspect_payload`. The base hub now renders the

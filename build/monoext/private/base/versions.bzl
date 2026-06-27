@@ -273,6 +273,51 @@ def _deps_kind_build(aliases, exec_files_targets = None):
 # Writers
 # ---------------------------------------------------------------------------
 
+def _cc_facade_root_build(overlay_repo):
+    """Render {version}/{option_set}/cc/BUILD.bazel: the overlay install tree."""
+    return Star.file(
+        Star.package(default_visibility = ["//visibility:public"]),
+        Star.alias(name = "tar", actual = "@%s//:tar" % overlay_repo),
+        header = _HEADER,
+    )
+
+def _cc_facade_pkg_build(overlay_repo, pkg, targets):
+    """Render {version}/{option_set}/cc/{pkg}/BUILD.bazel: per-target aliases."""
+    parts = [Star.package(default_visibility = ["//visibility:public"])]
+    parts += [
+        Star.alias(name = t, actual = "@%s//%s:%s" % (overlay_repo, pkg, t))
+        for t in targets
+    ]
+    return Star.file(header = _HEADER, *parts)
+
+def write_cc_facade(rctx, version, option_set, facade, overlay_repo):
+    """Render the native cc_* overlay alias facade under {version}/{option_set}/cc/.
+
+    Each overlay package's public targets (the libs / executables / modules /
+    shared libpq) are aliased at `@<hub>//<v>/<opt>/cc/<pkg>:<target>`, and the
+    install tree at `@<hub>//<v>/<opt>/cc:tar`, all pointing into the native
+    cc_* overlay repo `overlay_repo`. The facade comes from the same
+    `overlay_layout` that drives the overlay, so the two cannot drift. A pure
+    addition: the production `:tar` and the rules_foreign_cc build targets are
+    untouched.
+
+    Args:
+        rctx: repository context.
+        version: base version string.
+        option_set: option set name.
+        facade: `{package: [public target names]}` from `overlay_layout`.
+        overlay_repo: the overlay repo's apparent name (e.g. `pg_cc_16_0_full`).
+    """
+    rctx.file(
+        "%s/%s/cc/BUILD.bazel" % (version, option_set),
+        _cc_facade_root_build(overlay_repo),
+    )
+    for pkg, targets in facade.items():
+        rctx.file(
+            "%s/%s/cc/%s/BUILD.bazel" % (version, option_set, pkg),
+            _cc_facade_pkg_build(overlay_repo, pkg, targets),
+        )
+
 def write_base_version(rctx, version, entry, build_repo, option_sets, archs):
     """Generates the full directory hierarchy for one base version.
 

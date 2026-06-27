@@ -430,6 +430,22 @@ def create_base(hub_name, base_data, pkgs_result, archs, build_repo = "monogres"
 
     entries = _build_entries(base_data, versions_deps, hub_name)
 
+    # The native cc_* overlay alias facade inputs: per scoped (version,
+    # option_set), the committed (production) introspect JSON the hub decodes to
+    # run `overlay_layout`, and the overlay repo the facade aliases into. Same
+    # scope + introspect labels as `create_cc_overlays`, so facade == overlay.
+    cc_scope = _CC_OVERLAY_MVP if flavor == "postgres" else []
+    cc_introspect_meta = base_data.metadata.get("introspect", {})
+    cc_introspect_jsons = {}
+    cc_overlay_repos = {}
+    for v, opt, arch in cc_scope:
+        lbl = cc_introspect_meta.get(v, {}).get(opt)
+        if not lbl:
+            continue
+        key = "%s~%s" % (v, opt)
+        cc_introspect_jsons[Label(lbl)] = key
+        cc_overlay_repos[key] = repo_names.pg_cc(hub_name, v, opt, arch)
+
     # `introspect_payload` supplies `option_sets` + the test-introspect attrs;
     # the base hub renders the core/pl/module suites alongside the build
     # targets.
@@ -443,6 +459,8 @@ def create_base(hub_name, base_data, pkgs_result, archs, build_repo = "monogres"
         pg_src = "@%s" % base_data.source_repo,
         build_repo = build_repo,
         flavor = flavor,
+        cc_introspect_jsons = cc_introspect_jsons,
+        cc_overlay_repos = json.encode(cc_overlay_repos),
         # The core/pl/module suites run against the native cc_* overlay for the
         # MVP scope (the same pairs `cc_overlay_repos` creates), validating it
         # on the same regress / isolation harness as the rules_foreign_cc build.
