@@ -155,6 +155,13 @@ CODEGEN_TARGETS = [
     # #includes them from its own dir and no lib compiles them.
     "c_kwlist_d.h",
     "ecpg_kwlist_d.h",
+    # contrib generators with no compiled consumer: fuzzystrmatch #includes the
+    # perl-generated daitch_mokotoff.h textually, and sepgsql's extension SQL is
+    # sed-generated from sepgsql.sql.in (installed to share/extension/, not
+    # compiled). cube's / seg's bison + flex scanners are compiled sources, so
+    # the producer index discovers them from the module's generated_sources.
+    "daitch_mokotoff",
+    "sepgsql.sql",
 ]
 
 # Extra input globs per perl generator: modules loaded via `use lib` / FindBin

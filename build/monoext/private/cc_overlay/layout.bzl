@@ -26,8 +26,8 @@ DEFERRED_LIBS = [
 # drivers.
 DEFERRED_EXES = []
 
-# Shared modules held back past the core module phase. Contrib modules are
-# deferred wholesale by their `defined_in` (see `_is_contrib`).
+# Shared modules held back from the overlay (none: the src/ loadables, the PLs,
+# and every contrib extension render).
 DEFERRED_MODULES = []
 
 def pkg_of(defined_in):
@@ -43,10 +43,6 @@ def pkg_of(defined_in):
     """
     return defined_in.split("/gh/", 1)[1].rsplit("/meson.build", 1)[0]
 
-def _is_contrib(defined_in):
-    """Whether a target is defined under contrib/ (deferred wholesale)."""
-    return "/gh/contrib/" in defined_in
-
 def _module_so_name(target):
     """A shared module's output .so basename (the rendered cc_binary name)."""
     return target["filename"][0].rsplit("/", 1)[-1]
@@ -56,9 +52,9 @@ def overlay_layout(introspect):
 
     Collects the source directories that own a rendered target: a static library
     (minus DEFERRED_LIBS), an installed executable (minus DEFERRED_EXES), or a
-    non-contrib shared module (minus DEFERRED_MODULES). Each is the home package
-    of its targets. The renderer's deferrals are mirrored so the package set
-    matches what the overlay builds.
+    shared module (minus DEFERRED_MODULES). Each is the home package of its
+    targets. The renderer's deferrals are mirrored so the package set matches
+    what the overlay builds.
 
     `facade` is the per-package public-target map the hub aliases under
     `@<hub>//<v>/<opt>/cc/`: the named libs / executables / modules (a lib with
@@ -93,7 +89,7 @@ def overlay_layout(introspect):
                 continue
             tname = name
         elif type_ == "shared module":
-            if name in DEFERRED_MODULES or _is_contrib(t["defined_in"]):
+            if name in DEFERRED_MODULES:
                 continue
             tname = _module_so_name(t)
         else:

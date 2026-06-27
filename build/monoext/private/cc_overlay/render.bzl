@@ -246,15 +246,6 @@ def _cpp_compile_ts(target):
             return ts
     return None
 
-def _is_contrib_module(target):
-    """A `shared module` defined under contrib/.
-
-    Its `.control` / `.sql` packaging and regress suites land with the contrib
-    phase, so the core module phase renders only the src/ modules (the encoding
-    conversions, the PLs, dict_snowball, ...).
-    """
-    return "/gh/contrib/" in target["defined_in"]
-
 def _module_so_name(target):
     """A `shared module`'s output .so basename.
 
@@ -663,12 +654,12 @@ def _render_install(
     path. Sources resolve by build-path root: an executable to its rendered
     cc_binary, libpq.so to the cc_shared_library, a core module to its
     linkshared cc_binary, a `build_tmpdir/` path to its generated output, a
-    `/gh/` path to the symlinked source. This is the runnable core (the backend,
-    frontends, libpq, the core loadable modules, and the bootstrap data initdb /
-    postgres read); the server headers ({includedir}), the static archives
-    ({libdir_static}), the contrib extensions ({datadir}/extension + their
-    modules), the NLS catalogs ({datadir}/locale) and the pgxs / pkg-config
-    files land with their own phases and are not assembled here.
+    `/gh/` path to the symlinked source. This is the runnable tree: the backend,
+    frontends, libpq, every loadable module (the core loadables, the PLs and the
+    contrib extensions), the extension packaging ({datadir}/extension), the NLS
+    catalogs ({datadir}/locale) and the bootstrap data initdb / postgres read.
+    The server headers ({includedir}), the static archives ({libdir_static}) and
+    the pgxs / pkg-config files land with their own phases.
 
     Emitted into the root package (the install rule is the validation contract,
     label `@<overlay>//:tar`); the install_subdir filegroups render in whichever
@@ -724,17 +715,25 @@ def _render_install(
                 if sub.startswith("locale/"):
                     continue
 
-                # extension/ holds the .control / .sql packaging. A core PL's
-                # (plpgsql) installs with its built module; the deferred PLs'
-                # and every contrib extension's land with their own phase.
+                # extension/ holds the .control / .sql packaging. A PL's
+                # installs with its built module (its files live under
+                # src/pl/<lang>/); every contrib extension's installs from
+                # contrib/ (including the data-only ones, e.g. intagg, that
+                # build no module). sepgsql's .sql is generated, so it arrives
+                # as a build_tmpdir output rather than a /gh/ source.
                 if sub.startswith("extension/"):
-                    rel = rel_src(key) if "/gh/" in key else None
-                    keep = rel and [
+                    if "introspect.build_tmpdir/" in key:
+                        edir = rel_out(key).rsplit("/", 1)[0]
+                    elif "/gh/" in key:
+                        edir = rel_src(key).rsplit("/", 1)[0]
+                    else:
+                        continue
+                    in_pl = [
                         d
                         for d in pl_ext_dirs
-                        if rel.startswith(d + "/")
+                        if edir == d or edir.startswith(d + "/")
                     ]
-                    if not keep:
+                    if not edir.startswith("contrib/") and not in_pl:
                         continue
                 src = None
                 if "introspect.build_tmpdir/" in key:
@@ -812,10 +811,9 @@ def _build_index(introspect, packages):
     """Map every rendered target's reference name to its overlay package.
 
     Static libs (by archive basename), installed executables (by name), and
-    non-contrib shared modules (by `.so` output name) each render in their
-    `defined_in` package; the shared libpq targets render in
-    src/interfaces/libpq. Used to resolve a `:name` dependency / install
-    reference to `//pkg:name`.
+    shared modules (by `.so` output name) each render in their `defined_in`
+    package; the shared libpq targets render in src/interfaces/libpq. Used to
+    resolve a `:name` dependency / install reference to `//pkg:name`.
 
     Args:
         introspect: the decoded introspect JSON.
@@ -831,7 +829,7 @@ def _build_index(introspect, packages):
             index[t["name"]] = target_home(packages, t["defined_in"])
         elif type_ == "executable" and t.get("installed"):
             index[t["name"]] = target_home(packages, t["defined_in"])
-        elif type_ == "shared module" and not _is_contrib_module(t):
+        elif type_ == "shared module" and t["name"] not in DEFERRED_MODULES:
             index[_module_so_name(t)] = target_home(packages, t["defined_in"])
     libpq_home = target_home(
         packages,
@@ -1023,15 +1021,15 @@ def render_overlay(introspect, version, option_set, packages, src_prefix = ""):
                 want.append(p)
         frontend_specs.append((target, static_srcs, gen_srcs))
 
-    # The core shared modules (loadable .so the backend dlopen's: the encoding
-    # conversions, the PLs, dict_snowball, ...). Same producer-index resolution
-    # for their compiled generated sources (plpgsql's pl_gram.c / pl_*kwlist.h).
-    # Contrib modules are deferred (their packaging is a later phase).
+    # The shared modules (loadable .so the backend dlopen's: the encoding
+    # conversions, the PLs, dict_snowball, and every contrib extension). Same
+    # producer-index resolution for their compiled generated sources (plpgsql's
+    # pl_gram.c / pl_*kwlist.h, cube's / seg's bison + flex scanners).
     module_specs = []
     for target in introspect["targets"]:
         if target["type"] != "shared module":
             continue
-        if target["name"] in DEFERRED_MODULES or _is_contrib_module(target):
+        if target["name"] in DEFERRED_MODULES:
             continue
         cts = _exe_compile_ts(target)
         static_srcs = [rel_src(s) for s in cts.get("sources", [])]
