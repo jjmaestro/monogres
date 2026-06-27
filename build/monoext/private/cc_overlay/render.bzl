@@ -142,6 +142,16 @@ _INSTALL_DATA = "{datadir}/"
 # and the trigger tests load refint.so / autoinc.so. Captured when rendered.
 _REGRESS_SUPPORT_MODULES = ["regress", "refint", "autoinc"]
 
+# msgfmt (gettext's message-catalog compiler), its runtime libs and glibc's
+# charset converters, the NLS genrules use to compile each po/<lang>.po into a
+# .mo catalog. gettext is a postgres buildtime dep, so msgfmt + its libgettext*
+# / libunistring libs ride the buildtime sysroot the overlay exposes under
+# sysroot/; libc and the loader resolve from the sandbox (like the @perl_sysroot
+# interpreter).
+_NLS_MSGFMT = "//:nls_msgfmt"
+_NLS_LIBS = "//:nls_libs"
+_NLS_GCONV = "//:nls_gconv"
+
 def _cc_library(**kwargs):
     return Star.igen(Star.fn("cc_library", **kwargs))
 
@@ -516,7 +526,135 @@ def _render_shared_libpq(st, introspect, lib_names):
     )), "cc_shared_library")
     return imports
 
-def _render_install(st, introspect, exe_names, produced, module_so, pl_ext_dirs):
+def _render_nls(st, introspect):
+    """Render the NLS message catalogs (.mo) and return their install map.
+
+    Each translatable component carries one `custom` target per language that
+    runs msgfmt over its `po/<lang>.po` into a `<domain>-<major>.mo` catalog,
+    installed under share/locale/<lang>/LC_MESSAGES/. The catalog is
+    architecture-neutral, so each genrule renders in the package that owns the
+    .po (the component's package, or the root for a domain whose dir is not a
+    package) and runs msgfmt from the overlay sysroot. msgfmt's lib dir is
+    recovered from its own execpath (../lib/<multiarch> from its bin dir) so the
+    LD_LIBRARY_PATH holds whatever overlay repo the action stages.
+
+    Args:
+        st: the render state, mutated (the msgfmt filegroups + per-catalog
+            genrules).
+        introspect: the decoded introspect JSON.
+
+    Returns:
+        A {mo_label: install-rel dest} dict (empty when the build has no NLS).
+    """
+    mos = [
+        t
+        for t in introspect["targets"]
+        if t["type"] == "custom" and t["name"].endswith(".mo")
+    ]
+    if not mos:
+        return {}
+
+    # msgfmt as a single-file target (so `$(execpath)` is unambiguous) plus its
+    # runtime libs from the same sysroot, staged into every catalog genrule.
+    _emit(st, "", Star.igen(Star.fn(
+        "filegroup",
+        name = "nls_msgfmt",
+        srcs = ["sysroot/usr/bin/msgfmt"],
+    )))
+
+    # msgfmt's full transitive .so closure, globbed from both sysroot lib dirs
+    # since the minimal sandbox provides only the loader. msgfmt itself loads
+    # libgettextsrc + libgettextlib, and those pull libtextstyle (which needs
+    # libtinfo), libacl / libattr, libunistring, libicu / libxml2 / liblzma;
+    # nothing in the chain carries a RUNPATH, so the LD_LIBRARY_PATH below is
+    # the only resolution path and has to cover every link of it.
+    _nls_lib_dirs = ["sysroot/usr/lib/" + MULTIARCH, "sysroot/lib/" + MULTIARCH]
+    _nls_lib_pats = [
+        "libgettext*.so",
+        "libunistring.so*",
+        "libtextstyle.so*",
+        "libtinfo.so*",
+        "libacl.so*",
+        "libattr.so*",
+        "libicu*.so*",
+        "libxml2.so*",
+        "liblzma.so*",
+        "libc.so*",
+        "libm.so*",
+        "libz.so*",
+        "libstdc++.so*",
+        "libgcc_s.so*",
+    ]
+    _emit(st, "", Star.igen(Star.fn(
+        "filegroup",
+        name = "nls_libs",
+        srcs = Star.glob(
+            [d + "/" + p for d in _nls_lib_dirs for p in _nls_lib_pats],
+            allow_empty = True,
+        ),
+    )))
+
+    # glibc's charset converter modules. iconv() loads them from the compiled-in
+    # /usr/lib/<multiarch>/gconv, which the sandbox does not have, and msgfmt
+    # needs them for every catalog whose .po is not already UTF-8 (nb.po is
+    # ISO-8859-1). GCONV_PATH below redirects glibc to this staged copy; setting
+    # it also makes glibc parse gconv-modules + gconv-modules.d/ instead of the
+    # gconv-modules.cache it would only read from the compiled-in dir.
+    _emit(st, "", Star.igen(Star.fn(
+        "filegroup",
+        name = "nls_gconv",
+        srcs = Star.glob(
+            ["sysroot/usr/lib/" + MULTIARCH + "/gconv/**"],
+            allow_empty = True,
+        ),
+    )))
+
+    nls_files = {}
+    for t in mos:
+        po = rel_src(t["target_sources"][0]["sources"][0])
+        lang = po.rsplit("/", 1)[-1][:-len(".po")]
+        home = longest_pkg_prefix(st["packages"], po.rsplit("/", 1)[0])
+        out_full = (home + "/" + t["name"]) if home else t["name"]
+        out_lbl = _gen(st, out_full, home)
+        cmd = (
+            'M="$(execpath %s)"\n' % _NLS_MSGFMT +
+            'D="$$(pwd)/$$(dirname "$$M")"\n' +
+            'export LD_LIBRARY_PATH="$$D/../lib/' + MULTIARCH + ":$$D/../../lib/" + MULTIARCH +
+            '$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}"\n' +
+            'export GCONV_PATH="$$D/../lib/' + MULTIARCH + '/gconv"\n' +
+            '"$$M" -o $(execpath %s) $(execpath %s)\n' % (out_lbl, _src(
+                st,
+                po,
+                home,
+            ))
+        )
+        _emit(st, home, Star.igen(Star.fn(
+            "genrule",
+            name = "gen_" + t["name"].replace(
+                "/",
+                "_",
+            ).replace(".", "_").replace("-", "_"),
+            srcs = [_src(st, po, home), _NLS_LIBS, _NLS_GCONV],
+            outs = [out_lbl],
+            cmd = Star.tstr(cmd),
+            tools = [_NLS_MSGFMT],
+        )))
+        install_base = t["name"][:-len("-" + lang + ".mo")] + ".mo"
+        nls_files[_gen(
+            st,
+            out_full,
+            "",
+        )] = "share/locale/%s/LC_MESSAGES/%s" % (lang, install_base)
+    return nls_files
+
+def _render_install(
+        st,
+        introspect,
+        exe_names,
+        produced,
+        module_so,
+        pl_ext_dirs,
+        nls_files):
     """Render the install tree as `:tar`, matching the RFCC install layout.
 
     Driven by the introspect install_plan: each entry's destination
@@ -543,6 +681,7 @@ def _render_install(st, introspect, exe_names, produced, module_so, pl_ext_dirs)
         produced: the set of generated outputs (overlay paths) rendered.
         module_so: the set of rendered module .so output names.
         pl_ext_dirs: the `src/pl/<lang>` dirs of the rendered PLs.
+        nls_files: the {mo_label: share/locale dest} map from `_render_nls`.
 
     Returns:
         The pg_install_tree node.
@@ -612,6 +751,10 @@ def _render_install(st, introspect, exe_names, produced, module_so, pl_ext_dirs)
     for mod in _REGRESS_SUPPORT_MODULES:
         if mod + ".so" in module_so:
             files[_dep(st, mod + ".so", "")] = "lib/postgresql/" + mod + ".so"
+
+    # NLS catalogs (msgfmt-compiled .mo) install under share/locale/.
+    for lbl, dest in nls_files.items():
+        files[lbl] = dest
 
     # install_subdirs: meson install_subdir copies a source directory's contents
     # into a dest dir. The text-search data lands this way (the snowball
@@ -1183,6 +1326,10 @@ def render_overlay(introspect, version, option_set, packages, src_prefix = ""):
             out = bc_out,
         )), "pg_jit_bitcode")
 
+    # NLS message catalogs (.mo): one msgfmt genrule per (domain, language),
+    # returning the {label: share/locale/... dest} map for the install tree.
+    nls_files = _render_nls(st, introspect)
+
     # The install tree (`:tar`): the runnable core assembled from the
     # install_plan.
     _emit(st, "", _render_install(
@@ -1192,6 +1339,7 @@ def render_overlay(introspect, version, option_set, packages, src_prefix = ""):
         produced,
         module_so,
         _module_pl_dirs(module_specs),
+        nls_files,
     ), "pg_install_tree")
 
     # The filegroups relocated genrules stage cross-package inputs by (emitted
