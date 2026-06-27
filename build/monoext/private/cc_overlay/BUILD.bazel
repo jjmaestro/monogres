@@ -1,0 +1,62 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+# The renderer for the native cc_* Postgres overlay.
+# `render.bzl::render_overlay` is loaded by
+# `//monoext/private/base:cc_overlay.bzl`'s repo rule; the rest is internal to
+# this submodule (plus the unit tests).
+package(default_visibility = [
+    "//monoext/private/base:__pkg__",
+    "//tests/monoext:__subpackages__",
+])
+
+exports_files([
+    "codegen.bzl",
+    "flags.bzl",
+    "imports.bzl",
+    "labels.bzl",
+    "layout.bzl",
+    "render.bzl",
+])
+
+bzl_library(
+    name = "flags",
+    srcs = ["flags.bzl"],
+)
+
+bzl_library(
+    name = "layout",
+    srcs = ["layout.bzl"],
+)
+
+bzl_library(
+    name = "labels",
+    srcs = ["labels.bzl"],
+    deps = [":layout"],
+)
+
+bzl_library(
+    name = "codegen",
+    srcs = ["codegen.bzl"],
+    deps = [
+        ":flags",
+        ":labels",
+    ],
+)
+
+bzl_library(
+    name = "imports",
+    srcs = ["imports.bzl"],
+    deps = [":flags"],
+)
+
+bzl_library(
+    name = "render",
+    srcs = ["render.bzl"],
+    deps = [
+        ":codegen",
+        ":flags",
+        ":imports",
+        ":labels",
+        ":layout",
+    ],
+)

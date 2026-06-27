@@ -24,7 +24,7 @@ The introspect decode (`schema.bzl`) and the suite renderers (`suites.bzl`) are
 reused whole.
 """
 
-load("//monoext/private:repo_names.bzl", "bind")
+load("//monoext/private:repo_names.bzl", "bind", "repo_names")
 load("//monoext/private/base/build_options:flavors.bzl", "FLAVORS")
 load(
     "//monoext/private/test:suites.bzl",
@@ -90,7 +90,7 @@ INTROSPECT_ATTRS = dict(
     introspect_jsons = attr.label_keyed_string_dict(default = {}),
 )
 
-def introspect_payload(name, base_data):
+def introspect_payload(name, base_data, cc_overlay_scope = []):
     """Assemble the introspect repo-rule attrs for a unified hub.
 
     Runs in module-extension context (called from `create_base` / `create_ext`).
@@ -102,6 +102,12 @@ def introspect_payload(name, base_data):
     Args:
         name: the base hub name (e.g. `"pg"`); labels are `@{name}//...`.
         base_data: `BaseData` from `create_base_src`.
+        cc_overlay_scope: `(version, option_set, arch)` triples whose `:tar` is
+            the native cc_* overlay's (`@{name}_cc_<v>_<set>_<arch>`) rather
+            than the rules_foreign_cc build's, so the suites run the SAME
+            regress / isolation harness against the overlay. The base hub passes
+            the overlay MVP scope; the extensions hub passes none (its contrib
+            modules are not in the overlay yet).
 
     Returns:
         a `dict` to splat into the `base_repo` / `ext_repo` call.
@@ -168,6 +174,14 @@ def introspect_payload(name, base_data):
             )("@{name}//{v}/{opt}:tar.test")
             for opt in cols
         }
+
+    # Repoint the install tree to the native cc_* overlay for the scoped
+    # (version, option_set, arch) triples, so the regress / isolation suites
+    # validate the overlay against the same expected outputs. The +test variant
+    # (test_pg_tars, the modules: suites) stays on the meson test build.
+    for v, opt, arch in cc_overlay_scope:
+        if v in pg_tars and opt in pg_tars[v]:
+            pg_tars[v][opt] = "@%s//:tar" % repo_names.pg_cc(name, v, opt, arch)
 
     introspect_jsons = {
         Label(lbl): "%s~%s" % (v, opt)

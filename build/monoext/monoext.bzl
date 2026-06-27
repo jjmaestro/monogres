@@ -29,7 +29,13 @@ Internal repos:
 
 load("@platform_debian//:versions.bzl", "RELEASE")
 load("@sysroots//common:tag_key.bzl", "tag_key")
-load("//monoext/private:base.bzl", "create_base", "create_base_src")
+load(
+    "//monoext/private:base.bzl",
+    "cc_overlay_repos",
+    "create_base",
+    "create_base_src",
+    "create_cc_overlays",
+)
 load("//monoext/private:ext.bzl", "create_ext", "create_ext_src")
 load("//monoext/private:pkgs.bzl", "LLVM_PREREQS", "create_pkgs")
 load("//monoext/private:repo_names.bzl", "repo_names")
@@ -109,6 +115,11 @@ def create_monogres(
     # 4. shared deps pool: @{name}_pkgs
     pkgs_result = create_pkgs(ctx, pkgs_name, package_groups, lock = lock)
 
+    # 4b. native cc_* overlay repos (the from-source Postgres build generated
+    # off the introspect JSON). After create_pkgs so the overlay can reach the
+    # per-arch buildtime sysroot for external-dep headers. Lazy; MVP-scoped.
+    create_cc_overlays(ctx, name, base, base_data, pkgs_result)
+
     # 5. base hub: @{name}. Renders the build targets AND the core/pl/module
     # test introspect (one sh_test per (version x option_set x suite) under
     # `<v>/<opt>/tests/`).
@@ -121,6 +132,11 @@ def create_monogres(
     )
 
     repos = [name, pkgs_name]
+
+    # Native cc_* overlay repos (the from-source Postgres build generated off
+    # the introspect JSON). MVP-scoped; the repos are created lazily in
+    # `create_base_src`.
+    repos += cc_overlay_repos(name, base_data)
 
     # 6. extensions hub: @{name}_ext (if extensions set). Renders the extension
     # builds AND the contrib test introspect (`contrib/<name>/<v>/tests`). Runs

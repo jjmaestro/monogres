@@ -141,6 +141,7 @@ RELEASES = {
         "llvm_version": "14.0.6",
         "perl_version": "5.36",
         "python_version": "3.11",
+        "tcl_version": "8.6",
         "version": "12",
     },
     "13": {
@@ -151,6 +152,7 @@ RELEASES = {
         "llvm_version": "19.1.7",
         "perl_version": "5.40",
         "python_version": "3.13",
+        "tcl_version": "8.6",
         "version": "13",
     },
 }
@@ -274,7 +276,7 @@ monoext.monogres(
     deb_lock = "//catalog/locks:pg_pkgs.lock",
     extensions = "//catalog/extensions:index.json",
 )
-use_repo(monoext, "pg", "pg_ext", "pg_pkgs")
+use_repo(monoext, "pg", "pg_cc_16_0_full_amd64", "pg_ext", "pg_pkgs")
 
 monoext.monogres(
     name = "ivory",

@@ -66,6 +66,12 @@ repo_names = struct(
     pkgs_hub = lambda hub: "{hub}_pkgs".format(hub = hub),
     base_src = lambda hub: "{hub}_src".format(hub = hub),
     base_src_version = lambda hub, v: "{hub}_src-{v}".format(hub = hub, v = v),
+    pg_cc = lambda hub, v, opt, arch: "{hub}_cc_{v}_{opt}_{arch}".format(
+        hub = hub,
+        v = v.replace(".", "_"),
+        opt = opt,
+        arch = arch,
+    ),
     pg_introspect = lambda hub, v: "{hub}_introspect{sep}{v}".format(
         hub = hub,
         sep = INSTANCE_SEP,

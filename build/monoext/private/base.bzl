@@ -21,6 +21,7 @@ load("@platform_debian//:versions.bzl", "RELEASE")
 load("@version_utils//version:version.bzl", Version = "version")
 load("//monoext/private:pkgs.bzl", "pkgs_group")
 load("//monoext/private:repo_names.bzl", "bind", "repo_names")
+load("//monoext/private/base:cc_overlay.bzl", "pg_cc_overlay")
 load("//monoext/private/base:compat.bzl", "is_compatible_with")
 load("//monoext/private/base:hub.bzl", "base_repo")
 load(
@@ -48,6 +49,97 @@ load("//monoext/private/test:introspect.bzl", "introspect_payload")
 _TEST_OVERLAY = {
     "tap_tests": "enabled",
 }
+
+# Native cc_* overlay MVP scope: the (version, option_set, arch) triples that
+# have a captured config-header seed and get a generated
+# `@<hub>_cc_<v>_<set>_<arch>` overlay repo (the native Postgres build, see
+# `base/cc_overlay.bzl`). The arch is carried in the triple because the overlay
+# is per-arch (its config-header seed and buildtime sysroot are arch-specific);
+# expand as the overlay generalizes across versions / option sets / arch.
+_CC_OVERLAY_MVP = [("16.0", "full", "amd64")]
+
+def cc_overlay_repos(hub_name, base_data):
+    """Names of the native cc_* overlay repos created for the MVP scope.
+
+    Mirrors the gate in `create_cc_overlays` (postgres flavor, versions present
+    in the index) so the returned names match the repos actually created,
+    keeping `root_module_direct_deps` and `use_repo` consistent.
+
+    Args:
+        hub_name: Apparent name of the base hub (the `tag.name` value).
+        base_data: `BaseData` struct from `create_base_src`.
+
+    Returns:
+        A list of overlay repo names.
+    """
+    if base_data.flavor != "postgres":
+        return []
+    return [
+        repo_names.pg_cc(hub_name, v, opt, arch)
+        for v, opt, arch in _CC_OVERLAY_MVP
+        if v in base_data.versions
+    ]
+
+def create_cc_overlays(ctx, hub_name, base_label, base_data, pkgs_result):
+    """Create the native cc_* overlay repos for the MVP scope.
+
+    Runs after `create_pkgs` (from `create_monogres`) because the overlay repo
+    rule needs the concrete per-arch buildtime-sysroot label (from
+    `pkgs_result`) to expose the external-dep headers (openssl, icu, ...) the
+    compile needs. Re-reads the source index for each version's source name and
+    pulls the introspect JSON labels from the metadata; the gate matches
+    `cc_overlay_repos` so the created repos line up with the direct deps. Lazy:
+    the repos only materialize when built. Meson + postgres only (the make path
+    lacks a per-target compile graph; other flavors have no captured seed yet).
+
+    Args:
+        ctx: Module extension context.
+        hub_name: Apparent name of the base hub (the `tag.name` value).
+        base_label: Label of the base flavor's `repo.json` index.
+        base_data: `BaseData` struct from `create_base_src`.
+        pkgs_result: `PkgsResult` from `create_pkgs` (for the sysroot labels).
+    """
+    if base_data.flavor != "postgres":
+        return
+
+    index = Index.new(base_data.source_repo, ctx.read(base_label))
+    introspect_meta = base_data.metadata.get("introspect", {})
+    versions_deps = pkgs_result.versions_deps.get(base_data.flavor, {})
+
+    for version, option_set, arch in _CC_OVERLAY_MVP:
+        repos = index.repos.get(version)
+        introspect_label = introspect_meta.get(version, {}).get(option_set)
+        vd = versions_deps.get(version)
+        if not repos or not introspect_label or not vd or not vd.buildtime:
+            continue
+
+        sysroot_label = vd.buildtime.sysroot_labels_by_arch.get(arch)
+        if not sysroot_label:
+            continue
+
+        base_src_ver = repo_names.base_src_version(hub_name, version)
+        f = bind(src = base_src_ver, v = version, source = repos[0].source)
+        pg_cc_overlay(
+            name = repo_names.pg_cc(hub_name, version, option_set, arch),
+            version = version,
+            option_set = option_set,
+            pg_src_version_dir = f("@{src}//{v}/{source}:BUILD.bazel"),
+            introspect_json = introspect_label,
+            config_headers = "//{pkg}/config_headers:{flavor}~{v}~{opt}~{arch}/pg_config.h".format(
+                pkg = base_label.package,
+                flavor = base_data.flavor,
+                v = version,
+                opt = option_set,
+                arch = arch,
+            ),
+            # Per-arch buildtime sysroot package's BUILD.bazel: its dirname is
+            # the sysroot root, whose usr/include carries the external-dep
+            # headers (openssl, icu, libxml2, ...).
+            buildtime_sysroot_build = sysroot_label.replace(
+                ":sysroot",
+                ":BUILD.bazel",
+            ),
+        )
 
 def _release_gated(version, release_incompatible, active_debian):
     """Whether `version` is gated off the active Debian release.
@@ -351,7 +443,14 @@ def create_base(hub_name, base_data, pkgs_result, archs, build_repo = "monogres"
         pg_src = "@%s" % base_data.source_repo,
         build_repo = build_repo,
         flavor = flavor,
-        **introspect_payload(hub_name, base_data)
+        # The core/pl/module suites run against the native cc_* overlay for the
+        # MVP scope (the same pairs `cc_overlay_repos` creates), validating it
+        # on the same regress / isolation harness as the rules_foreign_cc build.
+        **introspect_payload(
+            hub_name,
+            base_data,
+            cc_overlay_scope = _CC_OVERLAY_MVP if base_data.flavor == "postgres" else [],
+        )
     )
 
 testing = struct(

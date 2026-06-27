@@ -15,6 +15,7 @@ load(
     openhalo_VERSIONS = "VERSIONS",
 )
 load("@pg//:all.bzl", pg_OPTION_SETS = "OPTION_SETS", pg_VERSIONS = "VERSIONS")
+load(":gen_pg_config_headers.bzl", "update_config_headers")
 load(":gen_pg_introspect_jsons.bzl", "gen_pg_introspect_jsons")
 
 package(default_visibility = ["//visibility:public"])
@@ -32,6 +33,11 @@ bzl_library(
 bzl_library(
     name = "gen_pg_introspect_jsons_bzl",
     srcs = ["gen_pg_introspect_jsons.bzl"],
+)
+
+bzl_library(
+    name = "gen_pg_config_headers_bzl",
+    srcs = ["gen_pg_config_headers.bzl"],
 )
 
 # Standalone script invoked from `pg_build_make`'s genrule shell action to
@@ -78,4 +84,16 @@ gen_pg_introspect_jsons(
     hub = "babelfish",
     option_sets = babelfish_OPTION_SETS,
     versions = babelfish_VERSIONS,
+)
+
+# Native cc_* overlay seed: the meson-configured headers (pg_config*.h) captured
+# by the `:introspect` target, committed under
+# build/catalog/postgres/config_headers/. Scoped to the 16.0/full/amd64 MVP
+# target; add instances per (version, option_set, arch) as the overlay
+# generalizes. Run with `bazel run //tools:gen_pg_config_headers_16_0_full`.
+update_config_headers(
+    name = "gen_pg_config_headers_16_0_full",
+    dest = "catalog/postgres/config_headers/postgres~16.0~full~amd64",
+    introspect = "@pg//16.0/full:introspect",
+    tags = ["manual"],
 )

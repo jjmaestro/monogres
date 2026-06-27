@@ -618,6 +618,26 @@ find "$$BUILD_TMPDIR" \\( -path '*/src/test/modules/*' \\
     -exec cp -f {} "$$INSTALLDIR/test_bin/" \\;
 """
 
+# Capture the meson-configured headers into the introspect install tree so the
+# native cc_* overlay can consume them. `meson setup` emits pg_config.h,
+# pg_config_os.h, and pg_config_ext.h from feature detection and
+# pg_config_paths.h from the prefix_distro paths, all via configure_file() under
+# `$$BUILD_TMPDIR/src/include/`. No build target produces them, so they are
+# absent from the introspect JSON: they are the one residue the overlay needs
+# that the JSON cannot carry. Appended to the introspect postfix only (the
+# production :tar build is unchanged); a regen writer copies them into the
+# committed seed next to the introspect JSON. pg_config_paths.h embeds
+# prefix_distro (/postgres/<version>), matching the :tar install root, so
+# pg_config reports identical paths from the native build.
+_CONFIG_HEADERS_CAPTURE = """
+mkdir -p "$$INSTALLDIR/config_headers"
+for __h in pg_config.h pg_config_os.h pg_config_ext.h pg_config_paths.h; do
+    __f=$$(find "$$BUILD_TMPDIR" -path '*/src/include/*' -name "$$__h" -type f \\
+        2>/dev/null | head -1)
+    if [ -n "$$__f" ]; then cp -f "$$__f" "$$INSTALLDIR/config_headers/"; fi
+done
+"""
+
 def _pg_build_meson(
         name,
         pg_src,
@@ -784,6 +804,11 @@ def _pg_build_introspect(
         # regen normalizer keys on, `_INTROSPECT_JSON_NAME`), not after the
         # build target `name`, so the normalizer always finds it.
         out_data_files = ["tar.json"],
+        # Capture the meson-configured headers (the one residue not in the
+        # introspect JSON) alongside the JSON. _CONFIG_HEADERS_CAPTURE, appended
+        # to the shared postfix, copies them into $INSTALLDIR/config_headers/.
+        out_data_dirs = ["config_headers"],
+        postfix_script = meson_common_args["postfix_script"] + _CONFIG_HEADERS_CAPTURE,
         targets = ["introspect"],
         tags = ["manual"],
     )))

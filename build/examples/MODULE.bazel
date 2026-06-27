@@ -26,7 +26,7 @@ monoext.monogres(
     deb_lock = "@monogres//catalog/locks:pg_pkgs.lock",
     extensions = "@monogres//catalog/extensions:index.json",
 )
-use_repo(monoext, "pg", "pg_ext", "pg_pkgs")
+use_repo(monoext, "pg", "pg_cc_16_0_full_amd64", "pg_ext", "pg_pkgs")
 
 monoext.monogres(
     name = "ivory",

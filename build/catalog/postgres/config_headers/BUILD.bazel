@@ -1,0 +1,10 @@
+# Captured meson-configured headers (pg_config.h, pg_config_os.h,
+# pg_config_ext.h, pg_config_paths.h): the native cc_* Postgres overlay seed.
+# One subdir per (flavor, version, option_set, arch), produced by
+# `//tools:gen_pg_config_headers_*` from the `:introspect` target's captured
+# config_headers tree. Committed like the introspect JSONs and consumed by the
+# generated @pg_cc overlay (they are the one residue `meson setup` produces that
+# the introspect JSON cannot carry).
+package(default_visibility = ["//visibility:public"])
+
+exports_files(glob(["**/*.h"]))

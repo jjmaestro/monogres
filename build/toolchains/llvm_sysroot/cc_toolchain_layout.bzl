@@ -371,7 +371,14 @@ filegroup(
     ),
 )
 
-filegroup(name = "ar", srcs = ["bin/llvm-ar", "bin/llvm-ar.real"])
+# `:lib` is included so the archive action's sandbox carries Debian's runtime
+# libs (libLLVM-14.so.1, ...): unlike clang (compile / link route through
+# compiler-files / linker-files, which already carry `:lib`), `toolchains_llvm`
+# binds `ar` straight to the binary, and the `bin/llvm-ar` wrapper's exported
+# `LD_LIBRARY_PATH=<adapter>/lib` only resolves if those `.so` files are present.
+# Without it, `llvm-ar` aborts with "libLLVM-14.so.1: cannot open shared object
+# file" the first time a native cc_library is archived.
+filegroup(name = "ar", srcs = ["bin/llvm-ar", "bin/llvm-ar.real", ":lib"])
 
 filegroup(name = "as", srcs = ["bin/clang", "bin/clang.real", "bin/llvm-as", "bin/llvm-as.real"])
 
