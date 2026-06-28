@@ -94,6 +94,52 @@ _EXE_EXTRA_DEPS = {
 _LIBPQ_SHARED = "libpq_shared"
 _LIBPQ_SO = "libpq_so"
 
+# The client shared libraries (libpq and the ecpg family). meson builds each as
+# a static_library + shared_library pair; the shared one installs and clients
+# link it. Each renders as a cc_library (<lib>_shared, the -fPIC sources)
+# wrapped in a cc_shared_library (<lib>_so) that names the versioned output,
+# sets the soname, and applies the gen_export.pl version script. `lib` is the
+# introspect target name, `real` the installed .so filename, `exports` the
+# .exports custom target. Ordered so a lib is defined before one that links it.
+# The inter-library edges (libecpg.so links libpgtypes.so + libpq.so) are the
+# .so files on the link line; see `_render_client_shlibs`.
+_CLIENT_SHLIBS = [
+    struct(
+        lib = "libpq",
+        real = "libpq.so.5.16",
+        exports = "libpq.exports",
+    ),
+    struct(
+        lib = "libpgtypes",
+        real = "libpgtypes.so.3.16",
+        exports = "libpgtypes.exports",
+    ),
+    struct(
+        lib = "libecpg",
+        real = "libecpg.so.6.16",
+        exports = "libecpg.exports",
+    ),
+    struct(
+        lib = "libecpg_compat",
+        real = "libecpg_compat.so.3.16",
+        exports = "libecpg_compat.exports",
+    ),
+]
+
+# Versioned .so name -> its `_CLIENT_SHLIBS` spec, for the install plan lookup.
+_client_shlib_by_real = {spec.real: spec for spec in _CLIENT_SHLIBS}
+
+def _so_names(real):
+    """The (soname, linker-name) for a versioned .so filename.
+
+    `libpq.so.5.16` -> (`libpq.so.5`, `libpq.so`): the soname keeps the major
+    (the DT_SONAME the loader follows), the linker name drops the version (the
+    dev symlink a `-lpq` link resolves).
+    """
+    base, ver = real.split(".so.", 1)
+    major = ver.split(".", 1)[0]
+    return base + ".so." + major, base + ".so"
+
 # The header-support libraries every compiled target depends on, all rendered in
 # the root package.
 _HDR_LIBS = [
@@ -445,77 +491,113 @@ def _render_header_libs(st, gen_hdrs):
         includes = ["src/include", "src/common"],
     ), "cc_library")
 
-def _render_shared_libpq(st, introspect, lib_names):
-    """Render the shared libpq (libpq.so.5.16) the way meson links it.
+def _render_client_shlibs(st, introspect, lib_names):
+    """Render the client shared libraries (libpq + the ecpg family) as meson links them.
 
-    meson builds libpq twice (a static_library and a shared_library) and the
-    `libpq` dependency every frontend consumes is the shared one
-    (declare_dependency(link_with: libpq_so)). Mirror that: a cc_library of the
-    shared variant's sources (compiled -fPIC, linking the _shlib port / common
-    variants), wrapped in a cc_shared_library that names the output
-    libpq.so.5.16, sets the soname libpq.so.5, and applies libpq's symbol export
-    map (gen_export.pl turns exports.txt into a GNU version script restricting
-    the exported symbols to the public libpq API). Emitted into the libpq
-    package; frontends dynamic_dep it.
+    meson builds each client lib twice (a static_library and a shared_library);
+    the dependency clients consume is the shared one
+    (declare_dependency(link_with: <lib>_so)). Mirror that for every
+    `_CLIENT_SHLIBS` entry: a cc_library (<lib>_shared) of the shared variant's
+    -fPIC sources, wrapped in a cc_shared_library (<lib>_so) that names the
+    versioned output, sets the soname, and applies the gen_export.pl version
+    script (exports.txt -> a GNU version script restricting the exported symbols
+    to the public API). Each is emitted into its defining package.
+
+    libpq links no overlay shared library; the ecpg family forms a chain
+    (libecpg.so links libpgtypes.so + libpq.so, libecpg_compat.so links both
+    ecpg libs). meson puts those upstream libraries on the link line as their
+    built .so files, so each is staged as an additional_linker_input and passed
+    by path rather than as a cc_shared_library dynamic_dep. That keeps the four
+    libraries in separate cc_shared_library graphs, so each one privately links
+    its own libpgport_shlib / libpgcommon_shlib copy (as meson does) without two
+    shared libraries claiming to own the same static library.
 
     Args:
-        st: the render state, mutated (libpq nodes emitted).
+        st: the render state, mutated (the client-lib nodes emitted).
         introspect: the decoded introspect JSON.
         lib_names: the set of rendered convenience-lib names.
 
     Returns:
-        The external cc_import specs the .so needs (so the caller renders them).
+        The deduped external cc_import specs the .so files need (so the caller
+        renders them).
     """
-    home = target_home(
-        st["packages"],
-        _find_target(introspect, "libpq", "shared library")["defined_in"],
-    )
+    homes = {}
+    so_by_real = {}
+    for spec in _CLIENT_SHLIBS:
+        homes[spec.lib] = target_home(
+            st["packages"],
+            _find_target(introspect, spec.lib, "shared library")["defined_in"],
+        )
+        so_by_real[spec.real] = spec
 
-    # The GNU version script: perl gen_export.pl --format gnu exports.txt.
-    exports = _find_target(introspect, "libpq.exports", "custom")
-    exp_home, exports_node, exports_outs = codegen_genrule(
-        exports,
-        st["packages"],
-        st["exports"],
-        st["needs"],
-    )
-    _emit(st, exp_home, exports_node)
-    version_script = _gen(st, exports_outs[0], home)
+    all_imports = []
+    seen = {}
+    for spec in _CLIENT_SHLIBS:
+        home = homes[spec.lib]
 
-    so = _find_target(introspect, "libpq", "shared library")
-    cts = _exe_compile_ts(so)
-    link_params = _exe_link_ts(so)["parameters"]
+        # The GNU version script: perl gen_export.pl --format gnu exports.txt.
+        exports = _find_target(introspect, spec.exports, "custom")
+        exp_home, exports_node, exports_outs = codegen_genrule(
+            exports,
+            st["packages"],
+            st["exports"],
+            st["needs"],
+        )
+        _emit(st, exp_home, exports_node)
+        version_script = _gen(st, exports_outs[0], home)
 
-    # libpq is pure C; its externals are all C shared libraries. The static
-    # libstdc++ meson appends to every link line is unused here, and bundling it
-    # (a static archive) into the .so would collide with the frontends that
-    # genuinely link it (for ICU), so keep only the shared externals.
-    imports = [i for i in external_imports(link_params) if i.shared]
-    static_deps = link_static_deps(link_params)
-    static_deps = static_deps + crc_sibling_deps(static_deps, lib_names)
-    inc_attr, inc_deps = _include_deps(st, cts["parameters"], home)
-    _emit(st, home, _cc_library(
-        name = _LIBPQ_SHARED,
-        srcs = sorted([_src(st, rel_src(s), home) for s in cts["sources"]]),
-        copts = copts(cts["parameters"]),
-        includes = inc_attr,
-        deps = _hdr_deps(st, home) +
-               [_dep(st, d[len(":"):], home) for d in static_deps] +
-               inc_deps +
-               [_dep(st, i.name, home) for i in imports],
-    ), "cc_library")
-    _emit(st, home, Star.igen(Star.fn(
-        "cc_shared_library",
-        name = _LIBPQ_SO,
-        shared_lib_name = "libpq.so.5.16",
-        deps = [_dep(st, _LIBPQ_SHARED, home)],
-        additional_linker_inputs = [version_script],
-        user_link_flags = [
-            "-Wl,-soname,libpq.so.5",
+        so = _find_target(introspect, spec.lib, "shared library")
+        cts = _exe_compile_ts(so)
+        link_params = _exe_link_ts(so)["parameters"]
+
+        # The client libs are pure C; their externals are all C shared
+        # libraries. The static libstdc++ meson appends to every link line is
+        # unused here, and bundling it (a static archive) into a .so would
+        # collide with the frontends that genuinely link it (for ICU), so keep
+        # only the shared externals.
+        imports = [i for i in external_imports(link_params) if i.shared]
+        for i in imports:
+            if i.name not in seen:
+                seen[i.name] = True
+                all_imports.append(i)
+        static_deps = link_static_deps(link_params)
+        static_deps = static_deps + crc_sibling_deps(static_deps, lib_names)
+        inc_attr, inc_deps = _include_deps(st, cts["parameters"], home)
+        _emit(st, home, _cc_library(
+            name = spec.lib + "_shared",
+            srcs = sorted([_src(st, rel_src(s), home) for s in cts["sources"]]),
+            copts = copts(cts["parameters"]) + st["copts_extra"],
+            includes = inc_attr,
+            deps = _hdr_deps(st, home) +
+                   [_dep(st, d[len(":"):], home) for d in static_deps] +
+                   inc_deps +
+                   [_dep(st, i.name, home) for i in imports],
+        ), "cc_library")
+
+        # The upstream overlay .so files this lib links by path (the ecpg
+        # chain).
+        soname, _ = _so_names(spec.real)
+        linker_inputs = [version_script]
+        link_flags = [
+            "-Wl,-soname,%s" % soname,
             "-Wl,--version-script=$(location %s)" % version_script,
-        ],
-    )), "cc_shared_library")
-    return imports
+        ]
+        for p in link_params:
+            for real in so_by_real:
+                if real != spec.real and (p == real or p.endswith("/" + real)):
+                    lbl = _dep(st, so_by_real[real].lib + "_so", home)
+                    if lbl not in linker_inputs:
+                        linker_inputs.append(lbl)
+                        link_flags.append("$(location %s)" % lbl)
+        _emit(st, home, Star.igen(Star.fn(
+            "cc_shared_library",
+            name = spec.lib + "_so",
+            shared_lib_name = spec.real,
+            deps = [_dep(st, spec.lib + "_shared", home)],
+            additional_linker_inputs = linker_inputs,
+            user_link_flags = link_flags,
+        )), "cc_shared_library")
+    return all_imports
 
 def _render_nls(st, introspect):
     """Render the NLS message catalogs (.mo) and return their install map.
@@ -688,9 +770,13 @@ def _render_install(
                 if name in exe_names:
                     files[_dep(st, name, "")] = "bin/" + name
             elif dest.startswith(_INSTALL_LIB_SHARED):
+                # The client shared libraries (libpq + the ecpg family) install
+                # by their versioned .so name; the rendered cc_shared_library is
+                # named <lib>_so.
                 rel = dest[len(_INSTALL_LIB_SHARED):]
-                if rel == "libpq.so.5.16":
-                    files[_dep(st, _LIBPQ_SO, "")] = "lib/" + rel
+                spec = _client_shlib_by_real.get(rel)
+                if spec:
+                    files[_dep(st, spec.lib + "_so", "")] = "lib/" + rel
             elif dest.startswith(_INSTALL_MODULE):
                 # rel is the module's output .so basename; the rendered target
                 # is named after the same build output.
@@ -794,17 +880,21 @@ def _render_install(
         label = ("//%s:%s" % (owner, fg)) if owner else ":" + fg
         subdir_files[label] = "share/" + sub
 
+    # Each client shared library ships as the real versioned .so plus the soname
+    # and dev symlinks an install creates (the loader follows the soname; a
+    # `-l<name>` link follows the dev name).
+    symlinks = {}
+    for spec in _CLIENT_SHLIBS:
+        soname, linkername = _so_names(spec.real)
+        symlinks["lib/" + linkername] = soname
+        symlinks["lib/" + soname] = spec.real
+
     return Star.igen(Star.fn(
         "pg_install_tree",
         name = "tar",
         files = files,
         subdir_files = subdir_files,
-        # libpq ships as the real libpq.so.5.16 plus the soname and dev symlinks
-        # (the loader follows libpq.so.5; an install creates these).
-        symlinks = {
-            "lib/libpq.so": "libpq.so.5",
-            "lib/libpq.so.5": "libpq.so.5.16",
-        },
+        symlinks = symlinks,
     ))
 
 def _build_index(introspect, packages):
@@ -831,12 +921,13 @@ def _build_index(introspect, packages):
             index[t["name"]] = target_home(packages, t["defined_in"])
         elif type_ == "shared module" and t["name"] not in DEFERRED_MODULES:
             index[_module_so_name(t)] = target_home(packages, t["defined_in"])
-    libpq_home = target_home(
-        packages,
-        _find_target(introspect, "libpq", "shared library")["defined_in"],
-    )
-    index[_LIBPQ_SHARED] = libpq_home
-    index[_LIBPQ_SO] = libpq_home
+    for spec in _CLIENT_SHLIBS:
+        h = target_home(
+            packages,
+            _find_target(introspect, spec.lib, "shared library")["defined_in"],
+        )
+        index[spec.lib + "_shared"] = h
+        index[spec.lib + "_so"] = h
     return index
 
 def _render_infra(st):
@@ -1136,9 +1227,10 @@ def render_overlay(introspect, version, option_set, packages, src_prefix = ""):
 
     lib_names = {target["name"]: True for target, _, _ in lib_specs}
 
-    # The shared libpq (libpq.so.5.16) the frontends dynamically link, plus the
-    # external libraries it carries (rendered as cc_imports below).
-    libpq_imports = _render_shared_libpq(st, introspect, lib_names)
+    # The client shared libraries (libpq, which the frontends dynamically link,
+    # and the ecpg family) plus the external libraries they carry (rendered as
+    # cc_imports below).
+    client_imports = _render_client_shlibs(st, introspect, lib_names)
 
     backend = _find_target(introspect, _EXE_BACKEND, "executable")
     backend_home = target_home(st["packages"], backend["defined_in"])
@@ -1146,11 +1238,12 @@ def render_overlay(introspect, version, option_set, packages, src_prefix = ""):
     for target, static_srcs, gen_srcs in frontend_specs:
         exe_items.append((target, None, (static_srcs, gen_srcs)))
 
-    # Seed the imports with libpq.so's, so the cc_imports its cc_library depends
-    # on are rendered even if no executable links them directly.
+    # Seed the imports with the client libraries', so the cc_imports their
+    # cc_libraries depend on are rendered even if no executable links them
+    # directly.
     all_imports = []
     seen_imp = {}
-    for imp in libpq_imports:
+    for imp in client_imports:
         seen_imp[imp.name] = True
         all_imports.append(imp)
 

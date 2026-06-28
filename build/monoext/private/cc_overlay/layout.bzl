@@ -10,13 +10,11 @@ renderer filters by them and `overlay_layout` mirrors that filtering, so both
 agree on which targets (and therefore which directories) the overlay builds.
 """
 
-# Static libs deferred past the core overlay. The ecpg family needs the ecpg
-# codegen (ecpg_config.h, the ecpg kwlists, the preprocessor); the shlib
-# config_info variant lands with the shared libpq layout.
+# Static libs held back from the overlay. libpgcommon_shlib_config_info is the
+# config_info variant compiled for shared libraries; meson builds it but nothing
+# in this option set links it (only pg_config reads the build data, through the
+# frontend config_info variant), so it is not rendered.
 DEFERRED_LIBS = [
-    "libecpg",
-    "libecpg_compat",
-    "libpgtypes",
     "libpgcommon_shlib_config_info",
 ]
 
@@ -59,11 +57,11 @@ def overlay_layout(introspect):
     `facade` is the per-package public-target map the hub aliases under
     `@<hub>//<v>/<opt>/cc/`: the named libs / executables / modules (a lib with
     no compiled sources is skipped, as the renderer skips it) plus the shared
-    libpq variants the renderer emits beside the static libpq. It mirrors
-    render.bzl's selection (KEEP IN SYNC); the internal targets the renderer
-    also emits (the header libs, the cc_imports, the per-package :hdrs /
-    :textual / :include, the codegen genrules, the JIT bitcode) are deliberately
-    absent.
+    client-library variants (libpq and the ecpg family) the renderer emits
+    beside their static libs. It mirrors render.bzl's selection (KEEP IN SYNC);
+    the internal targets the renderer also emits (the header libs, the
+    cc_imports, the per-package :hdrs / :textual / :include, the codegen
+    genrules, the JIT bitcode) are deliberately absent.
 
     Args:
         introspect: the decoded introspect JSON for one (version, option_set).
@@ -99,14 +97,14 @@ def overlay_layout(introspect):
         if tname:
             facade.setdefault(pkg, {})[tname] = True
 
-    # The shared libpq (libpq_shared cc_library + libpq_so cc_shared_library)
-    # the renderer emits beside the static libpq, in the libpq package.
+    # The shared client libraries (libpq and the ecpg family) the renderer emits
+    # as a cc_library (<lib>_shared) + cc_shared_library (<lib>_so) pair beside
+    # the static lib, in the defining package (clients link the shared variant).
     for t in introspect["targets"]:
-        if t["name"] == "libpq" and t["type"] == "shared library":
+        if t["type"] == "shared library":
             lp = facade.setdefault(pkg_of(t["defined_in"]), {})
-            lp["libpq_shared"] = True
-            lp["libpq_so"] = True
-            break
+            lp[t["name"] + "_shared"] = True
+            lp[t["name"] + "_so"] = True
 
     return struct(
         packages = sorted(packages.keys()),
