@@ -273,24 +273,27 @@ def _deps_kind_build(aliases, exec_files_targets = None):
 # Writers
 # ---------------------------------------------------------------------------
 
+# The native cc_* overlay install trees, exposed under cc/<arch>/ and aliased
+# flat under cc/ for the default arch.
+_CC_TARS = ["tar", "tar.dev", "tar.test"]
+
 def _cc_facade_root_build(overlay_repo):
-    """Render {version}/{option_set}/cc/BUILD.bazel: the overlay install trees.
+    """Render {version}/{option_set}/cc/{arch}/BUILD.bazel: the overlay trees.
 
     `:tar` is the production runtime; `:tar.dev` composes the server + client
     headers over it (the SDK an extension / PGXS builds against); `:tar.test`
     composes the install:false test fixtures over `:tar.dev` (what the test
     lanes run against).
     """
-    return Star.file(
-        Star.package(default_visibility = ["//visibility:public"]),
-        Star.alias(name = "tar", actual = "@%s//:tar" % overlay_repo),
-        Star.alias(name = "tar.dev", actual = "@%s//:tar.dev" % overlay_repo),
-        Star.alias(name = "tar.test", actual = "@%s//:tar.test" % overlay_repo),
-        header = _HEADER,
-    )
+    parts = [Star.package(default_visibility = ["//visibility:public"])]
+    parts += [
+        Star.alias(name = t, actual = "@%s//:%s" % (overlay_repo, t))
+        for t in _CC_TARS
+    ]
+    return Star.file(header = _HEADER, *parts)
 
 def _cc_facade_pkg_build(overlay_repo, pkg, targets):
-    """Render {version}/{option_set}/cc/{pkg}/BUILD.bazel: per-target aliases."""
+    """Render {version}/{option_set}/cc/{arch}/{pkg}/BUILD.bazel: target aliases."""
     parts = [Star.package(default_visibility = ["//visibility:public"])]
     parts += [
         Star.alias(name = t, actual = "@%s//%s:%s" % (overlay_repo, pkg, t))
@@ -298,32 +301,63 @@ def _cc_facade_pkg_build(overlay_repo, pkg, targets):
     ]
     return Star.file(header = _HEADER, *parts)
 
-def write_cc_facade(rctx, version, option_set, facade, overlay_repo):
+def _cc_alias_build(target_package, names):
+    """Render a flat cc/ alias BUILD pointing each name at the default arch.
+
+    `target_package` is the default-arch facade package label
+    (`//{v}/{opt}/cc/{arch}` or `.../{pkg}`); each alias points `<name>` at
+    `<target_package>:<name>`, so `cc:tar` == `cc/{arch}:tar` and the bare
+    `cc/...` namespace tracks the default arch.
+    """
+    parts = [Star.package(default_visibility = ["//visibility:public"])]
+    parts += [
+        Star.alias(name = n, actual = "%s:%s" % (target_package, n))
+        for n in names
+    ]
+    return Star.file(header = _HEADER, *parts)
+
+def write_cc_facade(rctx, version, option_set, facade, overlay_repo, arch):
     """Render the native cc_* overlay alias facade under {version}/{option_set}/cc/.
 
-    Each overlay package's public targets (the libs / executables / modules /
-    shared libpq) are aliased at `@<hub>//<v>/<opt>/cc/<pkg>:<target>`, and the
-    install tree at `@<hub>//<v>/<opt>/cc:tar`, all pointing into the native
-    cc_* overlay repo `overlay_repo`. The facade comes from the same
-    `overlay_layout` that drives the overlay, so the two cannot drift. A pure
-    addition: the production `:tar` and the rules_foreign_cc build targets are
-    untouched.
+    The overlay is per-arch, so the real aliases live under `cc/<arch>/`: the
+    install trees at `@<hub>//<v>/<opt>/cc/<arch>:tar[.dev|.test]` and each
+    overlay package's public targets at
+    `@<hub>//<v>/<opt>/cc/<arch>/<pkg>:<target>`, all pointing into the per-arch
+    overlay repo `overlay_repo`. A flat `cc/` level then aliases the default
+    arch (`cc:tar` -> `cc/<arch>:tar`) for ergonomics. The facade comes from the
+    same `overlay_layout` that drives the overlay, so the two cannot drift. A
+    pure addition: the production targets are untouched.
 
     Args:
         rctx: repository context.
         version: base version string.
         option_set: option set name.
         facade: `{package: [public target names]}` from `overlay_layout`.
-        overlay_repo: the overlay repo's apparent name (e.g. `pg_cc_16_0_full`).
+        overlay_repo: the per-arch overlay repo's apparent name (e.g.
+            `pg_cc_16_0_full_amd64`).
+        arch: the overlay arch (e.g. `amd64`); names the `cc/<arch>/` sub-level
+            and is the flat-alias target.
     """
+    cc = "%s/%s/cc" % (version, option_set)
+    arch_pkg = "//%s/%s" % (cc, arch)
+
+    # Per-arch level: the real aliases into the overlay repo.
     rctx.file(
-        "%s/%s/cc/BUILD.bazel" % (version, option_set),
+        "%s/%s/BUILD.bazel" % (cc, arch),
         _cc_facade_root_build(overlay_repo),
     )
     for pkg, targets in facade.items():
         rctx.file(
-            "%s/%s/cc/%s/BUILD.bazel" % (version, option_set, pkg),
+            "%s/%s/%s/BUILD.bazel" % (cc, arch, pkg),
             _cc_facade_pkg_build(overlay_repo, pkg, targets),
+        )
+
+    # Flat level: the bare cc/ namespace aliases the default arch.
+    rctx.file("%s/BUILD.bazel" % cc, _cc_alias_build(arch_pkg, _CC_TARS))
+    for pkg, targets in facade.items():
+        rctx.file(
+            "%s/%s/BUILD.bazel" % (cc, pkg),
+            _cc_alias_build("%s/%s" % (arch_pkg, pkg), targets),
         )
 
 def write_base_version(rctx, version, entry, build_repo, option_sets, archs):

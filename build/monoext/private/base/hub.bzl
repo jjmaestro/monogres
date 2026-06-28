@@ -131,13 +131,15 @@ def _impl(rctx):
     cc_overlay_repos = json.decode(rctx.attr.cc_overlay_repos)
     for label, key in rctx.attr.cc_introspect_jsons.items():
         version, option_set = key.split("~")
+        cc = cc_overlay_repos[key]
         layout = overlay_layout(json.decode(rctx.read(label)))
         write_cc_facade(
             rctx,
             version,
             option_set,
             layout.facade,
-            cc_overlay_repos[key],
+            cc["repo"],
+            cc["arch"],
         )
 
 _ATTRS = dict(
@@ -163,8 +165,9 @@ _ATTRS = dict(
     # scoped overlay's committed (production) introspect JSON to its
     # `"<version>~<option_set>"` key, declared as a label_keyed_string_dict so
     # `rctx.read` can decode it and run `overlay_layout`. `cc_overlay_repos` is
-    # JSON `{"<version>~<option_set>": overlay_repo_apparent_name}`, the alias
-    # targets. Both empty for flavors / scopes with no overlay.
+    # JSON `{"<version>~<option_set>": {"repo": apparent_name, "arch": arch}}`,
+    # the per-arch alias targets. Both empty for flavors / scopes with no
+    # overlay.
     cc_introspect_jsons = attr.label_keyed_string_dict(default = {}),
     cc_overlay_repos = attr.string(default = "{}"),
     # The test-introspect attrs (`+test` introspect labels + per-(v,opt) label

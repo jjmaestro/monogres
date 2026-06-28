@@ -444,7 +444,10 @@ def create_base(hub_name, base_data, pkgs_result, archs, build_repo = "monogres"
             continue
         key = "%s~%s" % (v, opt)
         cc_introspect_jsons[Label(lbl)] = key
-        cc_overlay_repos[key] = repo_names.pg_cc(hub_name, v, opt, arch)
+        cc_overlay_repos[key] = {
+            "arch": arch,
+            "repo": repo_names.pg_cc(hub_name, v, opt, arch),
+        }
 
     # `introspect_payload` supplies `option_sets` + the test-introspect attrs;
     # the base hub renders the core/pl/module suites alongside the build
