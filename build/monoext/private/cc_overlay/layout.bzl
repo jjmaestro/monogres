@@ -24,6 +24,18 @@ DEFERRED_LIBS = [
 # drivers.
 DEFERRED_EXES = []
 
+# Install:false test helper executables the TAP lane runs by bare name on PATH
+# (the harness stages them into test_bin/): pg_bsd_indent (its own TAP suite),
+# libpq_pipeline (src/test/modules), and the libpq test clients. The frontend
+# render path otherwise skips install:false executables, so these are named to
+# render and install alongside the test fixtures.
+TEST_EXES = [
+    "pg_bsd_indent",
+    "libpq_pipeline",
+    "libpq_uri_regress",
+    "libpq_testclient",
+]
+
 # Shared modules held back from the overlay (none: the src/ loadables, the PLs,
 # and every contrib extension render).
 DEFERRED_MODULES = []
@@ -49,10 +61,10 @@ def overlay_layout(introspect):
     """Map the introspect to the overlay package layout and its public facade.
 
     Collects the source directories that own a rendered target: a static library
-    (minus DEFERRED_LIBS), an installed executable (minus DEFERRED_EXES), or a
-    shared module (minus DEFERRED_MODULES). Each is the home package of its
-    targets. The renderer's deferrals are mirrored so the package set matches
-    what the overlay builds.
+    (minus DEFERRED_LIBS), an installed executable (minus DEFERRED_EXES) or a
+    named test helper (TEST_EXES), or a shared module (minus DEFERRED_MODULES).
+    Each is the home package of its targets. The renderer's deferrals are
+    mirrored so the package set matches what the overlay builds.
 
     `facade` is the per-package public-target map the hub aliases under
     `@<hub>//<v>/<opt>/cc/`: the named libs / executables / modules (a lib with
@@ -83,7 +95,9 @@ def overlay_layout(introspect):
             if ts.get("sources") or ts.get("generated_sources"):
                 tname = name
         elif type_ == "executable":
-            if not t.get("installed") or name in DEFERRED_EXES:
+            if name in DEFERRED_EXES:
+                continue
+            if not t.get("installed") and name not in TEST_EXES:
                 continue
             tname = name
         elif type_ == "shared module":

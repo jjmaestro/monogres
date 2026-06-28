@@ -274,10 +274,18 @@ def _deps_kind_build(aliases, exec_files_targets = None):
 # ---------------------------------------------------------------------------
 
 def _cc_facade_root_build(overlay_repo):
-    """Render {version}/{option_set}/cc/BUILD.bazel: the overlay install tree."""
+    """Render {version}/{option_set}/cc/BUILD.bazel: the overlay install trees.
+
+    `:tar` is the production runtime; `:tar.dev` composes the server + client
+    headers over it (the SDK an extension / PGXS builds against); `:tar.test`
+    composes the install:false test fixtures over `:tar.dev` (what the test
+    lanes run against).
+    """
     return Star.file(
         Star.package(default_visibility = ["//visibility:public"]),
         Star.alias(name = "tar", actual = "@%s//:tar" % overlay_repo),
+        Star.alias(name = "tar.dev", actual = "@%s//:tar.dev" % overlay_repo),
+        Star.alias(name = "tar.test", actual = "@%s//:tar.test" % overlay_repo),
         header = _HEADER,
     )
 

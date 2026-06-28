@@ -176,12 +176,26 @@ def introspect_payload(name, base_data, cc_overlay_scope = []):
         }
 
     # Repoint the install tree to the native cc_* overlay for the scoped
-    # (version, option_set, arch) triples, so the regress / isolation suites
-    # validate the overlay against the same expected outputs. The +test variant
-    # (test_pg_tars, the modules: suites) stays on the meson test build.
+    # (version, option_set, arch) triples, so the regress / isolation suites and
+    # the TAP / modules suites all validate the overlay. They run against the
+    # overlay's `:tar.test` (the production `:tar` composed with the
+    # install:false test fixtures: regress.so, the src/test/modules .so +
+    # packaging, the test_bin helpers); the clean `:tar` stays a production
+    # artifact. The overlay build graph equals the +test graph (tap_tests only
+    # adds the test definitions and the fixtures `:tar.test` carries), so one
+    # overlay test tree serves both the production (pg_tars) and +test
+    # (test_pg_tars) lanes.
     for v, opt, arch in cc_overlay_scope:
+        overlay_test_tar = "@%s//:tar.test" % repo_names.pg_cc(
+            name,
+            v,
+            opt,
+            arch,
+        )
         if v in pg_tars and opt in pg_tars[v]:
-            pg_tars[v][opt] = "@%s//:tar" % repo_names.pg_cc(name, v, opt, arch)
+            pg_tars[v][opt] = overlay_test_tar
+        if v in test_pg_tars and opt in test_pg_tars[v]:
+            test_pg_tars[v][opt] = overlay_test_tar
 
     introspect_jsons = {
         Label(lbl): "%s~%s" % (v, opt)
