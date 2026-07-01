@@ -10,7 +10,7 @@
 # real per-version suites are rendered into the @<hub> / @<hub>_ext repos by the
 # introspect codegen, not declared here.
 
-load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -50,4 +50,34 @@ _PG_TEST_EXTRA_GROUPS = [
         flag_values = {":pg_test_extra_" + group: "True"},
     )
     for group in _PG_TEST_EXTRA_GROUPS
+]
+
+# Test-lane tree selector. For a (version, option_set) that has BOTH a meson
+# build and a native cc_* overlay, this picks which install tree the rendered
+# regress / isolation / pl / module / TAP suites run against, at analysis time
+# (no repo re-fetch). `cc` (default) runs the overlay's `:tar.test`, the tree
+# under active validation; `meson` runs the meson test build's `:tar.test`. Both
+# carry the whole regress closure (pg_regress + psql + regress.so + the
+# install:false fixtures), so one tree serves every suite. The introspect points
+# the scoped lanes at the per-(v, opt) `:tar.test.lane` alias, which `select()`s
+# on this flag; unscoped (v, opt) pairs have no overlay and always run the meson
+# tree. Switch a whole run with `--//monoext/private/test:tree=meson`.
+string_flag(
+    name = "tree",
+    build_setting_default = "cc",
+    values = [
+        "meson",
+        "cc",
+    ],
+)
+
+[
+    config_setting(
+        name = "tree_" + tree,
+        flag_values = {":tree": tree},
+    )
+    for tree in [
+        "meson",
+        "cc",
+    ]
 ]

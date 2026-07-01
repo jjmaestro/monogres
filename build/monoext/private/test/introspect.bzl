@@ -24,7 +24,7 @@ The introspect decode (`schema.bzl`) and the suite renderers (`suites.bzl`) are
 reused whole.
 """
 
-load("//monoext/private:repo_names.bzl", "bind", "repo_names")
+load("//monoext/private:repo_names.bzl", "bind")
 load("//monoext/private/base/build_options:flavors.bzl", "FLAVORS")
 load(
     "//monoext/private/test:suites.bzl",
@@ -65,7 +65,8 @@ INTROSPECT_ATTRS = dict(
     introspect_labels = attr.string(default = "{}"),
     # JSON `{version: {option_set: pg_tar_label_str}}` -- the test build
     # (`@{name}//<v>/<opt>:tar.test`, carrying pg_regress + psql + the fixtures)
-    # for the regress / isolation / pl suites.
+    # for the regress / isolation / pl suites; a scoped pair points at its
+    # flag-switched `:tar.test.lane` selector instead.
     pg_tar_labels = attr.string(default = "{}"),
     # JSON `{version: {option_set: test_pg_tar_label_str}}` -- the test-enabled
     # build's fixtures tree (`@{name}//<v>/<opt>:tar.test`) for the modules: +
@@ -102,12 +103,15 @@ def introspect_payload(name, base_data, cc_overlay_scope = []):
     Args:
         name: the base hub name (e.g. `"pg"`); labels are `@{name}//...`.
         base_data: `BaseData` from `create_base_src`.
-        cc_overlay_scope: `(version, option_set, arch)` triples whose `:tar` is
-            the native cc_* overlay's (`@{name}_cc_<v>_<set>_<arch>`) rather
-            than the rules_foreign_cc build's, so the suites run the SAME
-            regress / isolation harness against the overlay. The base hub passes
-            the overlay MVP scope; the extensions hub passes none (its contrib
-            modules are not in the overlay yet).
+        cc_overlay_scope: `(version, option_set, arch)` triples that have a
+            native cc_* overlay (`@{name}_cc_<v>_<set>_<arch>`). Their suites
+            run against the per-(v, opt) `:tar.test.lane` selector
+            (`//monoext/private/test:tree`), so one `bazel test` runs the SAME
+            harness against either the meson test build or the overlay. The base
+            hub passes the overlay MVP scope; the extensions hub passes none
+            (its contrib modules are not in the overlay yet). `arch` is unused
+            here (the selector reaches the overlay through the arch-defaulting
+            `cc/` facade); it is carried for parity with the facade scope.
 
     Returns:
         a `dict` to splat into the `base_repo` / `ext_repo` call.
@@ -175,27 +179,22 @@ def introspect_payload(name, base_data, cc_overlay_scope = []):
             for opt in cols
         }
 
-    # Repoint the install tree to the native cc_* overlay for the scoped
-    # (version, option_set, arch) triples, so the regress / isolation suites and
-    # the TAP / modules suites all validate the overlay. They run against the
-    # overlay's `:tar.test` (the production `:tar` composed with the
-    # install:false test fixtures: regress.so, the src/test/modules .so +
-    # packaging, the test_bin helpers); the clean `:tar` stays a production
-    # artifact. The overlay build graph equals the +test graph (tap_tests only
-    # adds the test definitions and the fixtures `:tar.test` carries), so one
-    # overlay test tree serves both the production (pg_tars) and +test
+    # Repoint the scoped (version, option_set) lanes at the per-(v, opt)
+    # `:tar.test.lane` selector, so a single `bazel test` picks the meson test
+    # build or the native cc_* overlay at analysis time via
+    # `//monoext/private/test:tree`. The selector `select()`s between the meson
+    # `:tar.test` and the overlay's `:tar.test`; the default (`cc`) resolves to
+    # the overlay, the tree under active validation, so the suites validate it
+    # with no flag. The overlay build graph equals the +test graph (tap_tests
+    # only adds the test definitions the fixtures `:tar.test` carries), so one
+    # overlay test tree serves both the regress (pg_tars) and +test
     # (test_pg_tars) lanes.
-    for v, opt, arch in cc_overlay_scope:
-        overlay_test_tar = "@%s//:tar.test" % repo_names.pg_cc(
-            name,
-            v,
-            opt,
-            arch,
-        )
+    for v, opt, _arch in cc_overlay_scope:
+        fvo = bind(name = name, v = v, opt = opt)
         if v in pg_tars and opt in pg_tars[v]:
-            pg_tars[v][opt] = overlay_test_tar
+            pg_tars[v][opt] = fvo("@{name}//{v}/{opt}:tar.test.lane")
         if v in test_pg_tars and opt in test_pg_tars[v]:
-            test_pg_tars[v][opt] = overlay_test_tar
+            test_pg_tars[v][opt] = fvo("@{name}//{v}/{opt}:tar.test.lane")
 
     introspect_jsons = {
         Label(lbl): "%s~%s" % (v, opt)

@@ -61,7 +61,8 @@ def _option_set_build(
         source_repo,
         version,
         option_set,
-        build_options = None):
+        build_options = None,
+        cc_overlay = False):
     """Render a production or test-variant {version}/{option_set} build package.
 
     Dispatches between the Meson and autoconf+make build wrappers based on
@@ -77,6 +78,11 @@ def _option_set_build(
     The test-enabled sibling (`{version}/{option_set}/test/`) is a single
     tap_tests-enabled build named `:tar` (the `_TEST_OVERLAY`-augmented
     `target.test_build_options`); it is the fixtures source `:tar.test` aliases.
+
+    When `cc_overlay` is set (this (version, option_set) also has a native cc_*
+    overlay), the production meson package additionally exposes the
+    flag-switched test-lane alias `:tar.test.lane` that `select()`s between the
+    meson test build and the overlay tree (see `//monoext/private/test:tree`).
     """
     f = bind(build = build_repo, src = source_repo, v = version)
 
@@ -167,7 +173,7 @@ def _option_set_build(
     # Production: the full `meson install` is the SDK tree (`:tar.dev`); the
     # runtime `:tar` carves the dev-only paths out of its `gen_dir` (the whole
     # INSTALLDIR, captured as one tree artifact). Both ride the SAME compile.
-    return Star.file(
+    parts = [
         Star.load_(
             f("@{build}//monoext/private/base:pg_build.bzl"),
             "pg_build",
@@ -193,8 +199,25 @@ def _option_set_build(
             actual = "//%s/%s/test:tar" % (version, option_set),
         ),
         Star.alias(name = option_set, actual = ":tar"),
-        header = _HEADER,
-    )
+    ]
+
+    # The flag-switched test-lane alias the test introspect points the suites at
+    # when this (version, option_set) has a native cc_* overlay. It `select()`s
+    # on `//monoext/private/test:tree`: `meson` runs the meson test build
+    # (`:tar.test`), `cc` (the default) the overlay's `:tar.test`. Both carry
+    # the whole regress closure (pg_regress + psql + regress.so + the
+    # install:false fixtures), so one tree serves every suite and
+    # `--//monoext/private/test:tree=meson` flips a `bazel test` run to the
+    # meson tree at analysis time, with no repo re-fetch.
+    if cc_overlay:
+        parts.append(Star.alias(
+            name = "tar.test.lane",
+            actual = Star.select({
+                f("@{build}//monoext/private/test:tree_meson"): ":tar.test",
+                "//conditions:default": "//%s/%s/cc:tar.test" % (version, option_set),
+            }),
+        ))
+    return Star.file(header = _HEADER, *parts)
 
 def _arch_build(build_repo, actual, platform):
     """Render {version}/{option_set}/{arch}/BUILD.bazel: transition wrapper."""
@@ -360,7 +383,14 @@ def write_cc_facade(rctx, version, option_set, facade, overlay_repo, arch):
             _cc_alias_build("%s/%s" % (arch_pkg, pkg), targets),
         )
 
-def write_base_version(rctx, version, entry, build_repo, option_sets, archs):
+def write_base_version(
+        rctx,
+        version,
+        entry,
+        build_repo,
+        option_sets,
+        archs,
+        cc_overlay_keys = {}):
     """Generates the full directory hierarchy for one base version.
 
     Args:
@@ -370,6 +400,9 @@ def write_base_version(rctx, version, entry, build_repo, option_sets, archs):
         build_repo: Name of the build repo (e.g. "monogres").
         option_sets: Ordered list of option set names.
         archs: List of architecture names for per-arch targets.
+        cc_overlay_keys: `"<version>~<option_set>"` keys that have a native cc_*
+            overlay; their production package emits the `:tar.lane` /
+            `:tar.test.lane` flag selectors (see `_option_set_build`).
     """
     source_repo = entry.source_repo
     targets = entry.targets
@@ -392,6 +425,7 @@ def write_base_version(rctx, version, entry, build_repo, option_sets, archs):
                 source_repo,
                 version,
                 option_set,
+                cc_overlay = ("%s~%s" % (version, option_set)) in cc_overlay_keys,
             ),
         )
 

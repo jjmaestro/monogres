@@ -95,6 +95,11 @@ def _impl(rctx):
     option_sets = json.decode(rctx.attr.option_sets)
     archs = rctx.attr.archs
 
+    # `{"<version>~<option_set>": {"repo", "arch"}}` for the scoped overlays;
+    # drives both the production package's `:tar.lane` selectors (here) and the
+    # `cc/` facade (below).
+    cc_overlay_repos = json.decode(rctx.attr.cc_overlay_repos)
+
     for version in sorted(rctx.attr.entries):
         entry = _BaseSchema.BaseEntry.decode(rctx.attr.entries[version])
         entries[version] = entry
@@ -105,6 +110,7 @@ def _impl(rctx):
             rctx.attr.build_repo,
             option_sets,
             archs,
+            cc_overlay_keys = cc_overlay_repos,
         )
 
     rctx.file("BUILD.bazel", _root_build())
@@ -128,7 +134,6 @@ def _impl(rctx):
     # Driven by the SAME overlay_layout the overlay repo uses (both decode the
     # one committed introspect JSON), so the facade and the overlay cannot
     # drift. Empty for flavors / scopes with no overlay.
-    cc_overlay_repos = json.decode(rctx.attr.cc_overlay_repos)
     for label, key in rctx.attr.cc_introspect_jsons.items():
         version, option_set = key.split("~")
         cc = cc_overlay_repos[key]

@@ -122,9 +122,57 @@ def _option_set_build_test_impl(ctx):
     asserts.true(env, 'name = "full"' in out)
     asserts.true(env, 'actual = ":tar"' in out)
 
+    # no overlay → no flag-switched test-lane selector
+    asserts.false(env, "tar.test.lane" in out)
+
     return unittest.end(env)
 
 option_set_build_test = unittest.make(_option_set_build_test_impl)
+
+# --- option_set_build (cc overlay) -----------------------------------------
+
+def _option_set_build_cc_overlay_test_impl(ctx):
+    """A scoped (v, opt) emits the :tar.test.lane flag selector."""
+    env = unittest.begin(ctx)
+
+    bt = _PkgsSchema.DepsInfo.new(
+        packages = ["libssl-dev"],
+        pkgs_labels = ["@pg_pkgs//deb/libssl-dev:libssl-dev"],
+        sysroot_labels_by_arch = {"amd64": "@pgbuildtime-bt//debian/12/amd64:sysroot"},
+        sysroot_tar_labels_by_arch = {"amd64": "@pgbuildtime-bt//debian/12/amd64:sysroot.tar"},
+    )
+    vd = _PkgsSchema.VersionDeps.new(buildtime = bt)
+    target = _BaseSchema.BaseTarget.new(
+        hub_name = "pg",
+        version = "16.0",
+        option_set = "full",
+        auto_features = "enabled",
+        build_options = {"libdir": "lib", "rpath": "false"},
+        version_deps = vd,
+    )
+    out = _BaseVersions._option_set_build(
+        build_repo = "monogres",
+        target = target,
+        source_repo = "pg_src",
+        version = "16.0",
+        option_set = "full",
+        cc_overlay = True,
+    )
+
+    # the single flag-switched test-lane selector
+    asserts.true(env, 'name = "tar.test.lane"' in out)
+
+    # it select()s on the tree flag, defaulting to the overlay's :tar.test
+    asserts.true(env, "select(" in out)
+    asserts.true(env, '"@monogres//monoext/private/test:tree_meson"' in out)
+    asserts.true(env, '"//conditions:default"' in out)
+    asserts.true(env, '"//16.0/full/cc:tar.test"' in out)
+
+    return unittest.end(env)
+
+option_set_build_cc_overlay_test = unittest.make(
+    _option_set_build_cc_overlay_test_impl,
+)
 
 # --- src_build -------------------------------------------------------------
 
@@ -219,6 +267,7 @@ TEST_SUITE_TESTS = dict(
     deps_kind_build_multiple_aliases = deps_kind_build_multiple_aliases_test,
     deps_kind_build_single_alias = deps_kind_build_single_alias_test,
     option_set_build = option_set_build_test,
+    option_set_build_cc_overlay = option_set_build_cc_overlay_test,
     src_build = src_build_test,
     version_root_build = version_root_build_test,
 )
