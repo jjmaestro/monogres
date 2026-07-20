@@ -155,14 +155,17 @@ debian_releases(
 # toolchains/
 #
 # `toolchains_llvm` in mode 4 (Bazel-package `toolchain_root`): the compiler
-# binaries come from `@llvm_toolchain_amd64` (the `cc_toolchain_layout` adapter
-# wrapping the Debian-sourced `@llvm_sysroot`), NOT from a downloaded LLVM
-# tarball. `rules.bzl:48` short-circuits when `toolchain_roots` is non-empty so
-# `@llvm_toolchain_llvm` is never created.
+# binaries come from the per-host `@llvm_toolchain_<arch>` adapter (the
+# `cc_toolchain_layout` wrapping the Debian-sourced `@llvm_sysroot`), NOT from a
+# downloaded LLVM tarball. `rules.bzl:48` short-circuits when `toolchain_roots`
+# is non-empty so `@llvm_toolchain_llvm` is never created.
 #
-# `targets` on `llvm.toolchain_root` keys by EXEC arch (where clang RUNS).
-# Single entry for linux-x86_64: the build host is always amd64; clang
-# cross-targets aarch64 binaries via `--target=aarch64-linux-gnu`. The two
+# `targets` on `llvm.toolchain_root` keys by EXEC arch (where clang RUNS): one
+# tag per build-host arch (linux-x86_64 -> the amd64 adapter, linux-aarch64 ->
+# the arm64 adapter), so the compiler runs natively on either host and toolchain
+# resolution picks the entry matching the exec platform. `extra_compiler_files`
+# is an `arch_select` filegroup that likewise tracks the exec arch (the
+# compiler's own libs must match the host clang runs on). The two
 # `llvm.sysroot(targets = [...])` tags below key by TARGET arch (what clang
 # COMPILES FOR) and feed `--sysroot=` per cross-compile target.
 #
@@ -174,18 +177,24 @@ llvm.toolchain(
     name = "llvm_toolchain",
     # `extra_compiler_files`: Debian clang at exec time needs its dynamic libs
     # (libLLVM-14.so.1, libclang-cpp.so.14, libedit.so.2, libxml2.so.2, etc.)
-    # available in every compile/link action sandbox. The `cc_toolchain_layout`
-    # adapter's `:lib` filegroup carries them (hardlinked from Debian's
-    # multiarch dir); `extra_compiler_files` threads them into every action's
-    # input tree. The cc_wrapper.sh patch sets `LD_LIBRARY_PATH` so ld.so finds
-    # them when invoking clang.
-    extra_compiler_files = "@llvm_toolchain_amd64//:lib",
+    # available in every compile/link action sandbox. The per-host adapter's
+    # `:lib` filegroup carries them (hardlinked from Debian's multiarch dir);
+    # `:compiler_runtime_libs` arch_selects the exec host's set and threads it
+    # into every action's input tree. The cc_wrapper.sh patch sets
+    # `LD_LIBRARY_PATH` so ld.so finds them when invoking clang.
+    extra_compiler_files = "//toolchains/llvm_sysroot:compiler_runtime_libs",
     llvm_version = RELEASE["llvm_version"],
     stdlib = {"": "stdc++"},
 )
 llvm.toolchain_root(
     name = "llvm_toolchain",
     label = "@llvm_toolchain_amd64//:BUILD",
+    targets = ["linux-x86_64"],
+)
+llvm.toolchain_root(
+    name = "llvm_toolchain",
+    label = "@llvm_toolchain_arm64//:BUILD",
+    targets = ["linux-aarch64"],
 )
 llvm.sysroot(
     name = "llvm_toolchain",
