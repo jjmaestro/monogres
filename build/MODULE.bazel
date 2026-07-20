@@ -107,6 +107,7 @@ RELEASES = {
         "llvm_major": "14",
         "llvm_version": "14.0.6",
         "perl_version": "5.36",
+        "python_version": "3.11",
         "version": "12",
     },
     "13": {
@@ -116,6 +117,7 @@ RELEASES = {
         "llvm_major": "19",
         "llvm_version": "19.1.7",
         "perl_version": "5.40",
+        "python_version": "3.13",
         "version": "13",
     },
 }
@@ -317,7 +319,28 @@ sysroots.apt(
 )
 use_repo(sysroots, "perl_sysroot")
 
+# `@python_sysroot`: dedicated Debian-sourced Python toolchain, mirroring
+# `@perl_sysroot`. Provides the build-time python3 interpreter + stdlib
+# (`python3`) and the libpython headers / shared library + `-embed.pc`
+# (`python3-dev`), all from the same `apt_snapshot`. Python is a dual dependency
+# (build-time interpreter meson runs via `find_program('python3')` /
+# `find_installation()`, and the runtime ABI target plpython links) that is
+# version-coupled: the interpreter meson configures plpython against and the
+# `python-<ver>-embed.pc` the per-PG sysroot ships must agree at the same
+# MAJOR.MINOR. Sourcing both from this snapshot makes that hold by construction,
+# so a release bump moves them together (see `//toolchains/python/README.md`).
+sysroots.apt(
+    name = "python_sysroot",
+    lock = "//toolchains/python/locks:python_sysroot.lock",
+    manifest = "//toolchains/python:debian{}.json".format(RELEASE["version"]),
+    snapshot = RELEASE["apt_snapshot"],
+    exports = ["usr/bin/python3"],
+)
+use_repo(sysroots, "python_sysroot")
+
 register_toolchains(
     "//toolchains/perl:perl_amd64",
     "//toolchains/perl:perl_arm64",
+    "//toolchains/python:python3_amd64",
+    "//toolchains/python:python3_arm64",
 )

@@ -1,0 +1,32 @@
+load("@platform_debian//:versions.bzl", "VERSIONS")
+load(":python_toolchain.bzl", "current_python_toolchain", "python_toolchains")
+
+package(default_visibility = ["//visibility:public"])
+
+# Custom Python toolchain: hermetic interpreter + stdlib + libpython headers /
+# shared library, all materialized from a single Debian snapshot via the
+# `//sysroots:apt` extension. Python is a dual dependency like Perl: meson runs
+# the interpreter (`find_program('python3')`, `find_installation()`) at build
+# time and plpython links `libpython` at runtime. Sourcing both from the same
+# `@python_sysroot` snapshot makes `find_installation()` and the per-PG
+# sysroot's `python-<ver>-embed.pc` agree by construction (the version lives in
+# the release profile). See `README.md`.
+
+exports_files(["debian{}.json".format(v) for v in VERSIONS])
+
+# Toolchain type for the Python interpreter. Consumed by the per-arch
+# `python_toolchain` instances `python_toolchains(...)` generates below and by
+# `current_python_toolchain`'s resolver.
+toolchain_type(name = "toolchain_type")
+
+# Per-arch python_toolchain instances + toolchain registrations + the `:python3`
+# alias to the active per-arch instance. Single point where the Python version
+# string drives every generated label; see
+# `python_toolchain.bzl::PYTHON_VERSION`.
+python_toolchains()
+
+# Active python toolchain resolver. Goes in `toolchains = [...]` of
+# `rules_foreign_cc.meson()` (and similar); provides `TemplateVariableInfo`
+# carrying `PYTHON` -> binary path plus `PYTHON_MULTIARCH`. Mirrors
+# `//toolchains/perl:current_perl_toolchain`.
+current_python_toolchain(name = "current_python_toolchain")

@@ -10,6 +10,7 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 _APT_LOCKS = [
     "//toolchains/perl/locks:perl_sysroot.lock",
+    "//toolchains/python/locks:python_sysroot.lock",
 ]
 
 sh_test(
