@@ -203,6 +203,10 @@ def write_introspect(rctx):
 
         paths_repo = rctx.attr.introspect_paths_repos.get(pg_version)
 
+        if not paths_repo:
+            # release-gated version: no paths repo, so no introspect stub here
+            continue
+
         for option_set in introspect_jsons:
             if not introspect_jsons[option_set]:
                 continue

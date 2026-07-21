@@ -109,13 +109,21 @@ def introspect_payload(name, base_data):
     flavor = base_data.flavor
     option_sets = list(FLAVORS[flavor].OPTION_SETS)
 
-    # {version: {option_set: introspect_label}} from repo.json; rewritten to the
-    # tap_tests/injection_points-enabled `+test` introspect variant for the
-    # opted-in flavors. The coordinate maps below key off (version, option_set)
-    # only, so rewriting the label values does not perturb them. A separate map:
-    # never mutate `base_data.metadata` (it feeds the build-side stub
-    # introspect).
-    introspect_meta = base_data.metadata.get("introspect", {})
+    # {version: {option_set: introspect_label}} from repo.json, restricted to
+    # the release-compatible versions. `base_data.versions` already drops the
+    # release-gated minors (whose introspect the base build neither generates
+    # nor commits on this release), so keeping the test payload in lockstep
+    # stops the rendered suites from referencing a gated version's absent
+    # introspect. Rewritten to the tap_tests/injection_points-enabled `+test`
+    # introspect variant for the opted-in flavors. The coordinate maps below key
+    # off (version, option_set) only, so rewriting the label values does not
+    # perturb them. A separate map: never mutate `base_data.metadata` (it feeds
+    # the build-side stub introspect).
+    introspect_meta = {
+        v: cols
+        for v, cols in base_data.metadata.get("introspect", {}).items()
+        if v in base_data.versions
+    }
     if flavor in _TEST_INTROSPECT_FLAVORS:
         introspect_meta = {
             v: {

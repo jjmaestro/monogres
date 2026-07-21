@@ -345,20 +345,23 @@ def _introspect_manifest(external, base_versions, base_flavor):
             manifest[name] = versions
     return manifest
 
-def _build_contrib(extensions, hub_name, base_flavor = "postgres"):
+def _build_contrib(extensions, base_versions, hub_name, base_flavor = "postgres"):
     """Builds JSON-encoded `ExtContribEntry` values for ext_repo.
 
     `hub_name` is used to pre-qualify `@{hub_name}//contrib/{name}/{base_v}:tar`
     artifact labels baked onto each `ExtContribTarget` before the JSON boundary.
+    A contrib's base versions are intersected with `base_versions` (the
+    release-gated set) so release-incompatible ones are dropped.
     """
     entries = {}
 
     for name in sorted(extensions):
         ext = extensions[name]
+        ext_versions = [v for v in ext.ext_versions if v in base_versions]
         entry = _ExtSchema.ExtContribEntry.new(
             ext_hub_name = hub_name,
             ext_name = name,
-            ext_versions = ext.ext_versions,
+            ext_versions = ext_versions,
             metadata = ext.metadata,
             base_flavor = base_flavor,
         )
@@ -414,7 +417,7 @@ def create_ext(
         hub_name,
     )
 
-    entries |= _build_contrib(contrib, hub_name, base_flavor)
+    entries |= _build_contrib(contrib, base_versions, hub_name, base_flavor)
 
     # The external extensions' `metadata.test_ext` (the smoke + upstream regress
     # introspect), threaded to the hub so it renders the external test packages

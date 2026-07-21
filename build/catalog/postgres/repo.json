@@ -108,6 +108,13 @@
     }
   },
   "metadata": {
+    "release_incompatible": [
+      {
+        "pg": "<15.9",
+        "min_debian": 13,
+        "reason": "make-path JIT before PG 15.9 lacks the upstream fixes for LLVM 16+ (LLVM C API changes and the arm64 SectionMemoryManager fix); cannot build/run against Debian 13's LLVM 19"
+      }
+    ],
     "build_options": {
       "injection_points": {
         "compatible": ">=17.0"

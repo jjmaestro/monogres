@@ -17,6 +17,7 @@ load(
     download_archives = "archives",
 )
 load("@download_archives//lib:index.bzl", Index = "index")
+load("@platform_debian//:versions.bzl", "RELEASE")
 load("@version_utils//version:version.bzl", Version = "version")
 load("//monoext/private:pkgs.bzl", "pkgs_group")
 load("//monoext/private:repo_names.bzl", "bind", "repo_names")
@@ -48,6 +49,23 @@ _TEST_OVERLAY = {
     "tap_tests": "enabled",
 }
 
+def _release_gated(version, release_incompatible, active_debian):
+    """Whether `version` is gated off the active Debian release.
+
+    `release_incompatible` is `metadata.release_incompatible`: rules shaped
+    `{pg: <PGVER spec>, min_debian: <int>, reason: <str>}`. A version is gated
+    when the active Debian release is at least `min_debian` and the version
+    matches the rule's `pg` spec. Drops old PG minors whose vendored code
+    predates an upstream toolchain-compat backpatch from a newer release while
+    keeping them on older ones.
+    """
+    for rule in release_incompatible:
+        if active_debian < rule["min_debian"]:
+            continue
+        if is_compatible_with(version, rule["pg"]):
+            return True
+    return False
+
 def create_base_src(ctx, hub_name, base_label):
     """Create base source repos, introspect repos, and return base_data.
 
@@ -68,7 +86,18 @@ def create_base_src(ctx, hub_name, base_label):
     src_repo = repo_names.base_src(hub_name)
     index = Index.new(src_repo, ctx.read(base_label))
     metadata = index.metadata
-    versions = sorted(index.repos.keys())
+
+    # Release-by-version gate: drop PG minors that cannot build on the active
+    # Debian release (see `_release_gated` + `metadata.release_incompatible`).
+    # Gated versions are absent (not built, tested, or introspected) here but
+    # preserved on older releases.
+    active_debian = int(RELEASE.version)
+    release_incompatible = metadata.get("release_incompatible", [])
+    versions = [
+        v
+        for v in sorted(index.repos.keys())
+        if not _release_gated(v, release_incompatible, active_debian)
+    ]
 
     flavor = metadata.get("flavor", DEFAULT_FLAVOR)
     if flavor not in FLAVORS:
@@ -131,6 +160,8 @@ def create_base_src(ctx, hub_name, base_label):
     flavor_mod = FLAVORS[flavor]
 
     for v, repos in index.repos.items():
+        if v not in versions:  # release-gated; see the version filter above
+            continue
         if not repos:
             continue
 
