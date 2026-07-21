@@ -16,6 +16,13 @@ common:remote --ui_actions_shown 100
 # Add mirrors for certain download URLs
 common --downloader_config=.bazel_downloader.cfg
 
+# rules_python defaults to the system_python bootstrap, whose py_binary
+# launchers exec `#!/usr/bin/env python3` and so depend on an ambient
+# system python3 on PATH (not hermetic). Select the script bootstrap so
+# the launchers exec the rules_python toolchain interpreter directly, with
+# no dependency on a system python3.
+common --@rules_python//python/config_settings:bootstrap_impl=script
+
 build --nostamp
 build --incompatible_strict_action_env
 build --reuse_sandbox_directories

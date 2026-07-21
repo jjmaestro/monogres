@@ -5,6 +5,7 @@ module(
 
 bazel_dep(name = "bazel_skylib", version = "1.9.0", dev_dependency = True)
 bazel_dep(name = "monogres", version = "", dev_dependency = True)
+bazel_dep(name = "rules_python", version = "1.9.0", dev_dependency = True)
 bazel_dep(name = "toolchains_llvm", version = "1.7.0", dev_dependency = True)
 
 monoext = use_extension("@monogres//monoext:monoext.bzl", "monoext")
