@@ -347,13 +347,17 @@ SUBSTITUTIONS: list[tuple[re.Pattern[str], str]] = [
     # not consumed by the build but are still release-derived. Sanitize the
     # python dep's `version` (anchored on its already-normalized
     # `python-<PY_VERSION>-embed` name) and the C/C++ compiler's clang
-    # `version` + `full_version` (anchored on the `clang` full_version).
+    # `version` + `full_version` (anchored on the `clang` full_version). The
+    # clang rule also consumes an optional trailing Debian package-revision
+    # suffix (e.g. ` (3+b1)`), which trixie's clang reports and bookworm's does
+    # not. Every other dependency's `version` is release-derived too but is
+    # normalized generically in the structural pass (see `_placeholder_dep_version`).
     (
         re.compile(r'(python-<PY_VERSION>[^}]*?"version": ")[0-9]+\.[0-9]+'),
         r"\1<PY_VERSION>",
     ),
     (
-        re.compile(r"clang version [0-9]+(?:\.[0-9]+)+"),
+        re.compile(r"clang version [0-9]+(?:\.[0-9]+)+(?: \([^)]*\))?"),
         "clang version <LLVM_FULL_VERSION>",
     ),
     (
