@@ -3,11 +3,20 @@ load(":targets.bzl", "ARCH_CPU", "OS")
 
 package(default_visibility = ["//visibility:public"])
 
-exports_files(["targets.bzl"])
+exports_files([
+    "debian_releases.bzl",
+    "targets.bzl",
+])
 
 bzl_library(
     name = "targets",
     srcs = ["targets.bzl"],
+)
+
+bzl_library(
+    name = "debian_releases",
+    srcs = ["debian_releases.bzl"],
+    deps = ["@starlark_utils//starlark"],
 )
 
 # ---------------------------------------------------------------------------

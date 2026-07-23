@@ -92,39 +92,77 @@ archive_override(
     url = "https://github.com/bazel-contrib/toolchains_llvm/releases/download/v{v}/toolchains_llvm-v{v}.tar.gz".format(v = TOOLCHAINS_LLVM_VERSION),
 )
 
+# Single source of truth for every Debian-release-derived version fact, keyed by
+# release version. `MODULE.bazel` reads `RELEASE` (the active release) inline
+# for the facts it needs to declare repos; the `debian_releases` repo rule
+# re-exposes the whole table as `@platform_debian//:versions.bzl` so `.bzl` /
+# `BUILD` files can `load()` the same data (MODULE files cannot `load()`). The
+# table lives here and nowhere else.
+RELEASES = {
+    "12": {
+        "apt_snapshot": "20250113T000000Z",
+        "codename": "bookworm",
+        "gcc_major": "12",
+        "llvm_major": "14",
+        "llvm_version": "14.0.6",
+        "version": "12",
+    },
+    "13": {
+        "apt_snapshot": "20260316T000000Z",
+        "codename": "trixie",
+        "gcc_major": "14",
+        "llvm_major": "19",
+        "llvm_version": "19.1.7",
+        "version": "13",
+    },
+}
+
+RELEASE = RELEASES["12"]
+
+debian_releases = use_repo_rule("//platforms:debian_releases.bzl", "debian_releases")
+
+debian_releases(
+    name = "platform_debian",
+    active = RELEASE["version"],
+    releases = {
+        release: ["{}={}".format(field, value) for field, value in fields.items()]
+        for release, fields in RELEASES.items()
+    },
+)
+
 # toolchains/
 llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm", dev_dependency = True)
 
 # NOTE:
 # We use a system LLVM toolchain, so it will use the LLVM installed in the
-# Docker image. This requires llvm-14, clang-14, lld-14, and libc6-dev to be
-# installed. Also, absolute_paths=True is needed because the system toolchain
-# uses absolute paths for builtin headers:
-# /usr/lib/llvm-14/lib/clang/14.0.6/include/. Plus using libstdc++ instead of
+# Docker image, versioned by the active release. For debian 12 that is llvm-14,
+# clang-14, lld-14, and libc6-dev. Also, absolute_paths=True is needed because
+# the system toolchain uses absolute paths for builtin headers (e.g.
+# /usr/lib/llvm-14/lib/clang/14.0.6/include/). Plus using libstdc++ instead of
 # libc++ to match Debian's LLVM libraries ABI.
 llvm.toolchain(
     name = "llvm_toolchain_system_linux_amd64",
     absolute_paths = True,
     exec_arch = "amd64",
     exec_os = "linux",
-    llvm_version = "14.0.6",
+    llvm_version = RELEASE["llvm_version"],
     stdlib = {"": "stdc++"},
 )
 llvm.toolchain_root(
     name = "llvm_toolchain_system_linux_amd64",
-    path = "/usr/lib/llvm-14",
+    path = "/usr/lib/llvm-{}".format(RELEASE["llvm_major"]),
 )
 llvm.toolchain(
     name = "llvm_toolchain_system_linux_arm64",
     absolute_paths = True,
     exec_arch = "arm64",
     exec_os = "linux",
-    llvm_version = "14.0.6",
+    llvm_version = RELEASE["llvm_version"],
     stdlib = {"": "stdc++"},
 )
 llvm.toolchain_root(
     name = "llvm_toolchain_system_linux_arm64",
-    path = "/usr/lib/llvm-14",
+    path = "/usr/lib/llvm-{}".format(RELEASE["llvm_major"]),
 )
 use_repo(llvm, "llvm_toolchain_system_linux_amd64", "llvm_toolchain_system_linux_arm64")
 
