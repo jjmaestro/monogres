@@ -1,5 +1,5 @@
 PROJECT_NAME := monogres
-REPO := $(abspath $(lastword $(MAKEFILE_LIST))/../..)
+REPO := $(abspath $(lastword $(MAKEFILE_LIST))/../../..)
 
 DOCKER := $(shell command -v docker || which docker)
 
@@ -28,7 +28,7 @@ BASE_IMAGE=debian
 # https://hub.docker.com/_/debian/tags
 BASE_IMAGE_TAG=stable-20250113-slim
 # https://github.com/bazelbuild/bazel
-BAZEL_VERSION := $(shell cat $(REPO)/.bazelversion 2>/dev/null || echo 8.4.2)
+BAZEL_VERSION := $(shell cat $(REPO)/build/.bazelversion 2>/dev/null || echo 8.4.2)
 # https://github.com/reproducible-containers/repro-sources-list.sh
 REPRODUCIBLE_CONTAINERS_VERSION ?= 0.1.4
 # https://github.com/bazelbuild/bazelisk
@@ -198,9 +198,8 @@ run-image:
 		--group-add root \
 		--group-add "$(shell id -g)" \
 		--env HOST_GID="$(shell id -g)" \
-		--volume "$(REPO)":/src/repo:ro \
-		--volume "$(REPO)":/src/workspace:rw \
-		--volume "$(REPO)/../.git":/src/.git:ro \
+		--volume "$(REPO)":/src/repo:rw \
+		--volume "$(REPO)/build":/src/workspace:rw \
 		$(CACHE_MOUNTS) \
 		$(TMPFS_MOUNTS) \
 		$(EXTRA_VOLUME_FLAGS) \
@@ -215,7 +214,7 @@ gen-image: $(DOCKER_TARGET_LOCK)
 
 .PHONY: gen-image
 
-$(DOCKER_TARGET_LOCK): Dockerfile.$(DOCKERFILE) $(MAKEFILE_LIST) $(REPO)/.bazelversion
+$(DOCKER_TARGET_LOCK): Dockerfile.$(DOCKERFILE) $(MAKEFILE_LIST) $(REPO)/build/.bazelversion
 	$(DOCKER) build --file "$<" $(DOCKER_BUILD_ARGS) . && \
 	$(DOCKER) image tag $(IMAGE_NAME) $(TAG) && \
 	touch "$@"
