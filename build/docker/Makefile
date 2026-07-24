@@ -26,7 +26,7 @@ BUILD_PLATFORMS ?= "linux/amd64,linux/arm64"
 
 BASE_IMAGE=debian
 # https://hub.docker.com/_/debian/tags
-BASE_IMAGE_TAG=stable-20250113-slim
+BASE_IMAGE_TAG=trixie-20260316-slim
 # https://github.com/bazelbuild/bazel
 BAZEL_VERSION := $(shell cat $(REPO)/build/.bazelversion 2>/dev/null || echo 8.4.2)
 # https://github.com/reproducible-containers/repro-sources-list.sh

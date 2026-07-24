@@ -139,7 +139,7 @@ RELEASES = {
     },
 }
 
-RELEASE = RELEASES["12"]
+RELEASE = RELEASES["13"]
 
 debian_releases = use_repo_rule("//platforms:debian_releases.bzl", "debian_releases")
 
