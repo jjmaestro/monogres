@@ -6,6 +6,7 @@ Internal to monoext; invoked from generated `@{name}_ext//...` BUILD files.
 
 load("@platform_debian//:versions.bzl", "RELEASE")
 load("//toolchains/llvm_sysroot:llvm_version.bzl", "LLVM_MAJOR")
+load("//toolchains/perl:perl_toolchain.bzl", _PERL_VERSION = "PERL_VERSION")
 
 # Action-time setup script (shared with `pg_build.bzl`): extracts the per-PG
 # sysroot tar into `$EXT_BUILD_ROOT/sysroot/`, sed-patches perl Config files in
@@ -39,6 +40,41 @@ _LIBC_SYSROOT_TAR = "@libc_sysroot//debian/{}:sysroot_tar".format(
 # of the LLVM-14 binaries resolve at install time. Arch-selecting alias is
 # emitted by `//sysroots/common:codegen.bzl::version_root_build`.
 _LLVM_SYSROOT = "@llvm_sysroot//debian/{}:sysroot".format(RELEASE.version)
+
+# Codegen tools for extensions whose Makefiles regenerate a scanner/parser at
+# build time (e.g. Apache AGE: `ag_scanner.l` -> flex, `cypher_gram.y` ->
+# bison). Postgres's installed `Makefile.global` bakes `FLEX`/`BISON` to the
+# bazel exec-tool paths that only exist inside the PG build action's input tree,
+# so an external extension that triggers the `.l`/`.y` rules cannot find them
+# and dies with `flex: No such file or directory` (Error 127). Stage the same
+# tools here and override `FLEX`/`BISON`/`M4` on the `make` command line (GNU
+# make ranks command-line variables above the `Makefile.global` assignments).
+# Mirrors the wiring in `monoext/private/base/pg_build.bzl`. The rules_flex flex
+# has no built-in macro processor, so it resolves `m4` through the `M4` env var,
+# which is exported below.
+_M4 = "@m4//bin:m4"
+_FLEX = "@flex//bin:flex"
+_BISON = "@bison//bin:bison"
+
+# Perl for extensions whose Makefiles run a `.pl` codegen script at build time
+# (e.g. Apache AGE: `tools/gen_keywordlist.pl` -> `cypher_kwlist_d.h`). Same
+# rationale as flex/bison: `Makefile.global` bakes `PERL` to the PG-build-only
+# `@perl_sysroot` path. `_PERL_BIN` carries the `@perl_sysroot` tree as
+# runfiles, so staging it and pointing `PERL5LIB` at that tree's core-module
+# dirs lets the interpreter run a plain script. The plperl XS shim
+# (`Config_overrides.pm` / `PERL5OPT`) that `pg_build.bzl` needs is
+# intentionally omitted: external extensions run perl scripts, they do not link
+# `libperl`. `$(PERL_MULTIARCH)` is emitted by `_PERL_TOOLCHAIN`.
+_PERL_BIN = "@monogres//toolchains/perl:perl"
+_PERL_TOOLCHAIN = "@monogres//toolchains/perl:current_perl_toolchain"
+
+# Raw @perl_sysroot filegroup. Staged in `srcs` so the interpreter's core
+# modules (`strict.pm`, `warnings.pm`, ...) are materialized at their source
+# paths in the sandbox, where the `@perl_sysroot` perl's baked `@INC` (and the
+# `PERL5LIB` derived below) look for them. `_PERL_BIN`'s runfiles alone are not
+# co-located at those paths under a plain genrule (unlike rules_foreign_cc's
+# `build_data`), so the tree must be an explicit action input.
+_PERL_SYSROOT = "@monogres//toolchains/perl:sysroot"
 
 def pgxs_build(
         name,
@@ -113,11 +149,13 @@ def pgxs_build(
         _LLVM_SYSROOT,
         _SYSROOT_SETUP_SCRIPT,
         _SYSROOT_LIB_SCRIPT,
+        _PERL_SYSROOT,
     ]
 
     native.genrule(
         name = name,
         srcs = srcs,
+        tools = [_M4, _FLEX, _BISON, _PERL_BIN],
         outs = [tar_file, log_file],
         cmd = """
         tar_() {{
@@ -474,10 +512,26 @@ def pgxs_build(
             echo
             echo "make"
             echo
+            # CC/CXX/CPP + FLEX/BISON/M4/PERL: point make at real tools (the
+            # defaults in Makefile.global reference PG-build-only paths).
+            # pg_path_overrides relocate the PGXS install dirs (see above).
+            # These must outrank the Makefile `:=` assignments, hence the
+            # command line. CPPFLAGS: our sysroot include flags reach PGXS via
+            # PG_CPPFLAGS, but an extension whose own Makefile assigns
+            # PG_CPPFLAGS (e.g. Apache AGE's `-I src/include`) shadows that env
+            # value, so the bitcode rule (raw clang using BITCODE_CFLAGS +
+            # CPPFLAGS, not CFLAGS) loses --sysroot. A command-line CPPFLAGS
+            # makes PGXS's `override CPPFLAGS` merge our sysroot flags back into
+            # every rule, the .o and the .bc alike.
             local make_overrides=(
                 CC="$$cc"
                 CXX="$$cc"
                 CPP="$$cc -E"
+                FLEX="$$FLEX"
+                BISON="$$BISON"
+                M4="$$M4"
+                PERL="$$PERL"
+                CPPFLAGS="$${{pg_cflags[*]}}"
                 PG_CONFIG="$$EXT_BUILD_ROOT/$(PG_CONFIG)"
                 "$${{pg_path_overrides[@]}}"
                 USE_PGXS=1
@@ -597,6 +651,31 @@ def pgxs_build(
 
         CC="$$EXT_BUILD_ROOT/$(CC)"
 
+        # Codegen tools for extensions that regenerate a scanner/parser at build
+        # time. Exported for make (and for flex, which resolves m4 via the M4 env
+        # var); also passed as make command-line overrides below so they outrank
+        # the PG-build-only paths baked into Makefile.global.
+        FLEX="$$EXT_BUILD_ROOT/$(execpath {flex})"
+        BISON="$$EXT_BUILD_ROOT/$(execpath {bison})"
+        M4="$$EXT_BUILD_ROOT/$(execpath {m4})"
+        export FLEX BISON M4
+
+        # Perl for extensions whose Makefiles run a `.pl` codegen script. The perl
+        # binary lives at `<perl_sysroot>/usr/bin/perl`; three dirnames climb to
+        # the sysroot root. PERL5LIB points at the sysroot's core-module dirs
+        # because the @perl_sysroot interpreter's baked @INC uses Debian host
+        # paths absent from the sandbox.
+        PERL="$$EXT_BUILD_ROOT/$(execpath {perl})"
+        PERL_SYSROOT_DIR="$$(dirname $$(dirname $$(dirname "$$PERL")))"
+        perl5lib=(
+          "$$PERL_SYSROOT_DIR/usr/lib/$(PERL_MULTIARCH)/perl-base"
+          "$$PERL_SYSROOT_DIR/usr/lib/$(PERL_MULTIARCH)/perl/{perl_version}"
+          "$$PERL_SYSROOT_DIR/usr/share/perl/{perl_version}"
+          "$$PERL_SYSROOT_DIR/usr/share/perl5"
+        )
+        PERL5LIB="$$(IFS=:; echo "$${{perl5lib[*]}}")"
+        export PERL PERL5LIB
+
         # Per-extension sysroot delivered as a single `:sysroot_tar` artifact
         # and extracted at action time by the shared setup script (also used
         # by `pg_build.bzl`). The script extracts to `$$EXT_BUILD_ROOT/sysroot/`,
@@ -649,6 +728,11 @@ def pgxs_build(
             base_sysroot_tar = base_sysroot_tar,
             wrapper = _SYSROOT_CLANG_WRAPPER,
             llvm_major = LLVM_MAJOR,
+            flex = _FLEX,
+            bison = _BISON,
+            m4 = _M4,
+            perl = _PERL_BIN,
+            perl_version = _PERL_VERSION,
             debug = "%s" % debug,
         ),
         target_compatible_with = select({
@@ -664,6 +748,10 @@ def pgxs_build(
             "@monogres//toolchains/llvm_sysroot:llvm_sysroot_dir",
             "@monogres//toolchains/llvm_sysroot:llvm_sysroot_exec_dir",
             "@rules_foreign_cc//toolchains:current_make_toolchain",
+            "@rules_m4//m4:current_m4_toolchain",
+            "@rules_flex//flex:current_flex_toolchain",
+            "@rules_bison//bison:current_bison_toolchain",
+            _PERL_TOOLCHAIN,
             "%s//%s:toolchain" % (base_hub, base_version["version"]),
         ],
         visibility = ["//visibility:public"],
