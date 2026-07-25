@@ -83,6 +83,7 @@
     "pgagent",
     "pgaudit",
     "pgvector",
+    "postgis",
     "sslutils",
     "timescaledb"
   ],

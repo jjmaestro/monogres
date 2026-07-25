@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "sources": {
+    "osgeo": {
+      "name": "postgis",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://download.osgeo.org/postgis/source/{name}-{version}.tar.gz"
+    }
+  },
+  "versions": {
+    "3.5.7": {
+      "sha256": "af9ab591854d52a0d1115f90b797ef1cd60d01b85a11ff813073689e332272ff"
+    }
+  },
+  "metadata": {
+    "patches": [
+      {
+        "label": "//catalog/extensions/postgis/patches:0001-3.5.7-configure-keep-env-cc.patch",
+        "spec": ">=3.5.7/*"
+      }
+    ],
+    "build_args": [
+      "--with-pgconfig={pg_config}",
+      "--with-gdalconfig={sysroot}/usr/bin/gdal-config",
+      "--with-xml2config={sysroot}/usr/bin/xml2-config"
+    ],
+    "remap_paths": {
+      "gdal-config": {
+        "/usr": "{sysroot}/usr"
+      },
+      "xml2-config": {
+        "/usr": "{sysroot}/usr"
+      }
+    },
+    "compatible_with": {
+      "postgres": {
+        "3.5.7": ">=16"
+      }
+    },
+    "deps": {
+      "buildtime": {
+        "debian": {
+          "12": {
+            "*": [
+              "libgeos-dev",
+              "libproj-dev",
+              "libgdal-dev",
+              "libxml2-dev",
+              "libjson-c-dev",
+              "libprotobuf-c-dev",
+              "protobuf-c-compiler",
+              "gettext",
+              "pkgconf",
+              "binutils"
+            ]
+          },
+          "13": {
+            "*": [
+              "libgeos-dev",
+              "libproj-dev",
+              "libgdal-dev",
+              "libxml2-dev",
+              "libjson-c-dev",
+              "libprotobuf-c-dev",
+              "protobuf-c-compiler",
+              "gettext",
+              "pkgconf",
+              "binutils"
+            ]
+          }
+        }
+      },
+      "runtime": {
+        "debian": {
+          "12": {
+            "*": [
+              "libgeos-c1t64",
+              "libproj25",
+              "libgdal36",
+              "libxml2",
+              "libjson-c5",
+              "libprotobuf-c1"
+            ]
+          },
+          "13": {
+            "*": [
+              "libgeos-c1t64",
+              "libproj25",
+              "libgdal36",
+              "libxml2",
+              "libjson-c5",
+              "libprotobuf-c1"
+            ]
+          }
+        }
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "extensions": ["postgis", "postgis_raster", "postgis_topology"],
+        "cascade": true
+      }
+    }
+  }
+}
