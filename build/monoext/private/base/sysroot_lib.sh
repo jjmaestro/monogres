@@ -70,7 +70,10 @@ _bridge_libs() {
 # symlink_chroot_libs <root> <multiarch>
 # Symlink <root>'s libs into the chroot's standard /lib/<triplet> +
 # /usr/lib/<triplet> so ld.so's default search resolves NEEDED .so with no
-# LD_LIBRARY_PATH, via `_bridge_libs`.
+# LD_LIBRARY_PATH. Three bridges via `_bridge_libs`: the multiarch subdirs
+# verbatim, any `.so*` sitting directly in lib/ (some Debian libs are still
+# non-multiarch, e.g. libarmadillo14), and versioned `lib*.so.*` from immediate
+# subdirs of the multiarch dir.
 symlink_chroot_libs() {
     _root=$1
     _multiarch=$2
@@ -80,6 +83,24 @@ symlink_chroot_libs() {
     for _dir in "$_root/lib/$_multiarch" "$_root/usr/lib/$_multiarch"; do
         [ -d "$_dir" ] || continue
         _bridge_libs "${_dir#"$_root"}" "" "$_dir"/*
+    done
+
+    # Non-multiarch libs sitting directly in lib/ (some Debian libs are still
+    # non-multiarch, e.g. libarmadillo14): bridge the `.so*` files into the
+    # multiarch dir.
+    for _dir in "$_root/lib" "$_root/usr/lib"; do
+        _bridge_libs "${_dir#"$_root"}/$_multiarch" files "$_dir"/*.so*
+    done
+
+    # Debian alternatives-managed libs (e.g. BLAS/LAPACK) sit in a subdir of the
+    # multiarch dir (blas/libblas.so.3); the SONAME symlink in the multiarch dir
+    # is normally created by a postinst update-alternatives call, absent from a
+    # data.tar-only closure. Bridge versioned `lib*.so.*` from immediate subdirs
+    # up to the multiarch dir so ld.so resolves the SONAME. (Plugin subdirs like
+    # gconv/ or security/ hold path-loaded modules, not `lib*.so.*`, so are left.)
+    for _dir in "$_root/lib/$_multiarch" "$_root/usr/lib/$_multiarch"; do
+        [ -d "$_dir" ] || continue
+        _bridge_libs "${_dir#"$_root"}" files "$_dir"/*/lib*.so.*
     done
 }
 
