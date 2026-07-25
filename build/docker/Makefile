@@ -100,6 +100,37 @@ CACHE_MOUNTS :=
 CACHE_SETUP_SCRIPT :=
 endif
 
+# Opt-in RAM output base. Bazel's output base (per-workspace execroot + action
+# scaffolding) is a mass of tiny files; on a slow-backed cache volume its churn
+# dominates. With TMPFS_OUTPUT_BASE=true, put it on a RAM tmpfs and keep the
+# downloaded repository_cache on the persistent /cache volume so nothing is
+# re-fetched. Off by default; regenerable, so RAM volatility is fine. Bounded by
+# host RAM (the container is unlimited), sized via TMPFS_OUTPUT_BASE_SIZE.
+TMPFS_OUTPUT_BASE ?= false
+TMPFS_OUTPUT_BASE_SIZE ?= 12g
+TMPFS_OUTPUT_BASE_DIR := /bzl-tmp
+TMPFS_REPO_CACHE ?= /cache/bazel-cache/repos
+
+ifeq ($(TMPFS_OUTPUT_BASE),true)
+# `exec` is required: bazel extracts its install base (embedded JDK + server
+# binaries) here and must execute them. Docker's `--mount type=tmpfs` forces
+# noexec, so use the `--tmpfs` form, which accepts mount options.
+TMPFS_MOUNTS := --tmpfs $(TMPFS_OUTPUT_BASE_DIR):rw,exec,nosuid,nodev,size=$(TMPFS_OUTPUT_BASE_SIZE)
+
+# Write an ephemeral system bazelrc: output bases -> tmpfs, downloads persist.
+# Uses double-quoted echo (not printf with single quotes) because this whole
+# script is embedded in the entrypoint's `bash -c '...'`; single quotes would
+# close that string early.
+TMPFS_SETUP_SCRIPT := \
+	mkdir -p $(TMPFS_OUTPUT_BASE_DIR) $(TMPFS_REPO_CACHE); \
+	chown $(USERNAME) $(TMPFS_OUTPUT_BASE_DIR) $(TMPFS_REPO_CACHE); \
+	echo "startup --output_user_root=$(TMPFS_OUTPUT_BASE_DIR)" > /etc/bazel.bazelrc; \
+	echo "common --repository_cache=$(TMPFS_REPO_CACHE)" >> /etc/bazel.bazelrc;
+else
+TMPFS_MOUNTS :=
+TMPFS_SETUP_SCRIPT :=
+endif
+
 DETACHED ?= false
 
 ifeq ($(DETACHED),false)
@@ -125,6 +156,7 @@ endif
 ENTRYPOINT_SCRIPT := \
 	set -xeuo pipefail; \
 	$(CACHE_SETUP_SCRIPT) \
+	$(TMPFS_SETUP_SCRIPT) \
 	USER_UID=$$(getent passwd $(USERNAME) | cut -d: -f3); \
 	USER_GID=$$(getent passwd $(USERNAME) | cut -d: -f4); \
 	export HOME=$$(getent passwd $(USERNAME) | cut -d: -f6); \
@@ -169,6 +201,7 @@ run-image:
 		--volume "$(REPO)":/src/workspace:rw \
 		--volume "$(REPO)/../.git":/src/.git:ro \
 		$(CACHE_MOUNTS) \
+		$(TMPFS_MOUNTS) \
 		$(EXTRA_VOLUME_FLAGS) \
 		--workdir /src/workspace \
 		--entrypoint /bin/bash \
