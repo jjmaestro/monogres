@@ -7,7 +7,10 @@ load("//toolchains/llvm_sysroot:llvm_version.bzl", "LLVM_MAJOR")
 package(default_visibility = ["//visibility:public"])
 
 exports_files(
-    ["clang_wrapper.sh"] + ["debian{}.json".format(v) for v in VERSIONS],
+    [
+        "clang_wrapper.sh",
+        "cpp_wrapper.sh",
+    ] + ["debian{}.json".format(v) for v in VERSIONS],
 )
 
 # Per-target-arch alias for the @libc_sysroot clang wrapper. The wrapper is
