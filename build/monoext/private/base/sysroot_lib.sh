@@ -5,10 +5,11 @@
 # Sourced by both the build-time setup (`base/sysroot_setup.sh`, which layers
 # perl Config + clang-wrapper post-processing on top) and the test-time closure
 # populator (`test/closure_setup.sh`, which layers multiple tars + a run mode).
-# These three functions are the population mechanics both share: extract sysroot
-# tars, derive the Debian multiarch triplet from the tree, and symlink the
-# multiarch libs into the hermetic chroot's standard lib paths so ld.so's
-# default search resolves NEEDED .so with no LD_LIBRARY_PATH.
+# The functions here manipulate an extracted sysroot tree: extract sysroot tars,
+# derive the Debian multiarch triplet from the tree, symlink the multiarch libs
+# into the hermetic chroot's standard lib paths (so ld.so's default search
+# resolves NEEDED .so with no LD_LIBRARY_PATH), and remap baked absolute paths
+# in the tree's scripts.
 #
 # POSIX sh (the build action runs under `sh`). Functions prefix their working
 # variables with `_` so they do not clobber the sourcing script's variables.
@@ -79,5 +80,28 @@ symlink_chroot_libs() {
     for _dir in "$_root/lib/$_multiarch" "$_root/usr/lib/$_multiarch"; do
         [ -d "$_dir" ] || continue
         _bridge_libs "${_dir#"$_root"}" "" "$_dir"/*
+    done
+}
+
+# remap_paths <root> <pattern> <from> <to>
+# Replace <from> with <to> in each script matching <root>/usr/bin/<pattern>. A
+# script may bake absolute paths a consumer reads verbatim rather than through a
+# sysroot search (a `*-config` tool's `--cflags` / `--libs`, ...); rewriting
+# them re-roots those paths into the extracted tree. <pattern> is a basename or
+# POSIX glob; <from> / <to> are literal path-like strings (no `|`, the sed
+# delimiter). The interpreter (`#!`) line is left as-is, and non-script (ELF)
+# files are skipped via the `#!` check, so an ELF tool is left intact. The
+# extracted tree is writable, so the sed runs in place.
+remap_paths() {
+    _root=$1
+    _pattern=$2
+    _from=$3
+    _to=$4
+    # shellcheck disable=SC2086 # pattern is globbed on purpose
+    for _f in "$_root"/usr/bin/$_pattern; do
+        [ -f "$_f" ] || continue
+        _magic=$(head -c 2 "$_f" 2>/dev/null) || _magic=
+        [ "$_magic" = "#!" ] || continue
+        sed -i "1!s|$_from|$_to|g" "$_f"
     done
 }
