@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "hexacluster",
+      "name": "pg_dbms_job",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/hexacluster/pg_dbms_job/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "2.0": {
+      "sha256": "db9285d2fb16c2fd9e33dddf273217e0bab53653e6cf40df8e8b1880579995c3"
+    }
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "2.0": ">=16"
+      }
+    },
+    "deps": {
+      "buildtime": {
+        "debian": {
+          "12": {
+            "*": ["libpq-dev"]
+          },
+          "13": {
+            "*": ["libpq-dev"]
+          }
+        }
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "extensions": ["pg_dbms_job"],
+        "preload": ["pg_dbms_job"]
+      },
+      "test": {
+        "*": {
+          "integration": {
+            "kind": "integration",
+            "preload": ["pg_dbms_job"],
+            "num_clusters": 1,
+            "assertion_script": "//catalog/extensions/pg_dbms_job/tests:integration.sh"
+          }
+        }
+      }
+    }
+  }
+}

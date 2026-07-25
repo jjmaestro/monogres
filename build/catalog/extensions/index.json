@@ -74,6 +74,7 @@
   "extensions": [
     "citus",
     "noset",
+    "pg_dbms_job",
     "pg_qualstats",
     "pg_stat_monitor",
     "pgaudit",
