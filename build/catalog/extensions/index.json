@@ -73,6 +73,7 @@
   ],
   "extensions": [
     "citus",
+    "hypopg",
     "noset",
     "pg_dbms_job",
     "pg_qualstats",
