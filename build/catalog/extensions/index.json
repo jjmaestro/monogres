@@ -82,7 +82,8 @@
     "pg_stat_monitor",
     "pgaudit",
     "pgvector",
-    "sslutils"
+    "sslutils",
+    "timescaledb"
   ],
   "version": 1
 }
