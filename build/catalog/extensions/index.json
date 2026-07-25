@@ -75,6 +75,7 @@
     "citus",
     "noset",
     "pg_stat_monitor",
+    "pgaudit",
     "pgvector",
     "sslutils"
   ],
