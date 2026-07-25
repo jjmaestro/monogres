@@ -80,6 +80,7 @@
     "pg_qualstats",
     "pg_stat_kcache",
     "pg_stat_monitor",
+    "pgagent",
     "pgaudit",
     "pgvector",
     "sslutils",

@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "pgagent-{version}",
+      "gh_org": "pgadmin-org",
+      "name": "pgagent",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{tag}",
+      "url": "https://github.com/pgadmin-org/pgagent/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "4.2.3": {
+      "sha256": "d4af82e8b4063aa1ca9c407562a3bbc9c9951353538f83d82a7e523f40276388"
+    }
+  },
+  "metadata": {
+    "build_system": "cmake",
+    "build_args": [
+      "-DBOOST_STATIC_BUILD=YES"
+    ],
+    "compatible_with": {
+      "postgres": {
+        "4.2.3": ">=16"
+      }
+    },
+    "deps": {
+      "buildtime": {
+        "debian": {
+          "12": {
+            "*": [
+              "libboost-filesystem-dev",
+              "libboost-regex-dev",
+              "libboost-date-time-dev",
+              "libboost-thread-dev",
+              "libboost-system-dev"
+            ]
+          },
+          "13": {
+            "*": [
+              "libboost-filesystem-dev",
+              "libboost-regex-dev",
+              "libboost-date-time-dev",
+              "libboost-thread-dev",
+              "libboost-system-dev"
+            ]
+          }
+        }
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "extensions": ["pgagent"]
+      }
+    }
+  }
+}
