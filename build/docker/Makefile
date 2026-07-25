@@ -191,6 +191,7 @@ run-image:
 		--platform "linux/$(ARCH)" \
 		--name "$(CONTAINER_NAME)" \
 		--privileged \
+		--init \
 		--rm \
 		$(RUN_MODE) \
 		--user "root" \
