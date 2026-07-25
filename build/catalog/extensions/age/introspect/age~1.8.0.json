@@ -1,0 +1,65 @@
+{
+    "controls": [
+        "age"
+    ],
+    "test_suites": [
+        {
+            "dbname": "contrib_regression",
+            "encoding": "UTF-8",
+            "inputdir": "regress",
+            "kind": "regress",
+            "load_extensions": [
+                "age"
+            ],
+            "slug": "regress",
+            "temp_config": "regress/age_regression.conf",
+            "tests": {
+                "*": [
+                    "scan",
+                    "graphid",
+                    "agtype",
+                    "agtype_hash_cmp",
+                    "agehash",
+                    "catalog",
+                    "cypher",
+                    "expr",
+                    "cypher_create",
+                    "cypher_match",
+                    "cypher_unwind",
+                    "cypher_set",
+                    "cypher_remove",
+                    "cypher_delete",
+                    "cypher_with",
+                    "cypher_vle",
+                    "age_shortest_path",
+                    "cypher_union",
+                    "cypher_call",
+                    "cypher_merge",
+                    "cypher_subquery",
+                    "age_global_graph",
+                    "age_load",
+                    "index",
+                    "analyze",
+                    "graph_generation",
+                    "name_validation",
+                    "jsonb_operators",
+                    "list_comprehension",
+                    "predicate_functions",
+                    "pattern_expression",
+                    "age_reduce",
+                    "map_projection",
+                    "direct_field_access",
+                    "generated_columns",
+                    "security",
+                    "reserved_keyword_alias",
+                    "agtype_jsonb_cast",
+                    "containment_selectivity",
+                    "subgraph",
+                    "extension_security",
+                    "drop"
+                ]
+            }
+        }
+    ],
+    "version": 1
+}

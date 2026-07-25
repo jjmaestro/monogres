@@ -72,6 +72,7 @@
     "xml2"
   ],
   "extensions": [
+    "age",
     "citus",
     "hypopg",
     "noset",
