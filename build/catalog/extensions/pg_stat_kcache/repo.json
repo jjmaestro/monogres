@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "REL2_3_2",
+      "gh_org": "powa-team",
+      "name": "pg_stat_kcache",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{tag}",
+      "url": "https://github.com/powa-team/pg_stat_kcache/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "2.3.2": {
+      "sha256": "d5da20b5d8808f60dc1427c94d69186ff1d48fa1235ff672f5d0457b370304fb"
+    }
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "2.3.2": ">=16"
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "extensions": ["pg_stat_kcache"],
+        "preload": ["pg_stat_statements", "pg_stat_kcache"],
+        "cascade": true
+      },
+      "test": {
+        "*": {
+          "regress": {
+            "kind": "regress",
+            "inputdir": "test",
+            "expecteddir": ".",
+            "preload": ["pg_stat_statements", "pg_stat_kcache"],
+            "tests": ["01_basic"]
+          }
+        }
+      }
+    }
+  }
+}
