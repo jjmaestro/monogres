@@ -1,8 +1,8 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 
-# `pgxs.bzl` is loaded from generated `@{name}_ext//...` BUILD files, so its
-# file (and the shared `build.bzl` it transitively loads) must be publicly
-# visible.
+# `pgxs.bzl` / `cmake.bzl` are loaded from generated `@{name}_ext//...` BUILD
+# files, so their files (and the shared `build.bzl` they transitively load) must
+# be publicly visible. `build_args.bzl` is internal to this package.
 package(default_visibility = [
     "//monoext/private:__subpackages__",
     "//tests/monoext:__subpackages__",
@@ -12,6 +12,7 @@ exports_files(
     [
         "build.bzl",
         "pgxs.bzl",
+        "cmake.bzl",
     ],
     visibility = ["//visibility:public"],
 )
@@ -20,6 +21,7 @@ bzl_library(
     name = "build",
     srcs = ["build.bzl"],
     visibility = ["//visibility:public"],
+    deps = [":build_args"],
 )
 
 bzl_library(
@@ -27,4 +29,16 @@ bzl_library(
     srcs = ["pgxs.bzl"],
     visibility = ["//visibility:public"],
     deps = [":build"],
+)
+
+bzl_library(
+    name = "cmake",
+    srcs = ["cmake.bzl"],
+    visibility = ["//visibility:public"],
+    deps = [":build"],
+)
+
+bzl_library(
+    name = "build_args",
+    srcs = ["build_args.bzl"],
 )

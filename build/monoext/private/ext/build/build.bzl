@@ -16,6 +16,7 @@ the same pass as the shared ones.
 """
 
 load("@platform_debian//:versions.bzl", "RELEASE")
+load("//monoext/private/ext/build:build_args.bzl", "render_build_args")
 load("//toolchains/llvm_sysroot:llvm_version.bzl", "LLVM_MAJOR")
 
 # Action-time setup script (shared with `pg_build.bzl`): extracts the per-PG
@@ -79,6 +80,9 @@ def ext_build(
         extra_tools = [],
         extra_toolchains = [],
         extra_format_kwargs = {},
+        arg_subst = {},
+        build_args = [],
+        build_args_indent = 0,
         debug = False):
     """Emits the extension-build genrule shared by every build system.
 
@@ -110,6 +114,11 @@ def ext_build(
             after the shared set and before the base-PG toolchain.
         extra_format_kwargs (dict): Additional `str.format` values the injected
             fragments reference (e.g. the pgxs codegen-tool labels).
+        arg_subst (dict[str, str]): Portable-token -> action-time value map used
+            to render `build_args`.
+        build_args (list[str]): The extension's `metadata.build_args`.
+        build_args_indent (int): Continuation indent for the rendered build
+            args, matching the placeholder's column in `compile_extension`.
         debug (bool): If `True`, `set -x` the action.
     """
     prefix_distro_rel = prefix_distro.lstrip("/")
@@ -412,6 +421,7 @@ def ext_build(
             base_sysroot_tar = base_sysroot_tar,
             wrapper = _SYSROOT_CLANG_WRAPPER,
             llvm_major = LLVM_MAJOR,
+            build_args = render_build_args(build_args, arg_subst, build_args_indent),
             debug = "%s" % debug,
         ) | extra_format_kwargs)),
         target_compatible_with = select({

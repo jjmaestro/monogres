@@ -12,6 +12,10 @@ load(
     "//monoext/private/ext/build:build.bzl",
     "ext_build",
 )
+load(
+    "//monoext/private/ext/build:build_args.bzl",
+    "PGXS_ARG_SUBST",
+)
 load("//toolchains/perl:perl_toolchain.bzl", _PERL_VERSION = "PERL_VERSION")
 
 # Codegen tools for extensions whose Makefiles regenerate a scanner/parser at
@@ -239,6 +243,7 @@ _COMPILE_EXTENSION = """
                 local build_args=(
                     "--host=$$target_multiarch"
                     "--build=$$build_multiarch"
+                    {build_args}
                 )
 
                 # `citusac_pg_config_version` bypasses Citus's
@@ -385,6 +390,7 @@ def pgxs_build(
         base_hub,
         base_sysroot_tar,
         prefix_distro,
+        build_args = [],
         debug = False):
     """Builds a PGXS extension with the [PGXS build system].
 
@@ -422,6 +428,10 @@ def pgxs_build(
         prefix_distro (str): The base prefix path for the distro install (e.g.
             `"/postgres"`, `"/ivorysql"`). The base version is appended
             internally.
+        build_args (list[str]): Extra `./configure` flags from the extension's
+            `metadata.build_args`, appended (templated to sysroot paths via
+            `PGXS_ARG_SUBST`) when the source ships a `configure` script. Empty
+            for PGXS extensions that declare none.
         debug (bool): If `True`, prints a debug message for each command
             executed.
     """
@@ -450,5 +460,8 @@ def pgxs_build(
             "perl": _PERL_BIN,
             "perl_version": _PERL_VERSION,
         },
+        arg_subst = PGXS_ARG_SUBST,
+        build_args = build_args,
+        build_args_indent = 20,
         debug = debug,
     )
