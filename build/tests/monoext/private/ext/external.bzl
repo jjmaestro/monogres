@@ -177,7 +177,7 @@ def _pg_build_test_impl(ctx):
 
     asserts.true(
         env,
-        '"@monogres//monoext/private/ext:pgxs_build.bzl"' in out,
+        '"@monogres//monoext/private/ext/build:pgxs.bzl"' in out,
     )
     asserts.true(env, '"pgxs_build"' in out)
 

@@ -349,8 +349,8 @@ def _build_repo_load_labels_test_impl(ctx):
     )
     asserts.equals(
         env,
-        "@monogres//monoext/private/ext:pgxs_build.bzl",
-        f("@{build}//monoext/private/ext:pgxs_build.bzl"),
+        "@monogres//monoext/private/ext/build:pgxs.bzl",
+        f("@{build}//monoext/private/ext/build:pgxs.bzl"),
     )
     asserts.equals(
         env,

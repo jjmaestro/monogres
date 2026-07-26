@@ -141,7 +141,7 @@ def _pg_build(
     f = bind(build = build_repo, src = source_repo, v = version)
     return Star.file(
         Star.load_(
-            f("@{build}//monoext/private/ext:pgxs_build.bzl"),
+            f("@{build}//monoext/private/ext/build:pgxs.bzl"),
             "pgxs_build",
         ),
         Star.package(default_visibility = ["//visibility:public"]),
