@@ -77,6 +77,7 @@ max_conc=""
 dbname=""
 test_tar=""
 tap_env_args=""
+tap_locale=""
 srcdir_subtree=""
 tap_file=""
 skip_reason=""
@@ -164,6 +165,9 @@ while [ "$#" -gt 0 ]; do
     # A single TAP .pl basename to run (per-.pl target, e.g. 001_stream_rep);
     # empty falls back to running every t/*.pl in the suite (make path).
     --tap-file) tap_file="$2"; shift 2 ;;
+    # An external TAP suite's node locale (e.g. C.UTF-8); exported before the .pl
+    # so PostgreSQL::Test's initdb picks that encoding (default C / SQL_ASCII).
+    --tap-locale) tap_locale="$2"; shift 2 ;;
     # host-capability TAP test (e.g. a controlling-terminal pty); the harness
     # TAP-skips it (see below) so the hermetic suite stays green.
     --skip-reason) skip_reason="$2"; shift 2 ;;
@@ -665,6 +669,15 @@ export TCL8_6_TM_PATH="$CLOSURE/usr/share/tcltk/tcl8.6/tcl8"
 # running the .pl directly is also why the production introspect's
 # `--skip "TAP tests not enabled"` never reaches us.
 if [ "$kind" = "tap" ]; then
+    # An external TAP suite may need its nodes at a specific locale/encoding
+    # (pg_stat_monitor's query-length test wants a UTF-8 database; the hermetic
+    # default is C, i.e. SQL_ASCII). PostgreSQL::Test::Utils deletes LC_ALL and
+    # re-reads LC_CTYPE/LANG, so exporting them here re-roots the encoding initdb
+    # picks for the node.
+    if [ -n "$tap_locale" ]; then
+        unset LC_ALL
+        export LANG="$tap_locale" LC_CTYPE="$tap_locale"
+    fi
     tap_out="${TEST_UNDECLARED_OUTPUTS_DIR:-$TEST_TMPDIR/out}/${suite:-tap}"
     mkdir -p "$tap_out"
     # testwrap exports TESTDATADIR/TESTLOGDIR; PostgreSQL::Test::Utils reads them

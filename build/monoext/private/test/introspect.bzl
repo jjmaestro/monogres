@@ -340,5 +340,6 @@ def render_external_ext_tests(rctx, flavor, build_repo, external_entries, ext_te
                 overlay_tar = target.artifact + ".tar",
                 ext_srcdir = target.source.dir,
                 ext_runtime_tar = target.deps.runtime.sysroot_tar,
+                pg_src_dir = c.src_dirs.get(base_v),
                 test_ext = test_ext,
             )

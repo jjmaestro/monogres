@@ -1269,16 +1269,19 @@ def _ext_rlocs(
         runtime_tar,
         overlay_tar,
         ext_srcdir = None,
-        ext_runtime_tar = None):
+        ext_runtime_tar = None,
+        pg_src_dir = None):
     """Assemble the external-lane runfiles arg strings + the `data` list.
 
-    Unlike `_rlocs` (core/contrib), the external lane ships NO PG source tree
-    (smoke reads none; a regress suite reads the extension's OWN source via
-    `--ext-srcdir`) and NO `test` deps sysroot (no TAP), but adds the extension
-    artifact tar (`--overlay-tar`), optionally the extension source-tree root
+    Unlike `_rlocs` (core/contrib), the external lane runs against the
+    extension's OWN source via `--ext-srcdir` (smoke reads none; a regress suite
+    reads its `sql/`+`expected/`), and adds the extension artifact tar
+    (`--overlay-tar`), optionally the extension source-tree root
     (`--ext-srcdir`, a single tree artifact), and optionally the extension's
     runtime-deps sysroot tar (`--ext-runtime-from`, absent for an extension with
-    no third-party runtime deps).
+    no third-party runtime deps). A TAP suite additionally needs the PG source
+    tree (for `src/test/perl` = PostgreSQL::Test) and the base `test` deps
+    sysroot (IPC::Run), both shipped only when `pg_src_dir` is set.
 
     Args:
         build_repo: build repo holding the harness scripts + bsdtar toolchain.
@@ -1291,6 +1294,10 @@ def _ext_rlocs(
             (`@{name}_ext//<ext>/<ext_v>:dir`), or None (smoke needs no source).
         ext_runtime_tar: the extension runtime-deps sysroot tar
             (`@{name}_ext//<ext>/<ext_v>/deps/runtime:sysroot_tar`), or None.
+        pg_src_dir: the base hub PG source tree (`@{name}//<base_v>/src:dir`)
+            for a TAP suite (PostgreSQL::Test lives in `src/test/perl`), or
+            None; when set, the base `test` deps sysroot (IPC::Run) is shipped
+            too.
 
     Returns a struct of arg strings + the `data` list.
     """
@@ -1316,6 +1323,18 @@ def _ext_rlocs(
     if ext_runtime_tar:
         data.append(ext_runtime_tar)
 
+    # A TAP suite layers the base `test` deps sysroot (IPC::Run) onto the
+    # runtime closure and ships the PG source tree for PostgreSQL::Test; derive
+    # the test sysroot label from the runtime tar (same
+    # `<base_v>/deps/<kind>:sysroot_tar` shape), exactly as the core lane does.
+    test_sysroot_tar = None
+    if pg_src_dir:
+        test_sysroot_tar = runtime_tar.replace(
+            "/deps/runtime:",
+            "/deps/test:",
+        )
+        data += [pg_src_dir, test_sysroot_tar]
+
     return struct(
         runner = runner_srcs,
         closure_setup = _rloc(closure_setup),
@@ -1330,6 +1349,11 @@ def _ext_rlocs(
         overlay_tar = _rloc(overlay_tar),
         ext_srcdir = _rloc(ext_srcdir) if ext_srcdir else None,
         ext_runtime_tar = _rloc(ext_runtime_tar) if ext_runtime_tar else None,
+        # TAP-only: the PG source tree (a dir tree -> plural rloc) for
+        # src/test/perl, and the base `test` deps sysroot the harness layers
+        # onto the closure. Both None for smoke/regress.
+        pg_src_dir = ("$(rlocationpaths %s)" % pg_src_dir) if pg_src_dir else None,
+        test_sysroot = _rloc(test_sysroot_tar) if test_sysroot_tar else None,
         data = data,
     )
 
@@ -1481,6 +1505,66 @@ def _ext_regress_test(
         env_inherit = _ENV_INHERIT,
     )))
 
+def _ext_tap_test(
+        target_name,
+        base_version,
+        flavor,
+        default_option_set,
+        slug,
+        tap_file,
+        tap_locale,
+        exclusive,
+        rlocs):
+    """Render one external upstream PostgreSQL::Test TAP `.pl` as an `sh_test`.
+
+    Runs the extension's own `t/<tap_file>.pl` against the overlaid tree with
+    `--kind tap`: the PG source tree (`rlocs.pg_src_dir`, a positional) supplies
+    `src/test/perl` = PostgreSQL::Test, `--test-sysroot-from` layers IPC::Run
+    onto the closure, and `--ext-srcdir` roots the run at the extension source
+    so `use lib 't'` finds the suite's own helper modules. One target per `.pl`
+    (the decl's `tests` list), so a non-hermetic test is dropped by omitting it.
+    """
+    args = _ext_positionals(rlocs) + [rlocs.pg_src_dir]
+    if rlocs.ext_runtime_tar:
+        args += ["--ext-runtime-from", rlocs.ext_runtime_tar]
+    args += [
+        "--test-sysroot-from",
+        rlocs.test_sysroot,
+        "--kind",
+        "tap",
+        "--suite",
+        slug,
+        "--overlay-tar",
+        rlocs.overlay_tar,
+        "--ext-srcdir",
+        rlocs.ext_srcdir,
+        "--tap-file",
+        tap_file,
+        "--version",
+        base_version,
+        "--flavor",
+        flavor,
+        "--option-set",
+        default_option_set,
+    ]
+    if tap_locale:
+        args += ["--tap-locale", tap_locale]
+    tags = [_TAG_REGRESS, "tap", "external"]
+    if exclusive:
+        # A timing-sensitive .pl is deterministic only without concurrent CPU
+        # contention (pg_stat_monitor's histogram buckets by real response
+        # time), so run it in bazel's exclusive phase, alone.
+        tags.append("exclusive")
+    return Star.igen(Star.fn("sh_test", **dict(
+        name = target_name,
+        srcs = [rlocs.runner],
+        args = args,
+        data = rlocs.data,
+        size = "medium",
+        tags = tags,
+        env_inherit = _ENV_INHERIT,
+    )))
+
 def write_external_ext_test_entry(
         rctx,
         ext_name,
@@ -1494,12 +1578,14 @@ def write_external_ext_test_entry(
         overlay_tar,
         ext_srcdir,
         ext_runtime_tar,
+        pg_src_dir,
         test_ext):
     """Render the external-extension test package for one (ext, ext_v, base_v).
 
     Writes `<ext>/<ext_v>/<base_v>/tests/BUILD.bazel` into `@{name}_ext` with a
-    `:smoke` target (when `test_ext.smoke` is present) plus one regress target
-    per `test_ext.test` suite. A no-op when `test_ext` declares neither.
+    `:smoke` target (when `test_ext.smoke` is present) plus a target per
+    `test_ext.test` suite (regress, TAP `.pl`, manual, or integration). A no-op
+    when `test_ext` declares neither.
 
     Args:
         rctx: the `ext_repo` repo-rule context.
@@ -1514,6 +1600,8 @@ def write_external_ext_test_entry(
         overlay_tar: the extension artifact tar label.
         ext_srcdir: the extension source-tree root label.
         ext_runtime_tar: the extension runtime-deps sysroot tar label, or None.
+        pg_src_dir: the base hub PG source tree label (a TAP suite's
+            PostgreSQL::Test lives in `src/test/perl`), or None.
         test_ext: the extension's `metadata.test_ext` dict (`smoke` + `test`).
     """
     targets = []
@@ -1555,18 +1643,42 @@ def write_external_ext_test_entry(
         )
         for slug in sorted(groups):
             for info in groups[slug]:
-                # Externals render regress suites only (smoke covers load; the
-                # multi-cluster integration kind is a later tier).
-                if info.kind != _TestSchema.KIND_REGRESS:
-                    continue
-                targets.append(_ext_regress_test(
-                    target_name = slug,
-                    base_version = base_version,
-                    flavor = flavor,
-                    default_option_set = default_option_set,
-                    info = info,
-                    rlocs = reg_rlocs,
-                ))
+                if info.kind == _TestSchema.KIND_REGRESS:
+                    targets.append(_ext_regress_test(
+                        target_name = slug,
+                        base_version = base_version,
+                        flavor = flavor,
+                        default_option_set = default_option_set,
+                        info = info,
+                        rlocs = reg_rlocs,
+                    ))
+                elif info.kind == _TestSchema.KIND_TAP:
+                    # The extension's own PostgreSQL::Test TAP suite: one target
+                    # per `.pl`. Needs the PG source tree (PostgreSQL::Test) +
+                    # the base `test` deps sysroot (IPC::Run); skip if the base
+                    # hub did not expose its source for this version.
+                    if pg_src_dir:
+                        tap_rlocs = _ext_rlocs(
+                            build_repo,
+                            pg_tar,
+                            runtime_tar,
+                            overlay_tar,
+                            ext_srcdir = ext_srcdir,
+                            ext_runtime_tar = ext_runtime_tar,
+                            pg_src_dir = pg_src_dir,
+                        )
+                        for pl in info.pl_names:
+                            targets.append(_ext_tap_test(
+                                target_name = pl,
+                                base_version = base_version,
+                                flavor = flavor,
+                                default_option_set = default_option_set,
+                                slug = slug,
+                                tap_file = pl,
+                                tap_locale = info.tap_locale,
+                                exclusive = pl in info.tap_exclusive,
+                                rlocs = tap_rlocs,
+                            ))
 
     if not targets:
         return
@@ -1590,4 +1702,5 @@ testing = struct(
     _ext_rlocs = _ext_rlocs,
     _smoke_test = _smoke_test,
     _ext_regress_test = _ext_regress_test,
+    _ext_tap_test = _ext_tap_test,
 )

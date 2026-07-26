@@ -383,6 +383,8 @@ def _suite_info_classify(entries):
         dbname = dbname,
         encoding = encoding,
         locale_mode = locale_mode,
+        tap_locale = "",
+        tap_exclusive = [],
         load_extensions = load_extensions,
         create_roles = create_roles,
         tap_env = tap_env,
@@ -522,6 +524,13 @@ def _suite_decl_to_info(slug, decl):
         dbname = decl.get("dbname") or _default_dbname(kind),
         encoding = decl.get("encoding", ""),
         locale_mode = decl.get("locale_mode", "inherit" if is_tap else ""),
+        # A TAP suite's node locale (e.g. `C.UTF-8` for a suite that needs a
+        # UTF-8 database); the hermetic default is C, i.e. SQL_ASCII.
+        tap_locale = decl.get("locale", ""),
+        # `.pl` basenames a TAP suite runs exclusively (no concurrent tests),
+        # for a timing-sensitive test that is deterministic only without
+        # parallel CPU contention (pg_stat_monitor's response-time histogram).
+        tap_exclusive = decl.get("exclusive", []),
         load_extensions = decl.get("load_extensions", []),
         create_roles = decl.get("create_roles", []),
         tap_env = decl.get("tap_env", {}),
