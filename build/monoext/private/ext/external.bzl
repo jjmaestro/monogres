@@ -126,7 +126,8 @@ def _pg_build(
         base_flavor,
         base_prefix_distro = None,
         build_system = "pgxs",
-        build_args = []):
+        build_args = [],
+        remap_paths = {}):
     """Render {name}/{version}/{base_version}/BUILD.bazel for the extension build.
 
     Dispatches on `build_system`: `"cmake"` renders a `cmake_build` (via
@@ -134,7 +135,8 @@ def _pg_build(
     renders a `pgxs_build`. `build_args` is the extension's list of extra flags
     (autoconf/PGXS `configure` args for the pgxs path, CMake `-D` cache entries
     for the cmake path); both build rules resolve the `{pg_config}` /
-    `{sysroot}` placeholders to action-time sysroot paths.
+    `{sysroot}` placeholders to action-time sysroot paths. `remap_paths` (pgxs
+    path only) is the `{file: {from: to}}` sysroot-script path remapping.
 
     The source tree is the download_archives `:dir`, a tree artifact keyed on
     the archive and the patches it was made from, so the build action is re-run
@@ -167,6 +169,7 @@ def _pg_build(
         base_hub = "@%s" % base_hub_name,
         prefix_distro = prefix_distro,
         build_args = build_args,
+        remap_paths = remap_paths,
     )
 
     if build_system == "pgxs":
@@ -326,6 +329,7 @@ def write_extension_package(rctx, entry, name, archs):
                     base_flavor = rctx.attr.base_flavor,
                     build_system = entry.build_system,
                     build_args = entry.build_args,
+                    remap_paths = entry.remap_paths,
                 ),
             )
 

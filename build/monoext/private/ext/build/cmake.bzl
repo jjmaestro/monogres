@@ -42,6 +42,15 @@ _COMPILE_EXTENSION = """
             local pg_sysroot_dir="$$1"; shift
             local installdir="$$1"; shift
 
+            # Remap the declared baked paths in the sysroot's `*-config` scripts
+            # so they resolve inside the extracted sysroot, for a build step that
+            # reads a tool's raw output rather than going through the compiler's
+            # sysroot search (e.g. an autoconf GDAL / libxml2 version check that
+            # replaces CPPFLAGS/LIBS). Applied up front so the remapped sysroot
+            # is in effect for the whole build. Empty (no calls) for extensions
+            # that declare no `metadata.remap_paths`.
+            {remap_paths}
+
             local abs_pg_install_dir="$$EXT_BUILD_ROOT/$(PG_INSTALL_DIR)"
             local cmake_bin="$$EXT_BUILD_ROOT/$(CMAKE)"
             local make_bin="$$EXT_BUILD_ROOT/$(MAKE)"
@@ -132,6 +141,7 @@ def cmake_build(
         base_sysroot_tar,
         prefix_distro,
         build_args = [],
+        remap_paths = {},
         debug = False):
     """Builds a CMake-based Postgres extension.
 
@@ -149,6 +159,11 @@ def cmake_build(
         build_args (list[str]): Extra `-D` cache entries / flags from
             `metadata.build_args`, templated via `CMAKE_ARG_SUBST`
             (`{pg_config}` / `{sysroot}` / `{install_dir}`).
+        remap_paths (dict[str, dict[str, str]]): `{file: {from: to}}` from
+            `metadata.remap_paths`, applied to the sysroot's `usr/bin/<file>`
+            scripts exactly as in the PGXS path (the dispatch splats one arg
+            dict into either rule). No in-tree cmake extension declares it
+            today.
         debug (bool): If `True`, `set -x` the action.
     """
     ext_build(
@@ -165,5 +180,7 @@ def cmake_build(
         arg_subst = CMAKE_ARG_SUBST,
         build_args = build_args,
         build_args_indent = 16,
+        remap_paths = remap_paths,
+        remap_paths_indent = 12,
         debug = debug,
     )

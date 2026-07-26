@@ -4,8 +4,8 @@ Rules to build Postgres PGXS extensions from source.
 Internal to monoext; invoked from generated `@{name}_ext//...` BUILD files. The
 shared genrule scaffolding lives in `ext_build`; this file supplies the PGXS
 `compile_extension` (autoconf `./configure` + `make` driven through `pgxs.mk`),
-the prologue that stages the codegen tools, and the matching srcs / tools /
-toolchains.
+the prologue that stages the codegen tools and the `cpp` shim some autoconf
+extensions expect, and the matching srcs / tools / toolchains.
 """
 
 load(
@@ -17,6 +17,13 @@ load(
     "PGXS_ARG_SUBST",
 )
 load("//toolchains/perl:perl_toolchain.bzl", _PERL_VERSION = "PERL_VERSION")
+
+# Toolchain `cpp` preprocessor shim, planted into the sysroot bin at action time
+# (see `compile_extension`). Autoconf extensions that invoke `cpp` by name
+# (PostGIS preprocesses its `.sql.in` files) need it because the hermetic
+# sandbox ships no standalone `cpp`; the shim routes to the compile's clang via
+# `CPP_CLANG`.
+_SYSROOT_CPP_WRAPPER = "@monogres//toolchains/libc_sysroot:cpp_wrapper.sh"
 
 # Codegen tools for extensions whose Makefiles regenerate a scanner/parser at
 # build time (e.g. Apache AGE: `ag_scanner.l` -> flex, `cypher_gram.y` ->
@@ -65,6 +72,15 @@ _COMPILE_EXTENSION = """
             local pg_sysroot_dir="$$1"; shift
             local installdir="$$1"; shift
 
+            # Remap the declared baked paths in the sysroot's `*-config` scripts
+            # so they resolve inside the extracted sysroot, for a build step that
+            # reads a tool's raw output rather than going through the compiler's
+            # sysroot search (e.g. an autoconf GDAL / libxml2 version check that
+            # replaces CPPFLAGS/LIBS). Applied up front so the remapped sysroot
+            # is in effect for the whole build. Empty (no calls) for extensions
+            # that declare no `metadata.remap_paths`.
+            {remap_paths}
+
             # NOTE:
             # Unlike Meson, configure-make builds may write to the source tree.
             # While off-tree (VPATH) builds are theoretically supported, I haven't
@@ -93,6 +109,23 @@ _COMPILE_EXTENSION = """
             # to run anyway.
             if [[ -f "$$pgxs_src_copy/configure" ]]; then
                 touch "$$pgxs_src_copy/configure"
+            fi
+
+            # Whether this extension ships its own `configure` (autoconf), which
+            # bakes our compile flags into its generated Makefiles at configure
+            # time. Gates the `cpp` shim here and the make-time CPPFLAGS handling
+            # below.
+            local has_configure=0
+            [[ -f "$$pgxs_src_copy/configure" ]] && has_configure=1
+
+            # `cpp` shim for configure-based extensions that preprocess non-C
+            # inputs with a `cpp` they find on PATH (e.g. PostGIS's `.sql.in`
+            # install files); the hermetic sandbox ships no standalone `cpp`.
+            # Plant the toolchain wrapper into the sysroot bin (on PATH below)
+            # and point it at this build's clang via CPP_CLANG.
+            if [ "$$has_configure" -eq 1 ]; then
+                ln -sf "$$CPP_WRAPPER" "$$sysroot_dir/usr/bin/cpp"
+                export CPP_CLANG="$$cc"
             fi
 
             # Shared sysroot compile environment: sets the `target_multiarch`,
@@ -162,6 +195,19 @@ _COMPILE_EXTENSION = """
               "$${{ldpath_llvm_target[@]}}"
             )
 
+            # PKG_CONFIG_SYSTEM_INCLUDE_PATH lists the sysroot's standard include
+            # dirs so pkg-config DROPS a redundant `-I<sysroot>/usr/include` from
+            # `--cflags` (as it drops `-I/usr/include` in a native build). Those
+            # headers stay reachable via `--sysroot` + `-idirafter`. Without it an
+            # explicit `-I<sysroot>/usr/include` (e.g. from PROJ's `.pc`) is
+            # hoisted ahead of the C++ stdlib headers and breaks a C++ unit's
+            # `#include_next <stdlib.h>` from <cstdlib> (PostGIS's Wagyu dep).
+            local pkg_config_system_include_path=(
+              "$$sysroot_dir/usr/include"
+              "$$sysroot_dir/usr/include/$$target_multiarch"
+            )
+            export PKG_CONFIG_SYSTEM_INCLUDE_PATH
+            PKG_CONFIG_SYSTEM_INCLUDE_PATH="$$(IFS=:; echo "$${{pkg_config_system_include_path[*]}}")"
             # `LIBRARY_PATH` (link-time) and `LD_LIBRARY_PATH` (exec-time) layer
             # the same sysroots as the shared `PKG_CONFIG_PATH`, plus the pgxs
             # extras above (EXEC-arch tool libs, @llvm_sysroot ThinLTO libs).
@@ -169,6 +215,48 @@ _COMPILE_EXTENSION = """
             LIBRARY_PATH="$$(IFS=:; echo "$${{library_path[*]}}")"
             export LD_LIBRARY_PATH
             LD_LIBRARY_PATH="$$(IFS=:; echo "$${{ld_library_path[*]}}")"
+
+            # Append the sysroot bin dirs to PATH so build-time tools an
+            # autoconf/pkg-config extension expects (a GNU `ld` from binutils for
+            # libtool's AC_PROG_LD, `pkg-config`/`pkgconf`, `msgfmt` from gettext)
+            # resolve from the sysroots. Appended (not prepended) so the static
+            # busybox coreutils the hermetic sandbox mounts keep priority; only
+            # tools absent from busybox fall through to the sysroots. Extensions
+            # that need these declare them in `deps.buildtime` (e.g. binutils,
+            # pkgconf, gettext); PGXS extensions that need none are unaffected.
+            # The remapped `*-config` scripts and the planted `cpp` (when any)
+            # also live here, so a by-name invocation resolves them.
+            local path=(
+              "$$PATH"
+              "$$sysroot_dir/usr/bin"
+              "$$pg_sysroot_dir/usr/bin"
+            )
+            export PATH
+            PATH="$$(IFS=:; echo "$${{path[*]}}")"
+
+            # C_INCLUDE_PATH: clang always honors it regardless of the flags on
+            # the command line. Autoconf probes in some extensions (e.g.
+            # PostGIS's PROJ/GDAL compiled version tests) RESET CFLAGS/CPPFLAGS to
+            # just a library's `*-config` output, dropping our `--sysroot` and
+            # thus losing even `<stdio.h>`. Seeding this with the sysroot include
+            # dirs keeps libc + sysroot headers discoverable in those
+            # clobbered-flag conftests.
+            #
+            # Only C_INCLUDE_PATH (C), NOT CPLUS_INCLUDE_PATH (C++): clang adds
+            # these as system dirs BEFORE the toolchain's builtin C++ headers, so
+            # a CPLUS_INCLUDE_PATH entry for `<sysroot>/usr/include` is deduped
+            # ahead of the `c++/<v>` dir and a C++ unit's `#include_next
+            # <stdlib.h>` from <cstdlib> can no longer reach it (PostGIS's Wagyu).
+            # C++ compiles get the sysroot headers via `--sysroot` + `-idirafter`,
+            # whose late placement keeps `#include_next` working.
+            local c_include_path=(
+              "$$sysroot_dir/usr/include"
+              "$$sysroot_dir/usr/include/$$target_multiarch"
+              "$$pg_sysroot_dir/usr/include"
+              "$$pg_sysroot_dir/usr/include/$$target_multiarch"
+            )
+            export C_INCLUDE_PATH
+            C_INCLUDE_PATH="$$(IFS=:; echo "$${{c_include_path[*]}}")"
 
             # NOTE:
             # PGXS flag variables are exported as environment variables (not
@@ -225,7 +313,7 @@ _COMPILE_EXTENSION = """
                 "PGXS=$$abs_pg_install_dir/lib/pgxs/src/makefiles/pgxs.mk"
             )
 
-            if [ -f "$$pgxs_src_copy/configure" ]
+            if [ "$$has_configure" -eq 1 ]
             then
                 echo
                 echo "configure"
@@ -240,6 +328,9 @@ _COMPILE_EXTENSION = """
                 # binaries. Passing both unconditionally also works for
                 # native builds (autoconf canonicalizes via config.sub
                 # and just sets `$$cross_compiling=no`).
+                # `--host`/`--build` first, then the extension's own
+                # `metadata.build_args` (templated to sysroot paths). Empty for
+                # PGXS extensions that declare none.
                 local build_args=(
                     "--host=$$target_multiarch"
                     "--build=$$build_multiarch"
@@ -313,13 +404,7 @@ _COMPILE_EXTENSION = """
             # defaults in Makefile.global reference PG-build-only paths).
             # pg_path_overrides relocate the PGXS install dirs (see above).
             # These must outrank the Makefile `:=` assignments, hence the
-            # command line. CPPFLAGS: our sysroot include flags reach PGXS via
-            # PG_CPPFLAGS, but an extension whose own Makefile assigns
-            # PG_CPPFLAGS (e.g. Apache AGE's `-I src/include`) shadows that env
-            # value, so the bitcode rule (raw clang using BITCODE_CFLAGS +
-            # CPPFLAGS, not CFLAGS) loses --sysroot. A command-line CPPFLAGS
-            # makes PGXS's `override CPPFLAGS` merge our sysroot flags back into
-            # every rule, the .o and the .bc alike.
+            # command line.
             local make_overrides=(
                 CC="$$cc"
                 CXX="$$cc"
@@ -328,11 +413,25 @@ _COMPILE_EXTENSION = """
                 BISON="$$BISON"
                 M4="$$M4"
                 PERL="$$PERL"
-                CPPFLAGS="$${{cflags[*]}}"
                 PG_CONFIG="$$EXT_BUILD_ROOT/$(PG_CONFIG)"
                 "$${{pg_path_overrides[@]}}"
                 USE_PGXS=1
             )
+
+            # CPPFLAGS on the command line ONLY for pure-PGXS extensions (no
+            # configure). Our sysroot include flags reach PGXS via PG_CPPFLAGS,
+            # but an extension whose own Makefile assigns PG_CPPFLAGS (e.g.
+            # Apache AGE's `-I src/include`) shadows that env value, so the
+            # bitcode rule (raw clang using BITCODE_CFLAGS + CPPFLAGS, not
+            # CFLAGS) loses --sysroot. A command-line CPPFLAGS makes PGXS's
+            # `override CPPFLAGS` merge our sysroot flags back into every rule,
+            # the .o and the .bc alike. Configure-based extensions instead bake
+            # our flags into their generated Makefiles at configure time; a
+            # command-line CPPFLAGS would CLOBBER the Makefile's own composition
+            # (e.g. PostGIS liblwgeom's RYU and json-c includes).
+            if [ "$$has_configure" -eq 0 ]; then
+                make_overrides+=(CPPFLAGS="$${{cflags[*]}}")
+            fi
 
             "$$EXT_BUILD_ROOT/$(MAKE)" \
                 -C "$$pgxs_src_copy" \
@@ -405,6 +504,10 @@ _PROLOGUE_EXTRA = """
         )
         PERL5LIB="$$(IFS=:; echo "$${{perl5lib[*]}}")"
         export PERL PERL5LIB
+
+        # Toolchain `cpp` wrapper, planted into the sysroot bin by
+        # `compile_extension` for autoconf extensions that invoke `cpp` by name.
+        CPP_WRAPPER="$$EXT_BUILD_ROOT/$(execpath {cpp_wrapper})"
 """
 
 def pgxs_build(
@@ -416,6 +519,7 @@ def pgxs_build(
         base_sysroot_tar,
         prefix_distro,
         build_args = [],
+        remap_paths = {},
         debug = False):
     """Builds a PGXS extension with the [PGXS build system].
 
@@ -457,6 +561,12 @@ def pgxs_build(
             `metadata.build_args`, appended (templated to sysroot paths via
             `PGXS_ARG_SUBST`) when the source ships a `configure` script. Empty
             for PGXS extensions that declare none.
+        remap_paths (dict[str, dict[str, str]]): `{file: {from: to}}` from the
+            extension's `metadata.remap_paths`; before the build runs, each
+            `from` is replaced with `to` (templated to sysroot paths via
+            `PGXS_ARG_SUBST`) in the sysroot's `usr/bin/<file>` scripts, for
+            build steps that read those baked paths verbatim. Empty for
+            extensions that declare none.
         debug (bool): If `True`, prints a debug message for each command
             executed.
     """
@@ -470,7 +580,7 @@ def pgxs_build(
         prefix_distro = prefix_distro,
         compile_extension = _COMPILE_EXTENSION,
         prologue_extra = _PROLOGUE_EXTRA,
-        extra_srcs = [_PERL_SYSROOT],
+        extra_srcs = [_SYSROOT_CPP_WRAPPER, _PERL_SYSROOT],
         extra_tools = [_M4, _FLEX, _BISON, _PERL_BIN],
         extra_toolchains = [
             "@rules_m4//m4:current_m4_toolchain",
@@ -480,6 +590,7 @@ def pgxs_build(
         ],
         extra_format_kwargs = {
             "bison": _BISON,
+            "cpp_wrapper": _SYSROOT_CPP_WRAPPER,
             "flex": _FLEX,
             "m4": _M4,
             "perl": _PERL_BIN,
@@ -488,6 +599,8 @@ def pgxs_build(
         arg_subst = PGXS_ARG_SUBST,
         build_args = build_args,
         build_args_indent = 20,
+        remap_paths = remap_paths,
+        remap_paths_indent = 12,
         emit_introspect = True,
         debug = debug,
     )

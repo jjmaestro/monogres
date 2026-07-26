@@ -303,6 +303,7 @@ def _build_external(extensions, versions_deps, base_versions, base_flavor, hub_n
             base_flavor = base_flavor,
             build_system = metadata.get("build_system", "pgxs"),
             build_args = metadata.get("build_args", []),
+            remap_paths = metadata.get("remap_paths", {}),
         )
         entries[name] = json.encode(entry)
 

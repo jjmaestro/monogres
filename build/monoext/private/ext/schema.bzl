@@ -220,15 +220,19 @@ def _ext_external_entry_init(
         targets = [],
         lock = None,
         build_system = "pgxs",
-        build_args = []):
+        build_args = [],
+        remap_paths = {}):
     """Raw initializer for external entries; sets `is_contrib = False`.
 
     `build_system` selects the build rule the hub renders for this extension
     (`"pgxs"`, the default, or `"cmake"`). `build_args` is the extension's list
     of extra build flags (PGXS/autoconf `configure` args, or CMake `-D` cache
     entries), templated with `{pg_config}` / `{sysroot}` resolved to action-time
-    sysroot paths by the build rule. Both come from the extension's `repo.json`
-    `metadata` and are extension-wide (not per-version).
+    sysroot paths by the build rule. `remap_paths` is a `{file: {from: to}}` map
+    whose `from`->`to` substitutions the build applies to the sysroot's
+    `usr/bin/<file>` scripts (re-rooting baked paths a build step reads
+    verbatim). All come from the extension's `repo.json` `metadata` and are
+    extension-wide (not per-version).
     """
     return struct(
         name = name,
@@ -242,6 +246,7 @@ def _ext_external_entry_init(
         is_contrib = False,
         build_system = build_system,
         build_args = build_args,
+        remap_paths = remap_paths,
     )
 
 def _ext_external_entry_new(
@@ -254,7 +259,8 @@ def _ext_external_entry_new(
         lock = None,
         base_flavor = "postgres",
         build_system = "pgxs",
-        build_args = []):
+        build_args = [],
+        remap_paths = {}):
     """Constructs an `ExtExternalEntry`.
 
     Derives deps, sources, and targets from primitive inputs. The
@@ -274,6 +280,8 @@ def _ext_external_entry_new(
         build_system: Build rule selector (`"pgxs"` default, or `"cmake"`).
         build_args: Extra build flags (autoconf/PGXS `configure` args or CMake
             `-D` cache entries), templated to sysroot paths by the build rule.
+        remap_paths: `{file: {from: to}}` substitutions the build applies to the
+            sysroot's `usr/bin/<file>` scripts.
 
     Returns:
         An `ExtExternalEntry` struct.
@@ -325,6 +333,7 @@ def _ext_external_entry_new(
         lock = lock,
         build_system = build_system,
         build_args = build_args,
+        remap_paths = remap_paths,
     )
 
 def _ext_external_entry_from_dict(d):
@@ -353,6 +362,7 @@ def _ext_external_entry_from_dict(d):
         lock = d.get("lock"),
         build_system = d.get("build_system", "pgxs"),
         build_args = d.get("build_args", []),
+        remap_paths = d.get("remap_paths", {}),
     )
 
 def _ext_contrib_entry_init(ext_versions, metadata, name, targets = []):

@@ -49,3 +49,32 @@ def render_build_args(build_args, subst, indent):
             arg = arg.replace(token, repl)
         elements.append('"%s"' % arg)
     return ("\n" + " " * indent).join(elements)
+
+def render_remap_paths(remap_paths, subst, indent):
+    """Renders `remap_paths` as a sequence of `remap_paths` shell calls.
+
+    For each `{file_pattern: {from: to}}` entry emits one `remap_paths
+    "$sysroot_dir" "<pattern>" "<from>" "<to>"` call, with the portable tokens
+    in `from` / `to` replaced per `subst`. Calls are joined by a newline plus
+    `indent` spaces; the caller's template supplies the indent for the first
+    call. An empty `remap_paths` renders to `""`.
+
+    Args:
+        remap_paths (dict[str, dict[str, str]]): The extension's
+            `metadata.remap_paths` (`{file_pattern: {from: to}}`).
+        subst (dict[str, str]): Portable-token -> action-time value map.
+        indent (int): Leading spaces for the second and later calls.
+
+    Returns:
+        The rendered shell calls, or "" when `remap_paths` is empty.
+    """
+    calls = []
+    for pattern in remap_paths:
+        for frm, to in remap_paths[pattern].items():
+            for token, repl in subst.items():
+                frm = frm.replace(token, repl)
+                to = to.replace(token, repl)
+            calls.append(
+                'remap_paths "$$sysroot_dir" "%s" "%s" "%s"' % (pattern, frm, to),
+            )
+    return ("\n" + " " * indent).join(calls)

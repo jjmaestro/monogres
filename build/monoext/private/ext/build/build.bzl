@@ -16,7 +16,11 @@ the same pass as the shared ones.
 """
 
 load("@platform_debian//:versions.bzl", "RELEASE")
-load("//monoext/private/ext/build:build_args.bzl", "render_build_args")
+load(
+    "//monoext/private/ext/build:build_args.bzl",
+    "render_build_args",
+    "render_remap_paths",
+)
 load("//toolchains/llvm_sysroot:llvm_version.bzl", "LLVM_MAJOR")
 
 # Action-time setup script (shared with `pg_build.bzl`): extracts the per-PG
@@ -100,6 +104,8 @@ def ext_build(
         arg_subst = {},
         build_args = [],
         build_args_indent = 0,
+        remap_paths = {},
+        remap_paths_indent = 12,
         emit_introspect = False,
         debug = False):
     """Emits the extension-build genrule shared by every build system.
@@ -133,10 +139,14 @@ def ext_build(
         extra_format_kwargs (dict): Additional `str.format` values the injected
             fragments reference (e.g. the pgxs codegen-tool labels).
         arg_subst (dict[str, str]): Portable-token -> action-time value map used
-            to render `build_args`.
+            to render `build_args` / `remap_paths`.
         build_args (list[str]): The extension's `metadata.build_args`.
         build_args_indent (int): Continuation indent for the rendered build
             args, matching the placeholder's column in `compile_extension`.
+        remap_paths (dict[str, dict[str, str]]): The extension's
+            `metadata.remap_paths`.
+        remap_paths_indent (int): Continuation indent for the rendered remap
+            calls.
         emit_introspect (bool): If `True`, stage the test-introspect parser and
             emit a `<name>.tests.json` output; the build system's
             `compile_extension` runs `$EXT_INTROSPECT` at the end to discover
@@ -430,6 +440,10 @@ def ext_build(
         WRAPPER_PATH="$$EXT_BUILD_ROOT/$(execpath {wrapper})"
         SYSROOT_DIR=$$(sh "$$SETUP_SH" "$$SYSROOT_TAR_PATH" "$$WRAPPER_PATH" "{tar_cmd}" "{llvm_major}")
 
+        # Shared sysroot helpers (also sourced by `sysroot_setup.sh`); provides
+        # `remap_paths`, used by `compile_extension`.
+        . "$$EXT_BUILD_ROOT/$(execpath {sysroot_lib})"
+
         # Per-PG buildtime sysroot extracted inline with the same hermetic
         # `bsdtar`. No setup script needed: this tree is consumed read-only
         # for `-idirafter` / `-L` / pkg-config lookups (no perl patches, no
@@ -466,11 +480,17 @@ def ext_build(
             prefix_distro_rel = prefix_distro_rel,
             base_version = base_version["version"],
             setup = _SYSROOT_SETUP_SCRIPT,
+            sysroot_lib = _SYSROOT_LIB_SCRIPT,
             sysroot_tar = sysroot_tar,
             base_sysroot_tar = base_sysroot_tar,
             wrapper = _SYSROOT_CLANG_WRAPPER,
             llvm_major = LLVM_MAJOR,
             build_args = render_build_args(build_args, arg_subst, build_args_indent),
+            remap_paths = render_remap_paths(
+                remap_paths,
+                arg_subst,
+                remap_paths_indent,
+            ),
             debug = "%s" % debug,
         ) | extra_format_kwargs | introspect_fmt)),
         target_compatible_with = select({
