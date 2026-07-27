@@ -1,0 +1,19 @@
+{
+    "controls": [
+        "pg_cron"
+    ],
+    "test_suites": [
+        {
+            "dbname": "contrib_regression",
+            "kind": "regress",
+            "slug": "regress",
+            "temp_config": "pg_cron.conf",
+            "tests": {
+                "*": [
+                    "pg_cron-test"
+                ]
+            }
+        }
+    ],
+    "version": 1
+}

@@ -1,0 +1,36 @@
+From dc1a469937eb9fea5f6c334e12710f6c1549ce95 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sat, 25 Jul 2026 17:25:05 +0000
+Subject: [PATCH] patch: compile with -std=gnu99 rather than -std=c99
+
+`-std=c99` selects strict ISO C, which defines `__STRICT_ANSI__`. glibc reads
+that as a request to expose the ISO C library only, and hides the POSIX and
+GNU declarations that are visible by default. PostgreSQL is configured for the
+GNU dialect and its server headers are written against it, so an extension
+compiled in strict mode sees a different libc than the server it is being
+built for. The Makefile also passes `-Werror`, so any declaration that goes
+missing becomes a build failure rather than a warning.
+
+`gnu99` is the same C99 language with those declarations restored, which is
+what PostgreSQL itself compiles with. Both branches of the `CC` test change,
+since the dialect has nothing to do with which compiler is in use.
+---
+ Makefile | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index c139cac..3f230e0 100644
+--- a/Makefile
++++ b/Makefile
+@@ -12,9 +12,9 @@ REGRESS = pg_cron-test
+ MODULE_big = $(EXTENSION)
+ OBJS = $(patsubst %.c,%.o,$(wildcard src/*.c))
+ ifeq ($(CC),gcc)
+-    PG_CPPFLAGS = -std=c99 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-uninitialized -Wno-implicit-fallthrough -Iinclude -I$(libpq_srcdir)
++    PG_CPPFLAGS = -std=gnu99 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-uninitialized -Wno-implicit-fallthrough -Iinclude -I$(libpq_srcdir)
+ else
+-    PG_CPPFLAGS = -std=c99 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-implicit-fallthrough -Iinclude -I$(libpq_srcdir)
++    PG_CPPFLAGS = -std=gnu99 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-implicit-fallthrough -Iinclude -I$(libpq_srcdir)
+ endif
+ ifeq ($(shell uname -s),SunOS)
+     PG_CPPFLAGS += -Wno-sign-compare -D__EXTENSIONS__

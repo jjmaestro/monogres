@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "citusdata",
+      "name": "pg_cron",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "1.6.7": {
+      "sha256": "d950bc29155f31017567e23a31d268ff672e98276c0e9d062512fb7870351f03"
+    }
+  },
+  "metadata": {
+    "patches": [
+      {
+        "label": "//catalog/extensions/pg_cron/patches:0001-1.6-hermetic-clang-c99-strict-ansi.patch",
+        "spec": ">=1.6.7/*"
+      }
+    ],
+    "compatible_with": {
+      "postgres": {
+        "1.6.7": ">=16"
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "preload": ["pg_cron"]
+      }
+    }
+  }
+}
