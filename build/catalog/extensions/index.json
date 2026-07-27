@@ -74,6 +74,7 @@
   "extensions": [
     "age",
     "citus",
+    "hll",
     "hypopg",
     "noset",
     "pg_dbms_job",

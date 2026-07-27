@@ -1,0 +1,41 @@
+From 0aa2ee8aa6271688080dcb0ea35a58c573ada18c Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sat, 25 Jul 2026 13:34:53 +0000
+Subject: [PATCH] patch: preprocess with the build's compiler and compile as
+ gnu11
+
+Two independent assumptions about the toolchain, both in the Makefile.
+
+`SQLPP` preprocesses the SQL sources and defaults to the literal command
+`cpp`. That is a GNU convention: `cpp` exists as a separate binary in a gcc
+installation and need not exist at all elsewhere, so a clang toolchain, which
+keeps the preprocessor inside the compiler driver, has nothing by that name.
+`$(CC) -E -x c` is the same preprocessing done by the compiler the extension
+is being built with, and `-x c` is required because the inputs do not have a
+`.c` suffix.
+
+`-std=c11` on `src/hll.o` selects strict ISO C, which defines
+`__STRICT_ANSI__` and makes glibc hide its POSIX and GNU declarations.
+PostgreSQL is configured for the GNU dialect and its server headers are
+written against it, so `gnu11` is the dialect that matches the headers this
+file includes.
+---
+ Makefile | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index ff6f794..88d2963 100644
+--- a/Makefile
++++ b/Makefile
+@@ -28,9 +28,9 @@ PGXS = $(shell $(PG_CONFIG) --pgxs)
+ include $(PGXS)
+ 
+ SHLIB_LINK	+= -lstdc++
+-SQLPP ?= cpp -undef -w -P -imacros $(shell $(PG_CONFIG) --includedir-server)/pg_config.h
++SQLPP ?= $(CC) -E -x c -undef -w -P -imacros $(shell $(PG_CONFIG) --includedir-server)/pg_config.h
+ 
+-src/hll.o: override CFLAGS += -std=c11
++src/hll.o: override CFLAGS += -std=gnu11
+ 
+ %.sql: update/%.sql
+ 	$(SQLPP) $^ > $@
