@@ -1,0 +1,66 @@
+From 18866e1bc02648c978251da47afc4d06dcdc21a1 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sun, 26 Jul 2026 05:44:07 +0000
+Subject: [PATCH] patch: let the PostgreSQL version probe be preset
+
+configure establishes which PostgreSQL it is building against by running
+`$PG_CONFIG --version` and parsing the output. Executing `pg_config` is fine
+natively and impossible when cross-compiling: `$PG_CONFIG` is then a
+target-architecture binary the build host cannot run, so the probe yields
+nothing, the version parse finds no match, and configure stops with "Citus is
+not compatible with the detected PostgreSQL version".
+
+The version is not something only that binary knows, so accept it from the
+environment and fall back to the probe when it is unset:
+
+    citusac_pg_config_version=${citusac_pg_config_version:-$($PG_CONFIG --version 2>/dev/null)}
+
+A cross-compiling caller exports `citusac_pg_config_version="PostgreSQL
+$PG_VERSION_NUM"` and everything downstream, the compatibility check
+included, proceeds unchanged. A native build sets nothing and still probes.
+
+Both `configure` and `configure.ac` carry the change, so regenerating
+configure keeps it.
+---
+ configure    | 8 +++++++-
+ configure.ac | 8 +++++++-
+ 2 files changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/configure b/configure
+index e98d8d968..48874be7f 100755
+--- a/configure
++++ b/configure
+@@ -2548,7 +2548,13 @@ if test -z "$PG_CONFIG"; then
+ fi
+ 
+ # check we're building against a supported version of PostgreSQL
+-citusac_pg_config_version=$($PG_CONFIG --version 2>/dev/null)
++#
++# `$PG_CONFIG --version` is a runtime probe; when cross-compiling, `$PG_CONFIG`
++# is a target-arch binary that cannot execute on the build host. A preset
++# `citusac_pg_config_version` env var bypasses the probe and is consumed by the
++# version extraction below as if `pg_config` had emitted it. Cross-compiling
++# callers pass `citusac_pg_config_version="PostgreSQL $PG_VERSION_NUM"`.
++citusac_pg_config_version=${citusac_pg_config_version:-$($PG_CONFIG --version 2>/dev/null)}
+ # Extract major[.minor] from "PostgreSQL X[.Y] ..."
+ version_num=$(printf '%s\n' "$citusac_pg_config_version" \
+   | $SED -nE 's/^PostgreSQL[[:space:]]+([0-9]+(\.[0-9]+)?).*/\1/p')
+diff --git a/configure.ac b/configure.ac
+index 0a46bc4a4..0e0b9f386 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -63,7 +63,13 @@ if test -z "$PG_CONFIG"; then
+ fi
+ 
+ # check we're building against a supported version of PostgreSQL
+-citusac_pg_config_version=$($PG_CONFIG --version 2>/dev/null)
++#
++# `$PG_CONFIG --version` is a runtime probe; when cross-compiling, `$PG_CONFIG`
++# is a target-arch binary that cannot execute on the build host. A preset
++# `citusac_pg_config_version` env var bypasses the probe and is consumed by the
++# version extraction below as if `pg_config` had emitted it. Cross-compiling
++# callers pass `citusac_pg_config_version="PostgreSQL $PG_VERSION_NUM"`.
++citusac_pg_config_version=${citusac_pg_config_version:-$($PG_CONFIG --version 2>/dev/null)}
+ version_num=$(echo "$citusac_pg_config_version"|
+               $SED -e 's/^PostgreSQL \([[0-9]]*\)\(\.[[0-9]]*\)\{0,1\}\(.*\)$/\1\2/')
+ 
