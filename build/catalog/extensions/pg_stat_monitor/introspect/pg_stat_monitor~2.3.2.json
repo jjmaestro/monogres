@@ -1,0 +1,82 @@
+{
+    "controls": [
+        "pg_stat_monitor"
+    ],
+    "test_suites": [
+        {
+            "dbname": "contrib_regression",
+            "inputdir": "regression",
+            "kind": "regress",
+            "slug": "regress",
+            "tests": {
+                "*": [
+                    "basic",
+                    "version",
+                    "guc",
+                    "pgsm_query_id",
+                    "functions",
+                    "counters",
+                    "relations",
+                    "database",
+                    "error_insert",
+                    "application_name",
+                    "application_name_unique",
+                    "top_query",
+                    "different_parent_queries",
+                    "cmd_type",
+                    "error",
+                    "rows",
+                    "squashing",
+                    "tags",
+                    "user",
+                    "level_tracking",
+                    "decode_error_level",
+                    "parallel"
+                ]
+            }
+        },
+        {
+            "kind": "tap",
+            "slug": "tap",
+            "tests": {
+                "*": [
+                    "001_settings_default",
+                    "002_settings_pgsm_track_planning",
+                    "003_settings_pgms_extract_comments",
+                    "004_settings_pgsm_track",
+                    "005_settings_pgsm_enable_query_plan",
+                    "006_settings_pgsm_overflow_target",
+                    "007_settings_pgsm_query_shared_buffer",
+                    "008_settings_pgsm_histogram_buckets",
+                    "009_settings_pgsm_histogram_max",
+                    "010_settings_pgsm_histogram_min",
+                    "011_settings_pgsm_bucket_time",
+                    "012_settings_pgsm_max_buckets",
+                    "013_settings_pgsm_normalized_query",
+                    "014_settings_pgsm_track_utility",
+                    "015_settings_pgsm_query_max_len",
+                    "016_settings_pgsm_max",
+                    "017_execution_stats",
+                    "018_column_names",
+                    "019_insufficient_shared_space",
+                    "020_buffer_overflow",
+                    "021_misc_1",
+                    "022_misc_2",
+                    "023_missing_queries",
+                    "024_check_timings",
+                    "025_compare_pgss",
+                    "026_shared_blocks",
+                    "027_local_blocks",
+                    "028_temp_block",
+                    "029_bucket_done",
+                    "030_histogram",
+                    "031_query_stat",
+                    "032_multiple_extensions",
+                    "033_stats_since",
+                    "034_update"
+                ]
+            }
+        }
+    ],
+    "version": 1
+}

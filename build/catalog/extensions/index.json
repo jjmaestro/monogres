@@ -74,6 +74,7 @@
   "extensions": [
     "citus",
     "noset",
+    "pg_stat_monitor",
     "pgvector",
     "sslutils"
   ],

@@ -7,7 +7,12 @@ load("//tools:gen_index.bzl", "gen_index", "update_index")
 
 package(default_visibility = ["//visibility:public"])
 
-exports_files(["index.json"] + glob(["**/repo.json"]))
+exports_files(
+    ["index.json"] + glob([
+        "**/repo.json",
+        "*/introspect/*.json",
+    ]),
+)
 
 _EXT_REPO_JSONS = glob(["*/repo.json"])
 
