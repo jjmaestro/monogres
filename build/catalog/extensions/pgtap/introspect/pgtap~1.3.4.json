@@ -1,0 +1,17 @@
+{
+    "controls": [
+        "pgtap"
+    ],
+    "test_suites": [
+        {
+            "inputdir": "test",
+            "kind": "regress",
+            "schedule": "test/build/run.sch",
+            "slug": "regress",
+            "tests": {
+                "*": []
+            }
+        }
+    ],
+    "version": 1
+}

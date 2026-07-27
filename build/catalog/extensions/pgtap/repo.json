@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "theory",
+      "name": "pgtap",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "1.3.4": {
+      "sha256": "d2c951afb296a001d21785611a8e966e3f8fa3f5bfbd929396a5130c0152f314"
+    }
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "1.3.4": ">=16"
+      }
+    },
+    "test_ext": {
+      "test_overrides": {
+        "regress": {
+          "exclude": true
+        }
+      }
+    }
+  }
+}

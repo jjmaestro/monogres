@@ -97,6 +97,7 @@
     "pgmq",
     "pgrouting",
     "pgsql_http",
+    "pgtap",
     "pgvector",
     "plpgsql_check",
     "postgis",
