@@ -95,6 +95,7 @@
     "pg_track_settings",
     "pgagent",
     "pgaudit",
+    "pgjwt",
     "pgmq",
     "pgrouting",
     "pgsql_http",
