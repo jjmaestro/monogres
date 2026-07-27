@@ -1,0 +1,26 @@
+{
+    "controls": [],
+    "test_suites": [
+        {
+            "dbname": "contrib_regression",
+            "kind": "regress",
+            "slug": "regress",
+            "tests": {
+                "*": [
+                    "init-extension",
+                    "repack-setup",
+                    "repack-run",
+                    "error-on-invalid-idx",
+                    "no-error-on-invalid-idx",
+                    "after-schema",
+                    "repack-check",
+                    "nosuper",
+                    "tablespace",
+                    "get_order_by",
+                    "trigger"
+                ]
+            }
+        }
+    ],
+    "version": 1
+}

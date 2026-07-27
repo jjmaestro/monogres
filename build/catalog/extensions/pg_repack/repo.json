@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "ver_{version}",
+      "gh_org": "reorg",
+      "name": "pg_repack",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{tag}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "1.5.3": {
+      "sha256": "9439892c0b7c7575677f61133e5692f3e8cfd5c6688c5db4fb202320c668c745"
+    }
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "1.5.3": ">=16"
+      }
+    },
+    "test_ext": {
+      "test_overrides": {
+        "regress": {
+          "inputdir": "regress",
+          "exclude_tests": [
+            "repack-setup",
+            "repack-run",
+            "error-on-invalid-idx",
+            "no-error-on-invalid-idx",
+            "after-schema",
+            "repack-check",
+            "nosuper",
+            "tablespace",
+            "get_order_by",
+            "trigger"
+          ]
+        }
+      }
+    }
+  }
+}
