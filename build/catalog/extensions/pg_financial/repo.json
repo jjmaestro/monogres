@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "intgr",
+      "name": "pg_financial",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/intgr/pg_financial/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "1.0.1": {
+      "sha256": "d9efdcd5195da62ba69541af6b4eef31ba0ec65139201b390dfe784536259a18"
+    }
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "1.0.1": ">=16"
+      }
+    }
+  }
+}
