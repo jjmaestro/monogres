@@ -24,11 +24,25 @@ load(
     "//monoext/private/ext/build:build_args.bzl",
     "CMAKE_ARG_SUBST",
 )
+load("//toolchains/perl:perl_toolchain.bzl", _PERL_VERSION = "PERL_VERSION")
 
 # rules_foreign_cc's prebuilt cmake, exposed for genrule use: the make-var
 # `$(CMAKE)` (via `current_cmake_toolchain`'s TemplateVariableInfo) plus its
 # file tree (its DefaultInfo, staged by listing the same label in `tools`).
 _CMAKE_TOOLCHAIN = "@rules_foreign_cc//toolchains:current_cmake_toolchain"
+
+# Perl for cmake extensions whose build runs a `.pl` codegen script (e.g.
+# pgRouting generates `pgrouting--<ver>.sql` with `build-extension-file.pl`).
+# The hermetic sandbox ships no perl core modules on the interpreter's baked
+# `@INC`, so stage the `@perl_sysroot` tree and point `PERL5LIB` at its
+# core-module dirs; mirrors the PGXS path's perl wiring. `$(PERL_MULTIARCH)` is
+# emitted by `_PERL_TOOLCHAIN`.
+_PERL_BIN = "@monogres//toolchains/perl:perl"
+_PERL_TOOLCHAIN = "@monogres//toolchains/perl:current_perl_toolchain"
+
+# Raw @perl_sysroot filegroup, staged in `srcs` so the interpreter's core
+# modules materialize at their source paths in the sandbox (see the PGXS path).
+_PERL_SYSROOT = "@monogres//toolchains/perl:sysroot"
 
 # CMake `compile_extension`: take the shared sysroot compile environment
 # (`setup_compile_env`, in the engine) and hand its `cflags` / `ldflags` to
@@ -102,6 +116,10 @@ _COMPILE_EXTENSION = """
                 # libstdc++-dev floor in the buildtime sysroot); inert for
                 # C-only extensions.
                 "-DCMAKE_CXX_STANDARD_LIBRARIES=-l:libstdc++.a"
+                # Use the staged perl (with `PERL5LIB` set in the prologue) for
+                # any `.pl` codegen the build runs; inert for extensions that
+                # need no perl.
+                "-DPERL_EXECUTABLE=$$PERL"
                 {build_args}
             )
 
@@ -130,6 +148,26 @@ _COMPILE_EXTENSION = """
             echo
             echo "Extension compiled OK"
         }}
+"""
+
+# Prologue staging perl for cmake extensions with `.pl` codegen. `PERL5LIB`
+# points at the `@perl_sysroot` core-module dirs since that interpreter's baked
+# `@INC` uses Debian host paths absent from the sandbox; mirrors the PGXS path.
+_PROLOGUE_EXTRA = """
+        # Perl for cmake extensions whose build runs a `.pl` codegen script. The
+        # perl binary lives at `<perl_sysroot>/usr/bin/perl`; three dirnames
+        # climb to the sysroot root. `PERL5LIB` points at the sysroot's
+        # core-module dirs. Passed to CMake as `-DPERL_EXECUTABLE` below.
+        PERL="$$EXT_BUILD_ROOT/$(execpath {perl})"
+        PERL_SYSROOT_DIR="$$(dirname $$(dirname $$(dirname "$$PERL")))"
+        perl5lib=(
+          "$$PERL_SYSROOT_DIR/usr/lib/$(PERL_MULTIARCH)/perl-base"
+          "$$PERL_SYSROOT_DIR/usr/lib/$(PERL_MULTIARCH)/perl/{perl_version}"
+          "$$PERL_SYSROOT_DIR/usr/share/perl/{perl_version}"
+          "$$PERL_SYSROOT_DIR/usr/share/perl5"
+        )
+        PERL5LIB="$$(IFS=:; echo "$${{perl5lib[*]}}")"
+        export PERL PERL5LIB
 """
 
 def cmake_build(
@@ -175,8 +213,14 @@ def cmake_build(
         base_sysroot_tar = base_sysroot_tar,
         prefix_distro = prefix_distro,
         compile_extension = _COMPILE_EXTENSION,
-        extra_tools = [_CMAKE_TOOLCHAIN],
-        extra_toolchains = [_CMAKE_TOOLCHAIN],
+        prologue_extra = _PROLOGUE_EXTRA,
+        extra_srcs = [_PERL_SYSROOT],
+        extra_tools = [_CMAKE_TOOLCHAIN, _PERL_BIN],
+        extra_toolchains = [_CMAKE_TOOLCHAIN, _PERL_TOOLCHAIN],
+        extra_format_kwargs = {
+            "perl": _PERL_BIN,
+            "perl_version": _PERL_VERSION,
+        },
         arg_subst = CMAKE_ARG_SUBST,
         build_args = build_args,
         build_args_indent = 16,
