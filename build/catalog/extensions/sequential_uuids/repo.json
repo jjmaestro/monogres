@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "tvondra",
+      "name": "sequential-uuids",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/tvondra/sequential-uuids/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "1.0.3": {
+      "sha256": "ad6b27cea6d1515baefa520d725f083d23f7dc321a5484e34d51c6c060252063"
+    }
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "1.0.3": ">=16"
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+    "controls": [
+        "sequential_uuids"
+    ],
+    "test_suites": [
+        {
+            "dbname": "contrib_regression",
+            "inputdir": "test",
+            "kind": "regress",
+            "slug": "regress",
+            "tests": {
+                "*": [
+                    "uuids"
+                ]
+            }
+        }
+    ],
+    "version": 1
+}
