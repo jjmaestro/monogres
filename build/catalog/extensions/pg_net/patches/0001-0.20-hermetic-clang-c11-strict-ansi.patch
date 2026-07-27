@@ -1,0 +1,30 @@
+From 9fd1e051360913d8e1ecd9712bf079fb8bfeac7c Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sat, 25 Jul 2026 18:08:12 +0000
+Subject: [PATCH] patch: compile with -std=gnu11 rather than -std=c11
+
+`-std=c11` selects strict ISO C, which defines `__STRICT_ANSI__`. glibc reads
+that as a request to expose the ISO C library only, and hides the POSIX and
+GNU declarations that are visible by default. PostgreSQL is configured for the
+GNU dialect and its server headers are written against it, so an extension
+compiled in strict mode sees a different libc than the server it is being
+built for. The Makefile also passes `-Werror`, so any declaration that goes
+missing becomes a build failure rather than a warning.
+
+`gnu11` is the same C11 language with those declarations restored, which is
+what PostgreSQL itself compiles with.
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 240a5dc..5517b07 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,5 +1,5 @@
+ # the `-Wno`s quiet C90 warnings
+-PG_CFLAGS = -std=c11 -Wextra -Wall -Werror \
++PG_CFLAGS = -std=gnu11 -Wextra -Wall -Werror \
+ 	-Wold-style-definition \
+ 	-Wno-declaration-after-statement \
+ 	-Wno-vla \

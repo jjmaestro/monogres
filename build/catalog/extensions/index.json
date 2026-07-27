@@ -84,6 +84,7 @@
     "pg_financial",
     "pg_ivm",
     "pg_json_utils",
+    "pg_net",
     "pg_partman",
     "pg_qualstats",
     "pg_stat_kcache",
