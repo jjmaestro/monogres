@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "{upstream_version}",
+      "gh_org": "ossc-db",
+      "name": "pg_store_plans",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{upstream_version}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "1.10.0": {
+      "upstream_version": "1.10",
+      "sha256": "87ec345182e0defee7e8dcbb316bb08a462ab424d4dbbc653a261ed08f2e8c3c"
+    }
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "1.10.0": ">=16"
+      }
+    },
+    "test_ext": {
+      "test_overrides": {
+        "regress": {
+          "exclude_tests": {
+            "<18": ["convert", "store"]
+          }
+        }
+      }
+    }
+  }
+}

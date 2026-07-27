@@ -1,0 +1,20 @@
+{
+    "controls": [
+        "pg_store_plans"
+    ],
+    "test_suites": [
+        {
+            "dbname": "contrib_regression",
+            "kind": "regress",
+            "slug": "regress",
+            "temp_config": "regress.conf",
+            "tests": {
+                "*": [
+                    "convert",
+                    "store"
+                ]
+            }
+        }
+    ],
+    "version": 1
+}
