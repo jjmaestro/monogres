@@ -1,0 +1,78 @@
+From 423b66570c445ae494465890d4fc9453676b7319 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sat, 25 Jul 2026 17:28:31 +0000
+Subject: [PATCH] patch: reconnect after resetting enable_password_check
+
+`pgtle.enable_password_check` is PGC_SIGHUP. `pg_reload_conf()` only signals the
+postmaster; the backend already running the test adopts the new value when it
+next processes that signal. A handful of statements later `register_feature`
+prints a NOTICE iff the setting is off, and the expected output carries that
+NOTICE, so the transcript silently depends on the signal landing inside that
+window. It usually does. Under load it often does not: measured over five runs
+per version, the suite failed 2/5 on 16.11, 3/5 on 17.7 and 4/5 on 18.1, every
+time on exactly that missing NOTICE.
+
+Every other reload in both files already forces propagation with `\c -` under
+this same comment, because a fresh backend inherits the reloaded configuration
+outright rather than waiting for a signal. These two RESET sites are the only
+ones that omit it, which is what makes them racy; adding it makes the NOTICE
+deterministic.
+---
+ test/expected/pg_tle_api.out             | 2 ++
+ test/expected/pg_tle_api_clusterwide.out | 2 ++
+ test/sql/pg_tle_api.sql                  | 2 ++
+ test/sql/pg_tle_api_clusterwide.sql      | 2 ++
+ 4 files changed, 8 insertions(+)
+
+diff --git a/test/expected/pg_tle_api.out b/test/expected/pg_tle_api.out
+index e941055..c8a3621 100644
+--- a/test/expected/pg_tle_api.out
++++ b/test/expected/pg_tle_api.out
+@@ -253,6 +253,8 @@ SELECT pg_reload_conf();
+  t
+ (1 row)
+ 
++-- reconnect to ensure reload settings are propagated immediately
++\c -
+ DROP FUNCTION test_validuntil;
+ DROP FUNCTION password_check_length_greater_than_8;
+ DROP FUNCTION password_check_only_nums;
+diff --git a/test/expected/pg_tle_api_clusterwide.out b/test/expected/pg_tle_api_clusterwide.out
+index 6700054..37969cd 100644
+--- a/test/expected/pg_tle_api_clusterwide.out
++++ b/test/expected/pg_tle_api_clusterwide.out
+@@ -258,6 +258,8 @@ SELECT pg_reload_conf();
+  t
+ (1 row)
+ 
++-- reconnect to ensure reload settings are propagated immediately
++\c -
+ DROP FUNCTION test_validuntil;
+ DROP FUNCTION password_check_length_greater_than_8;
+ DROP FUNCTION password_check_only_nums;
+diff --git a/test/sql/pg_tle_api.sql b/test/sql/pg_tle_api.sql
+index cac7e9a..16013f9 100644
+--- a/test/sql/pg_tle_api.sql
++++ b/test/sql/pg_tle_api.sql
+@@ -155,6 +155,8 @@ DROP SCHEMA testuser_2;
+ DROP ROLE testuser_2;
+ ALTER SYSTEM RESET pgtle.enable_password_check;
+ SELECT pg_reload_conf();
++-- reconnect to ensure reload settings are propagated immediately
++\c -
+ DROP FUNCTION test_validuntil;
+ DROP FUNCTION password_check_length_greater_than_8;
+ DROP FUNCTION password_check_only_nums;
+diff --git a/test/sql/pg_tle_api_clusterwide.sql b/test/sql/pg_tle_api_clusterwide.sql
+index 5d4a3d8..71a34ad 100644
+--- a/test/sql/pg_tle_api_clusterwide.sql
++++ b/test/sql/pg_tle_api_clusterwide.sql
+@@ -165,6 +165,8 @@ DROP SCHEMA testuser_2;
+ DROP ROLE testuser_2;
+ ALTER SYSTEM RESET pgtle.enable_password_check;
+ SELECT pg_reload_conf();
++-- reconnect to ensure reload settings are propagated immediately
++\c -
+ DROP FUNCTION test_validuntil;
+ DROP FUNCTION password_check_length_greater_than_8;
+ DROP FUNCTION password_check_only_nums;

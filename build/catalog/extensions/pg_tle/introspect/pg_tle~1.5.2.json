@@ -1,0 +1,29 @@
+{
+    "controls": [
+        "pg_tle"
+    ],
+    "test_suites": [
+        {
+            "dbname": "contrib_regression",
+            "inputdir": "test",
+            "kind": "regress",
+            "slug": "regress",
+            "temp_config": "regress.conf",
+            "tests": {
+                "*": [
+                    "pg_tle_api",
+                    "pg_tle_api_clusterwide",
+                    "pg_tle_datatype",
+                    "pg_tle_extension_schema",
+                    "pg_tle_functions_acl",
+                    "pg_tle_injection",
+                    "pg_tle_management",
+                    "pg_tle_perms",
+                    "pg_tle_requires",
+                    "pg_tle_versions"
+                ]
+            }
+        }
+    ],
+    "version": 1
+}

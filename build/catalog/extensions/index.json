@@ -88,6 +88,7 @@
     "pg_stat_kcache",
     "pg_stat_monitor",
     "pg_store_plans",
+    "pg_tle",
     "pg_track_settings",
     "pgagent",
     "pgaudit",
