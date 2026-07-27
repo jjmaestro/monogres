@@ -1,0 +1,33 @@
+{
+    "controls": [
+        "plpgsql_check"
+    ],
+    "test_suites": [
+        {
+            "dbname": "contrib_regression",
+            "kind": "regress",
+            "slug": "regress",
+            "tests": {
+                "*": [
+                    "plpgsql_check_passive",
+                    "plpgsql_check_active",
+                    "plpgsql_check_profiler",
+                    "plpgsql_pragma_generator"
+                ],
+                ">=16,<17": [
+                    "plpgsql_check_active-16",
+                    "plpgsql_check_passive-16"
+                ],
+                ">=17,<18": [
+                    "plpgsql_check_active-17",
+                    "plpgsql_check_passive-17"
+                ],
+                ">=18": [
+                    "plpgsql_check_active-18",
+                    "plpgsql_check_passive-18"
+                ]
+            }
+        }
+    ],
+    "version": 1
+}

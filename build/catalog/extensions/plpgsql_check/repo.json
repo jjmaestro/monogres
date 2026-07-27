@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "okbob",
+      "name": "plpgsql_check",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/okbob/plpgsql_check/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "2.10.3": {
+      "sha256": "15a3741f06e78cd166e01ba0e5bca1aa8c3b7806008a8519e335004ef13bac06"
+    }
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "2.10.3": ">=16"
+      }
+    }
+  }
+}

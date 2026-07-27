@@ -87,6 +87,7 @@
     "pgaudit",
     "pgrouting",
     "pgvector",
+    "plpgsql_check",
     "postgis",
     "rum",
     "sequential_uuids",
