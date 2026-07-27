@@ -1,0 +1,21 @@
+{
+    "controls": [
+        "pg_ivm"
+    ],
+    "test_suites": [
+        {
+            "dbname": "contrib_regression",
+            "kind": "regress",
+            "slug": "regress",
+            "tests": {
+                "*": [
+                    "pg_ivm",
+                    "create_immv",
+                    "refresh_immv",
+                    "outer_join"
+                ]
+            }
+        }
+    ],
+    "version": 1
+}

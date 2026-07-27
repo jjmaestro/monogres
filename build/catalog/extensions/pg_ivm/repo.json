@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "sraoss",
+      "name": "pg_ivm",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/sraoss/pg_ivm/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "1.15": {
+      "sha256": "31d8248e68fdfc8c47c8571435da8529395d680637218e5178e9e95ecba0e22c"
+    }
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "1.15": ">=16"
+      }
+    }
+  }
+}
