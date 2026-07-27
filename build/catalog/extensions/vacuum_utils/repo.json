@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "{version}",
+      "gh_org": "asotolongo",
+      "name": "vacuum_utils",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/asotolongo/vacuum_utils/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "0.1.0": {
+      "sha256": "c57fb69bd48d1b8652afbd0f30402445af0462db08616ad7d9936ed6a766ec5a"
+    }
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "0.1.0": ">=16"
+      }
+    }
+  }
+}

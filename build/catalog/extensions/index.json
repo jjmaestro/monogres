@@ -95,7 +95,8 @@
     "rum",
     "sequential_uuids",
     "sslutils",
-    "timescaledb"
+    "timescaledb",
+    "vacuum_utils"
   ],
   "version": 1
 }
