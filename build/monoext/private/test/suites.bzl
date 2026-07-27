@@ -1270,7 +1270,9 @@ def _ext_rlocs(
         overlay_tar,
         ext_srcdir = None,
         ext_runtime_tar = None,
-        pg_src_dir = None):
+        pg_src_dir = None,
+        extra_overlay_tars = [],
+        extra_runtime_tars = []):
     """Assemble the external-lane runfiles arg strings + the `data` list.
 
     Unlike `_rlocs` (core/contrib), the external lane runs against the
@@ -1298,6 +1300,12 @@ def _ext_rlocs(
             for a TAP suite (PostgreSQL::Test lives in `src/test/perl`), or
             None; when set, the base `test` deps sysroot (IPC::Run) is shipped
             too.
+        extra_overlay_tars: prerequisite extensions' artifact tars (from
+            `test_ext.requires`), each overlaid alongside `overlay_tar` via an
+            additional `--overlay-tar` so a hard dependency's files are present.
+        extra_runtime_tars: those prerequisite extensions' runtime-deps sysroot
+            tars, each layered onto the closure via an additional
+            `--ext-runtime-from`.
 
     Returns a struct of arg strings + the `data` list.
     """
@@ -1322,6 +1330,7 @@ def _ext_rlocs(
         data.append(ext_srcdir)
     if ext_runtime_tar:
         data.append(ext_runtime_tar)
+    data += extra_overlay_tars + extra_runtime_tars
 
     # A TAP suite layers the base `test` deps sysroot (IPC::Run) onto the
     # runtime closure and ships the PG source tree for PostgreSQL::Test; derive
@@ -1354,6 +1363,11 @@ def _ext_rlocs(
         # onto the closure. Both None for smoke/regress.
         pg_src_dir = ("$(rlocationpaths %s)" % pg_src_dir) if pg_src_dir else None,
         test_sysroot = _rloc(test_sysroot_tar) if test_sysroot_tar else None,
+        # Prerequisite extensions (from `test_ext.requires`): extra
+        # `--overlay-tar` / `--ext-runtime-from` operands the runner accepts
+        # repeatably, so each is staged before `CREATE EXTENSION`.
+        extra_overlay_tars = [_rloc(t) for t in extra_overlay_tars],
+        extra_runtime_tars = [_rloc(t) for t in extra_runtime_tars],
         data = data,
     )
 
@@ -1370,6 +1384,31 @@ def _ext_positionals(rlocs):
         rlocs.runtime_tar,
         rlocs.pg_tar,
     ]
+
+def _overlay_args(rlocs):
+    """Build the `--overlay-tar` operands for a test target.
+
+    The extension's own artifact tar plus any prerequisite extension tars
+    (`test_ext.requires`), which the runner overlays in order onto the tree.
+    """
+    args = ["--overlay-tar", rlocs.overlay_tar]
+    for t in rlocs.extra_overlay_tars:
+        args += ["--overlay-tar", t]
+    return args
+
+def _ext_runtime_args(rlocs):
+    """Build the `--ext-runtime-from` operands for a test target.
+
+    The extension's own runtime-deps tar (if any) plus any prerequisite
+    extensions' runtime-deps tars, each layered onto the closure so every
+    overlaid `.so` resolves its NEEDED libraries.
+    """
+    args = []
+    if rlocs.ext_runtime_tar:
+        args += ["--ext-runtime-from", rlocs.ext_runtime_tar]
+    for t in rlocs.extra_runtime_tars:
+        args += ["--ext-runtime-from", t]
+    return args
 
 def _ext_test_build(targets):
     """Render an external extension's `<ext>/<ext_v>/<base_v>/tests/BUILD.bazel`.
@@ -1400,14 +1439,8 @@ def _smoke_test(base_version, flavor, default_option_set, rlocs, ext_name, smoke
     preload = smoke.get("preload", [])
     cascade = smoke.get("cascade", False)
 
-    args = _ext_positionals(rlocs) + [
-        "--kind",
-        "smoke",
-        "--overlay-tar",
-        rlocs.overlay_tar,
-    ]
-    if rlocs.ext_runtime_tar:
-        args += ["--ext-runtime-from", rlocs.ext_runtime_tar]
+    args = _ext_positionals(rlocs) + ["--kind", "smoke"] + _overlay_args(rlocs)
+    args += _ext_runtime_args(rlocs)
     args += [
         "--version",
         base_version,
@@ -1448,15 +1481,13 @@ def _ext_regress_test(
     fork-independent upstream: the `.out` files ship with the extension source.
     """
     args = _ext_positionals(rlocs)
-    if rlocs.ext_runtime_tar:
-        args += ["--ext-runtime-from", rlocs.ext_runtime_tar]
+    args += _ext_runtime_args(rlocs)
     args += [
         "--kind",
         info.kind,
         "--suite",
         info.slug,
-        "--overlay-tar",
-        rlocs.overlay_tar,
+    ] + _overlay_args(rlocs) + [
         "--ext-srcdir",
         rlocs.ext_srcdir,
     ]
@@ -1525,8 +1556,7 @@ def _ext_tap_test(
     (the decl's `tests` list), so a non-hermetic test is dropped by omitting it.
     """
     args = _ext_positionals(rlocs) + [rlocs.pg_src_dir]
-    if rlocs.ext_runtime_tar:
-        args += ["--ext-runtime-from", rlocs.ext_runtime_tar]
+    args += _ext_runtime_args(rlocs)
     args += [
         "--test-sysroot-from",
         rlocs.test_sysroot,
@@ -1534,8 +1564,7 @@ def _ext_tap_test(
         "tap",
         "--suite",
         slug,
-        "--overlay-tar",
-        rlocs.overlay_tar,
+    ] + _overlay_args(rlocs) + [
         "--ext-srcdir",
         rlocs.ext_srcdir,
         "--tap-file",
@@ -1579,7 +1608,9 @@ def write_external_ext_test_entry(
         ext_srcdir,
         ext_runtime_tar,
         pg_src_dir,
-        test_ext):
+        test_ext,
+        extra_overlay_tars = [],
+        extra_runtime_tars = []):
     """Render the external-extension test package for one (ext, ext_v, base_v).
 
     Writes `<ext>/<ext_v>/<base_v>/tests/BUILD.bazel` into `@{name}_ext` with a
@@ -1603,6 +1634,11 @@ def write_external_ext_test_entry(
         pg_src_dir: the base hub PG source tree label (a TAP suite's
             PostgreSQL::Test lives in `src/test/perl`), or None.
         test_ext: the extension's `metadata.test_ext` dict (`smoke` + `test`).
+        extra_overlay_tars: prerequisite extensions' artifact tars (resolved by
+            the caller from `test_ext.requires` for this base version), overlaid
+            into every test instance alongside `overlay_tar`.
+        extra_runtime_tars: those prerequisite extensions' runtime-deps sysroot
+            tars, layered onto the closure alongside `ext_runtime_tar`.
     """
     targets = []
 
@@ -1614,6 +1650,8 @@ def write_external_ext_test_entry(
             runtime_tar,
             overlay_tar,
             ext_runtime_tar = ext_runtime_tar,
+            extra_overlay_tars = extra_overlay_tars,
+            extra_runtime_tars = extra_runtime_tars,
         )
         smoke_target = _smoke_test(
             base_version = base_version,
@@ -1640,6 +1678,8 @@ def write_external_ext_test_entry(
             overlay_tar,
             ext_srcdir = ext_srcdir,
             ext_runtime_tar = ext_runtime_tar,
+            extra_overlay_tars = extra_overlay_tars,
+            extra_runtime_tars = extra_runtime_tars,
         )
         for slug in sorted(groups):
             for info in groups[slug]:
@@ -1666,6 +1706,8 @@ def write_external_ext_test_entry(
                             ext_srcdir = ext_srcdir,
                             ext_runtime_tar = ext_runtime_tar,
                             pg_src_dir = pg_src_dir,
+                            extra_overlay_tars = extra_overlay_tars,
+                            extra_runtime_tars = extra_runtime_tars,
                         )
                         for pl in info.pl_names:
                             targets.append(_ext_tap_test(

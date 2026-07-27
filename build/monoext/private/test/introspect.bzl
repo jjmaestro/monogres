@@ -308,10 +308,23 @@ def render_external_ext_tests(rctx, flavor, build_repo, external_entries, ext_te
     if not c.option_sets:
         return
     default_option_set = c.option_sets[-1]
+
+    # Cross-extension lookup for `test_ext.requires`: the artifact +
+    # runtime-deps tars of every external, keyed by (ext_name, base_version).
+    # Targets arrive in ascending (ext_version, base_version) order, so a plain
+    # last-wins write leaves the NEWEST ext_version per base version, the one a
+    # prerequisite resolves to.
+    by_ext_base = {}
+    for entry in external_entries:
+        for target in entry.targets:
+            base = target.base_version.version
+            by_ext_base.setdefault(entry.name, {})[base] = target
+
     for entry in external_entries:
         test_ext = ext_test_meta.get(entry.name)
         if not test_ext:
             continue
+        requires = test_ext.get("requires", [])
         for target in entry.targets:
             base_v = target.base_version.version
             pg_tar = c.pg_tars.get(base_v, {}).get(default_option_set)
@@ -322,6 +335,22 @@ def render_external_ext_tests(rctx, flavor, build_repo, external_entries, ext_te
             # version.
             if not pg_tar or not runtime_tar:
                 continue
+
+            # Resolve each prerequisite extension's artifact + runtime-deps tars
+            # for THIS base version, to overlay alongside the extension's own.
+            extra_overlay_tars = []
+            extra_runtime_tars = []
+            for req in requires:
+                req_target = by_ext_base.get(req, {}).get(base_v)
+                if not req_target:
+                    continue
+                extra_overlay_tars.append(req_target.artifact + ".tar")
+
+                # A prerequisite with no runtime apt deps (e.g. pg_partman) has
+                # no runtime-deps sysroot tar; only overlay one when present.
+                req_runtime_tar = req_target.deps.runtime.sysroot_tar
+                if req_runtime_tar:
+                    extra_runtime_tars.append(req_runtime_tar)
 
             # The artifact target is a genrule with two outputs (`<base_v>.tar`
             # + `<base_v>.log`), so reference the tar output FILE (target name +
@@ -342,4 +371,6 @@ def render_external_ext_tests(rctx, flavor, build_repo, external_entries, ext_te
                 ext_runtime_tar = target.deps.runtime.sysroot_tar,
                 pg_src_dir = c.src_dirs.get(base_v),
                 test_ext = test_ext,
+                extra_overlay_tars = extra_overlay_tars,
+                extra_runtime_tars = extra_runtime_tars,
             )

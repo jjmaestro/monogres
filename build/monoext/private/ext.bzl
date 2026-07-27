@@ -51,6 +51,9 @@ def _synth_ext_test_meta(
     - `test`: `{version_spec: {slug: decl}}` custom suites (integration or
       manual) that no `installcheck` can produce, merged on top of the
       discovered ones.
+    - `requires`: `[ext_name, ...]` prerequisite catalog extensions whose
+      artifact + runtime-deps trees are overlaid into every test instance for
+      this extension (e.g. pgrouting requires postgis for `CREATE EXTENSION`).
 
     Returns `(test_ext, introspect_versions)`: the untouched `metadata.test_ext`
     and an empty version list when the extension ships no introspects yet, so
@@ -133,6 +136,14 @@ def _synth_ext_test_meta(
 
     if test:
         result["test"] = test
+
+    # Prerequisite catalog extensions (their artifact + runtime-deps trees are
+    # overlaid into every test instance for this extension, so its `CREATE
+    # EXTENSION` can resolve a hard dependency such as pgrouting on postgis).
+    # Discovery cannot know these, so they pass through untouched.
+    requires = overrides.get("requires")
+    if requires:
+        result["requires"] = requires
 
     return result, introspect_versions
 
