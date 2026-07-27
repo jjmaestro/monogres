@@ -38,6 +38,7 @@ bzl_library(
 # synthesize a meson-shape introspect JSON from the post-`make install` tree +
 # the build-time source tree.
 exports_files([
+    "ext_introspect.py",
     "pg_build_make_introspect.py",
 ])
 

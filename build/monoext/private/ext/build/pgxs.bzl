@@ -347,6 +347,31 @@ _COMPILE_EXTENSION = """
                 DESTDIR="$$installdir" \
                 install || return $$?
 
+            # Discover this extension's own tests (make-exact): capture
+            # `make -n installcheck` (a dry run, executes nothing) and hand the
+            # resolved pg_regress command to the introspect parser, which also
+            # globs `t/*.pl` (TAP) and `*.control` (smoke) from the source. The
+            # committed `<ext>~<ver>.json` regen copies this output; the catalog
+            # `repo.json` then carries only overrides, never test names.
+            #
+            # An extension with no `installcheck` target legitimately has no
+            # regress suite (its smoke / TAP still resolve from the source
+            # globs), so a `make` failure is tolerated. The parser then always
+            # writes the introspect from whatever it resolved; if the PARSER
+            # itself fails, the action fails and surfaces the error rather than
+            # masking it with an empty file.
+            local installcheck_out="$$EXT_BUILD_ROOT/installcheck.mk"
+
+            "$$EXT_BUILD_ROOT/$(MAKE)" \
+                -C "$$pgxs_src_copy" \
+                "$${{make_overrides[@]}}" \
+                -n installcheck > "$$installcheck_out" 2>/dev/null || true
+
+            "$$EXT_INTROSPECT_PYTHON" "$$EXT_INTROSPECT" \
+                --src-dir "$$pgxs_src_copy" \
+                --out "$$INTROSPECT_OUT" \
+                < "$$installcheck_out"
+
             echo
             echo "Extension compiled OK"
         }}
@@ -463,5 +488,6 @@ def pgxs_build(
         arg_subst = PGXS_ARG_SUBST,
         build_args = build_args,
         build_args_indent = 20,
+        emit_introspect = True,
         debug = debug,
     )

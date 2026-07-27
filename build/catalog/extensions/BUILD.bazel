@@ -2,7 +2,9 @@ load("@babelfish//:introspect.bzl", BABELFISH_INTROSPECTIONS = "INTROSPECTIONS")
 load("@ivory//:introspect.bzl", IVORY_INTROSPECTIONS = "INTROSPECTIONS")
 load("@openhalo//:introspect.bzl", OPENHALO_INTROSPECTIONS = "INTROSPECTIONS")
 load("@pg//:introspect.bzl", PG_INTROSPECTIONS = "INTROSPECTIONS")
+load("@pg_ext//:introspect.bzl", EXT_TEST_INTROSPECTIONS = "TEST_INTROSPECTIONS")
 load("//tools:gen_contrib.bzl", "gen_contrib", "update_contrib")
+load("//tools:gen_ext_introspect.bzl", "ext_introspect")
 load("//tools:gen_index.bzl", "gen_index", "update_index")
 
 package(default_visibility = ["//visibility:public"])
@@ -45,4 +47,10 @@ update_index(
     name = "update_index",
     src = ":gen_index",
     dest = "catalog/extensions/index.json",
+)
+
+ext_introspect(
+    name = "update_ext_introspect",
+    check_name = "check_ext_introspect",
+    entries = EXT_TEST_INTROSPECTIONS,
 )

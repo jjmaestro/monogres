@@ -36,6 +36,23 @@ _SYSROOT_LIB_SCRIPT = "@monogres//monoext/private/base:sysroot_lib.sh"
 # (under `/external/sysroots++sysroots+libc_sysroot/...`).
 _SYSROOT_CLANG_WRAPPER = "@monogres//toolchains/libc_sysroot:active_clang_wrapper"
 
+# Test-introspect parser (opt-in via `emit_introspect`): turns an extension's
+# own `make -n installcheck` dry run plus its `t/*.pl` / `*.control` globs into
+# a committed-shaped `test_suites` JSON, so the catalog carries no transcribed
+# test names. Staged into the action and invoked by the build system's
+# `compile_extension` at the end of the build (where `pg_config` and the
+# resolved make environment are in scope). Pure-Python stdlib run under the
+# hermetic interpreter, exactly like the base make path's
+# `pg_build_make_introspect.py`.
+_EXT_INTROSPECT_SCRIPT = "@monogres//tools:ext_introspect.py"
+
+# Hermetic Python interpreter for the introspect parser (the same one the base
+# make path uses). `_PYTHON_FILES` is the full standalone install tree: the
+# interpreter locates its stdlib relative to the binary, so it must materialize
+# alongside `python3`. Both run on the exec machine, so they ride `tools`.
+_EXT_INTROSPECT_PYTHON_BIN = "@python_3_11//:python3"
+_EXT_INTROSPECT_PYTHON_FILES = "@python_3_11//:files"
+
 # Fallback buildtime sysroot tar (active Debian release) for extensions that
 # declare no buildtime deps of their own; see the consumer below.
 _LIBC_SYSROOT_TAR = "@libc_sysroot//debian/{}:sysroot_tar".format(
@@ -83,6 +100,7 @@ def ext_build(
         arg_subst = {},
         build_args = [],
         build_args_indent = 0,
+        emit_introspect = False,
         debug = False):
     """Emits the extension-build genrule shared by every build system.
 
@@ -119,10 +137,40 @@ def ext_build(
         build_args (list[str]): The extension's `metadata.build_args`.
         build_args_indent (int): Continuation indent for the rendered build
             args, matching the placeholder's column in `compile_extension`.
+        emit_introspect (bool): If `True`, stage the test-introspect parser and
+            emit a `<name>.tests.json` output; the build system's
+            `compile_extension` runs `$EXT_INTROSPECT` at the end to discover
+            the extension's own tests.
         debug (bool): If `True`, `set -x` the action.
     """
     prefix_distro_rel = prefix_distro.lstrip("/")
     tar_file, log_file = ["%s%s" % (name, file) for file in (".tar", ".log")]
+    tests_json_file = "%s.tests.json" % name
+
+    # Opt-in test-introspect wiring: the parser (a `srcs` entry) plus the
+    # hermetic Python interpreter (exec-config `tools`), an extra `outs` entry
+    # (the JSON), a prologue fragment exporting the interpreter + parser +
+    # output paths, and the matching `str.format` values. All empty when the
+    # build system does not emit an introspect.
+    introspect_srcs = [_EXT_INTROSPECT_SCRIPT] if emit_introspect else []
+    introspect_tools = [
+        _EXT_INTROSPECT_PYTHON_BIN,
+        _EXT_INTROSPECT_PYTHON_FILES,
+    ] if emit_introspect else []
+    introspect_outs = [tests_json_file] if emit_introspect else []
+    introspect_env = """
+        # Test-introspect parser + interpreter + output path, consumed by
+        # `compile_extension`.
+        EXT_INTROSPECT_PYTHON="$$EXT_BUILD_ROOT/$(execpath {ext_introspect_python})"
+        EXT_INTROSPECT="$$EXT_BUILD_ROOT/$(execpath {ext_introspect})"
+        INTROSPECT_OUT="$$EXT_BUILD_ROOT/{tests_json_out}"
+        export EXT_INTROSPECT_PYTHON EXT_INTROSPECT INTROSPECT_OUT
+        """ if emit_introspect else ""
+    introspect_fmt = {
+        "ext_introspect": _EXT_INTROSPECT_SCRIPT,
+        "ext_introspect_python": _EXT_INTROSPECT_PYTHON_BIN,
+        "tests_json_out": "$(locations %s)" % tests_json_file,
+    } if emit_introspect else {}
 
     # Extensions without buildtime deps fall back to the @libc_sysroot tar
     # (codegen-emitted arch-selecting alias at
@@ -145,9 +193,9 @@ def ext_build(
             _LLVM_SYSROOT,
             _SYSROOT_SETUP_SCRIPT,
             _SYSROOT_LIB_SCRIPT,
-        ] + extra_srcs,
-        tools = extra_tools,
-        outs = [tar_file, log_file],
+        ] + introspect_srcs + extra_srcs,
+        tools = introspect_tools + extra_tools,
+        outs = [tar_file, log_file] + introspect_outs,
         # The shell script: shared scaffolding inline, with the per-build-system
         # `compile_extension` and `prologue_extra` fragments concatenated in
         # (never as `.format()` values, so their own `{{...}}` fields resolve in
@@ -366,6 +414,7 @@ def ext_build(
 
         CC="$$EXT_BUILD_ROOT/$(CC)"
         """,
+            introspect_env,
             prologue_extra,
             """
         # Per-extension sysroot delivered as a single `:sysroot_tar` artifact
@@ -423,7 +472,7 @@ def ext_build(
             llvm_major = LLVM_MAJOR,
             build_args = render_build_args(build_args, arg_subst, build_args_indent),
             debug = "%s" % debug,
-        ) | extra_format_kwargs)),
+        ) | extra_format_kwargs | introspect_fmt)),
         target_compatible_with = select({
             # bsdtar.exe: -s is not supported by this version of bsdtar
             "@platforms//os:windows": ["@platforms//:incompatible"],
