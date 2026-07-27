@@ -1,0 +1,23 @@
+{
+    "controls": [
+        "pgmq"
+    ],
+    "test_suites": [
+        {
+            "dbname": "contrib_regression",
+            "inputdir": "test",
+            "kind": "regress",
+            "slug": "regress",
+            "tests": {
+                "*": [
+                    "base",
+                    "fifo_per_group_tests",
+                    "fifo_rr_tests",
+                    "fifo_tests",
+                    "topic_tests"
+                ]
+            }
+        }
+    ],
+    "version": 1
+}

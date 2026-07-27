@@ -94,6 +94,7 @@
     "pg_track_settings",
     "pgagent",
     "pgaudit",
+    "pgmq",
     "pgrouting",
     "pgsql_http",
     "pgvector",

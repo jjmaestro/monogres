@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "tembo-io",
+      "name": "pgmq",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}/pgmq-extension",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "1.12.0": {
+      "sha256": "e6bdbb2311a3bbf34439871a99ee1e5e87c79fdca2b1e6784411a51b079314d1"
+    }
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "1.12.0": ">=16"
+      }
+    },
+    "test_ext": {
+      "requires": ["pg_partman"],
+      "test_overrides": {
+        "regress": {
+          "exclusive": true
+        }
+      }
+    }
+  }
+}
