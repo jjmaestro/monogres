@@ -79,6 +79,7 @@
     "hll",
     "hypopg",
     "noset",
+    "pg_auditor",
     "pg_cron",
     "pg_dbms_job",
     "pg_financial",

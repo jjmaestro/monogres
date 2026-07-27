@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "{commit}",
+      "gh_org": "kouber",
+      "name": "pg_auditor",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{commit}",
+      "url": "https://github.com/{gh_org}/{name}/archive/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "0.3.0": {
+      "commit": "7c2edff7a09c5882bfc8f1f8aa8f8d5d7e3b0c41",
+      "sha256": "39c89eb30232554b2f5eddbae74b863316471c1ea576e2b63c63651df2849ecd"
+    }
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "0.3.0": ">=16"
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "cascade": true
+      }
+    }
+  }
+}
