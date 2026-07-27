@@ -75,6 +75,7 @@
     "age",
     "citus",
     "db_info",
+    "decoderbufs",
     "hll",
     "hypopg",
     "noset",

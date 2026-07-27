@@ -1,0 +1,46 @@
+From 513edf2e417699001899e5374ffab3d4664691e4 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sun, 26 Jul 2026 18:06:59 +0000
+Subject: [PATCH] patch: add a regression test that loads the output plugin
+
+decoderbufs ships no test suite: there is no `sql/`, no `expected/`, and no
+`REGRESS` in the Makefile, so a build has nothing to check beyond the fact
+that the shared object linked. The plugin's own failure modes are exactly the
+ones linking does not catch, above all an unresolved symbol or a missing
+`_PG_output_plugin_init`, which only surface when the server dlopens it.
+
+Being a logical-decoding output plugin, it has no SQL objects to exercise, so
+the test does the one thing that proves the plugin is loadable and registered:
+it opens a logical replication slot with it and drops it again. That is enough
+to run `_PG_output_plugin_init` and the startup callback, whose `INFO` line the
+transcript records.
+
+`logical.conf` carries the server settings decoding needs (`wal_level =
+logical` and slot/sender headroom), for a caller to pass to pg_regress as a
+`--temp-config`, since a default instance cannot open a logical slot at all.
+---
+ logical.conf             | 3 +++
+ sql/decoderbufs_load.sql | 4 ++++
+ 2 files changed, 7 insertions(+)
+ create mode 100644 logical.conf
+ create mode 100644 sql/decoderbufs_load.sql
+
+diff --git a/logical.conf b/logical.conf
+new file mode 100644
+index 0000000..107daf1
+--- /dev/null
++++ b/logical.conf
+@@ -0,0 +1,3 @@
++wal_level = logical
++max_replication_slots = 10
++max_wal_senders = 10
+diff --git a/sql/decoderbufs_load.sql b/sql/decoderbufs_load.sql
+new file mode 100644
+index 0000000..2562093
+--- /dev/null
++++ b/sql/decoderbufs_load.sql
+@@ -0,0 +1,4 @@
++-- decoderbufs is a logical-decoding output plugin with no SQL objects;
++-- verify the plugin loads and registers by opening a slot with it.
++SELECT slot_name FROM pg_create_logical_replication_slot('decoderbufs_test', 'decoderbufs');
++SELECT pg_drop_replication_slot('decoderbufs_test');

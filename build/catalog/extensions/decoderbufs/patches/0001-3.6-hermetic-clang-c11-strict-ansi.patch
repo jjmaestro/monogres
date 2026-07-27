@@ -1,0 +1,32 @@
+From 0a0af0f7ac436a8a49a5613a91d90fecaa559ed3 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Fri, 24 Jul 2026 18:06:59 +0000
+Subject: [PATCH] patch: compile with -std=gnu11 rather than -std=c11
+
+`-std=c11` selects strict ISO C, which defines `__STRICT_ANSI__`. glibc reads
+that as a request to expose the ISO C library only, and hides the POSIX and
+GNU declarations that are visible by default. PostgreSQL is configured for the
+GNU dialect and its server headers are written against it, so an extension
+compiled in strict mode sees a different libc than the server it is being
+built for.
+
+`gnu11` is the same C11 language with those declarations restored, which is
+what PostgreSQL itself compiles with, so it is the dialect that matches the
+headers being included.
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index f68855c..6b7b73f 100644
+--- a/Makefile
++++ b/Makefile
+@@ -4,7 +4,7 @@ EXTENSION = decoderbufs
+ PROTOBUF_C_CFLAGS = $(shell pkg-config --cflags 'libprotobuf-c >= 1.0.0')
+ PROTOBUF_C_LDFLAGS = $(shell pkg-config --libs 'libprotobuf-c >= 1.0.0')
+ 
+-PG_CPPFLAGS += -std=c11 $(PROTOBUF_C_CFLAGS) -I/usr/local/include $(C_PARAMS)
++PG_CPPFLAGS += -std=gnu11 $(PROTOBUF_C_CFLAGS) -I/usr/local/include $(C_PARAMS)
+ SHLIB_LINK  += $(PROTOBUF_C_LDFLAGS)
+ 
+ OBJS = src/decoderbufs.o src/proto/pg_logicaldec.pb-c.o

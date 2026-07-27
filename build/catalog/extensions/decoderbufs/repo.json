@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "v{upstream_version}",
+      "gh_org": "debezium",
+      "name": "postgres-decoderbufs",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{upstream_version}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "3.6.0": {
+      "upstream_version": "3.6.0.Final",
+      "sha256": "86e8bd7c609ad66dca01e7f8596296928b787a92ac17d0aad53932ec25c34815"
+    }
+  },
+  "metadata": {
+    "patches": [
+      {
+        "label": "//catalog/extensions/decoderbufs/patches:0001-3.6-hermetic-clang-c11-strict-ansi.patch",
+        "spec": ">=3.6.0/*"
+      },
+      {
+        "label": "//catalog/extensions/decoderbufs/patches:0002-3.6-hermetic-regress-plugin-load.patch",
+        "spec": ">=3.6.0/*"
+      }
+    ],
+    "compatible_with": {
+      "postgres": {
+        "3.6.0": ">=16"
+      }
+    },
+    "deps": {
+      "buildtime": {
+        "debian": {
+          "12": {"*": ["libprotobuf-c-dev", "protobuf-c-compiler", "pkgconf"]},
+          "13": {"*": ["libprotobuf-c-dev", "protobuf-c-compiler", "pkgconf"]}
+        }
+      },
+      "runtime": {
+        "debian": {
+          "12": {"*": ["libprotobuf-c1"]},
+          "13": {"*": ["libprotobuf-c1"]}
+        }
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "extensions": []
+      },
+      "test": {
+        ">=16": {
+          "regress": {
+            "kind": "regress",
+            "tests": ["decoderbufs_load"],
+            "temp_config": "logical.conf"
+          }
+        }
+      }
+    }
+  }
+}
