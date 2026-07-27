@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "pgpartman",
+      "name": "pg_partman",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "5.5.0": {
+      "sha256": "a3f100ae871677f0012579f58542c174900297f664a4ad2be0256e7ee5e33502"
+    }
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "5.5.0": ">=16"
+      }
+    }
+  }
+}
