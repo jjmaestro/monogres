@@ -87,6 +87,7 @@
     "pgrouting",
     "pgvector",
     "postgis",
+    "rum",
     "sequential_uuids",
     "sslutils",
     "timescaledb"

@@ -1,0 +1,62 @@
+{
+    "controls": [
+        "rum"
+    ],
+    "test_suites": [
+        {
+            "dbname": "contrib_regression",
+            "kind": "regress",
+            "slug": "regress",
+            "tests": {
+                "*": [
+                    "security",
+                    "rum",
+                    "rum_validate",
+                    "rum_hash",
+                    "ruminv",
+                    "timestamp",
+                    "orderby",
+                    "orderby_hash",
+                    "altorder",
+                    "altorder_hash",
+                    "limits",
+                    "int2",
+                    "int4",
+                    "int8",
+                    "float4",
+                    "float8",
+                    "money",
+                    "oid",
+                    "time",
+                    "timetz",
+                    "date",
+                    "interval",
+                    "macaddr",
+                    "inet",
+                    "cidr",
+                    "text",
+                    "varchar",
+                    "char",
+                    "bytea",
+                    "bit",
+                    "varbit",
+                    "numeric",
+                    "rum_weight",
+                    "expr",
+                    "array"
+                ]
+            }
+        },
+        {
+            "kind": "tap",
+            "slug": "tap",
+            "tests": {
+                "*": [
+                    "001_wal",
+                    "002_pglist"
+                ]
+            }
+        }
+    ],
+    "version": 1
+}
