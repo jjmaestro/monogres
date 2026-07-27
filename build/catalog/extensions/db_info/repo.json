@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "asotolongo",
+      "name": "db_info",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/asotolongo/db_info/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "0.2.0": {
+      "sha256": "9e96398e69be86abac5cabf046a54b6f6296d0d5fc304cd3388ec9c77061b1c9"
+    }
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "0.2.0": ">=16"
+      }
+    }
+  }
+}

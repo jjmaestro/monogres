@@ -74,6 +74,7 @@
   "extensions": [
     "age",
     "citus",
+    "db_info",
     "hll",
     "hypopg",
     "noset",
