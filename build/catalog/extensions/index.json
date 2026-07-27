@@ -97,6 +97,7 @@
     "plpgsql_check",
     "postgis",
     "rum",
+    "safeupdate",
     "sequential_uuids",
     "set_user",
     "sslutils",

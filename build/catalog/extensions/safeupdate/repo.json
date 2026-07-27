@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "{upstream_version}",
+      "gh_org": "eradman",
+      "name": "pg-safeupdate",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{upstream_version}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "1.7.0": {
+      "upstream_version": "1.7",
+      "sha256": "456aa0ceffc412292c41d88aad7c91ada33fb4af05f355ba78e5bcf2cdf56377"
+    }
+  },
+  "metadata": {
+    "patches": [
+      {
+        "label": "//catalog/extensions/safeupdate/patches:0001-1.7-hermetic-regress-where-clause.patch",
+        "spec": ">=1.7.0/*"
+      }
+    ],
+    "compatible_with": {
+      "postgres": {
+        "1.7.0": ">=16"
+      }
+    },
+    "test_ext": {
+      "test": {
+        ">=16": {
+          "regress": {
+            "kind": "regress",
+            "tests": ["safeupdate"]
+          }
+        }
+      }
+    }
+  }
+}

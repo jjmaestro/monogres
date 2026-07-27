@@ -1,0 +1,66 @@
+From 84dfba0d1aa8ede5c1ec11a487cc739f090fa082 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sat, 25 Jul 2026 17:44:56 +0000
+Subject: [PATCH] patch: add a regression test for the required WHERE clause
+
+The repository has no pg_regress suite: the only test is `test.rb`, a Ruby
+script that drives a server it expects to already exist. A build therefore has
+no way to check the extension with the standard PostgreSQL test harness, and
+nothing at all to run without a Ruby interpreter.
+
+Add `sql/safeupdate.sql` and its transcript, covering what the extension is
+for: after `LOAD 'safeupdate'`, an `UPDATE` or `DELETE` without a `WHERE`
+clause is refused, and the same statements with one succeed. The transcript
+records both error messages and the resulting table contents, so a regression
+in either direction, refusing too much or too little, shows up as a diff.
+
+The test needs nothing beyond a default instance, since `LOAD` is enough to
+arm the hooks.
+---
+ expected/safeupdate.out | 18 ++++++++++++++++++
+ sql/safeupdate.sql      | 11 +++++++++++
+ 2 files changed, 29 insertions(+)
+ create mode 100644 expected/safeupdate.out
+ create mode 100644 sql/safeupdate.sql
+
+diff --git a/expected/safeupdate.out b/expected/safeupdate.out
+new file mode 100644
+index 0000000..413d024
+--- /dev/null
++++ b/expected/safeupdate.out
+@@ -0,0 +1,18 @@
++LOAD 'safeupdate';
++CREATE TABLE su_test (a int, b text);
++INSERT INTO su_test VALUES (1, 'x'), (2, 'y');
++-- unqualified UPDATE/DELETE are blocked
++UPDATE su_test SET b = 'z';
++ERROR:  UPDATE requires a WHERE clause
++DELETE FROM su_test;
++ERROR:  DELETE requires a WHERE clause
++-- qualified UPDATE/DELETE succeed
++UPDATE su_test SET b = 'z' WHERE a = 1;
++DELETE FROM su_test WHERE a = 2;
++SELECT * FROM su_test ORDER BY a;
++ a | b 
++---+---
++ 1 | z
++(1 row)
++
++DROP TABLE su_test;
+diff --git a/sql/safeupdate.sql b/sql/safeupdate.sql
+new file mode 100644
+index 0000000..193c369
+--- /dev/null
++++ b/sql/safeupdate.sql
+@@ -0,0 +1,11 @@
++LOAD 'safeupdate';
++CREATE TABLE su_test (a int, b text);
++INSERT INTO su_test VALUES (1, 'x'), (2, 'y');
++-- unqualified UPDATE/DELETE are blocked
++UPDATE su_test SET b = 'z';
++DELETE FROM su_test;
++-- qualified UPDATE/DELETE succeed
++UPDATE su_test SET b = 'z' WHERE a = 1;
++DELETE FROM su_test WHERE a = 2;
++SELECT * FROM su_test ORDER BY a;
++DROP TABLE su_test;
