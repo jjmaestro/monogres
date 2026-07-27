@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "REL{upstream_version}",
+      "gh_org": "pgaudit",
+      "name": "set_user",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{tag}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "4.2.0": {
+      "upstream_version": "4_2_0",
+      "sha256": "87db7f1baee9149bfb88547415644d0855bf975ad22d3d17de7e01901e35850c"
+    }
+  },
+  "metadata": {
+    "patches": [
+      {
+        "label": "//catalog/extensions/set_user/patches:0001-4.2-hermetic-regress-log-line-prefix.patch",
+        "spec": ">=4.2.0/*"
+      }
+    ],
+    "compatible_with": {
+      "postgres": {
+        "4.2.0": ">=16"
+      }
+    },
+    "test_ext": {
+      "test_overrides": {
+        "regress": {
+          "temp_config": "hermetic.conf"
+        }
+      }
+    }
+  }
+}

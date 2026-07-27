@@ -98,6 +98,7 @@
     "postgis",
     "rum",
     "sequential_uuids",
+    "set_user",
     "sslutils",
     "timescaledb",
     "vacuum_utils"

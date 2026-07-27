@@ -1,0 +1,18 @@
+{
+    "controls": [
+        "set_user"
+    ],
+    "test_suites": [
+        {
+            "dbname": "contrib_regression",
+            "kind": "regress",
+            "slug": "regress",
+            "tests": {
+                "*": [
+                    "set_user"
+                ]
+            }
+        }
+    ],
+    "version": 1
+}

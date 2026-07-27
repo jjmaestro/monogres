@@ -1,0 +1,36 @@
+From 67695a16457e4d8ca53ee9c9a80a053ffcc0c39c Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sat, 25 Jul 2026 17:29:39 +0000
+Subject: [PATCH] patch: pin log_line_prefix for the regression suite
+
+The suite inspects `log_line_prefix` directly, five times, because the
+extension prepends an audit tag to it:
+
+    SHOW log_line_prefix;
+     log_line_prefix
+    -----------------
+     %m [%p]
+
+That expected value is PostgreSQL's built-in default, which is what the suite
+sees when it runs against a server configured by hand. It is not what a
+pg_regress `--temp-instance` provides: pg_regress writes its own
+`log_line_prefix` into the temporary server's configuration so that its logs
+identify the backend and application, and the suite then reports five diffs
+against a setting nothing in the extension touched.
+
+Ship the value the transcript expects as a config fragment a caller can hand
+to pg_regress as a `--temp-config`, which is applied after pg_regress's own
+settings and so wins. Nothing else in the suite depends on the prefix, and a
+run against a hand-configured server is unaffected.
+---
+ hermetic.conf | 1 +
+ 1 file changed, 1 insertion(+)
+ create mode 100644 hermetic.conf
+
+diff --git a/hermetic.conf b/hermetic.conf
+new file mode 100644
+index 0000000..6e900c9
+--- /dev/null
++++ b/hermetic.conf
+@@ -0,0 +1 @@
++log_line_prefix = '%m [%p] '
