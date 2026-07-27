@@ -101,7 +101,8 @@
     "set_user",
     "sslutils",
     "timescaledb",
-    "vacuum_utils"
+    "vacuum_utils",
+    "wal2json"
   ],
   "version": 1
 }

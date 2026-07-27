@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "wal2json_{upstream_version}",
+      "gh_org": "eulerto",
+      "name": "wal2json",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{tag}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "2.6.0": {
+      "upstream_version": "2_6",
+      "sha256": "18b4bdec28c74a8fc98a11c72de38378a760327ef8e5e42e975b0029eb96ba0d"
+    }
+  },
+  "metadata": {
+    "patches": [
+      {
+        "label": "//catalog/extensions/wal2json/patches:0001-2.6-hermetic-logical-decoding-conf.patch",
+        "spec": ">=2.6.0/*"
+      }
+    ],
+    "compatible_with": {
+      "postgres": {
+        "2.6.0": ">=16"
+      }
+    },
+    "test_ext": {
+      "test_overrides": {
+        "regress": {
+          "temp_config": "logical.conf",
+          "encoding": "UTF8"
+        }
+      }
+    }
+  }
+}
