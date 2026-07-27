@@ -95,6 +95,7 @@
     "pgagent",
     "pgaudit",
     "pgrouting",
+    "pgsql_http",
     "pgvector",
     "plpgsql_check",
     "postgis",

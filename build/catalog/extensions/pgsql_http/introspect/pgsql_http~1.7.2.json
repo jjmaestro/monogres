@@ -1,0 +1,18 @@
+{
+    "controls": [
+        "http"
+    ],
+    "test_suites": [
+        {
+            "dbname": "contrib_regression",
+            "kind": "regress",
+            "slug": "regress",
+            "tests": {
+                "*": [
+                    "http"
+                ]
+            }
+        }
+    ],
+    "version": 1
+}
