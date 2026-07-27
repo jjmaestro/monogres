@@ -81,6 +81,7 @@
     "pg_qualstats",
     "pg_stat_kcache",
     "pg_stat_monitor",
+    "pg_track_settings",
     "pgagent",
     "pgaudit",
     "pgrouting",

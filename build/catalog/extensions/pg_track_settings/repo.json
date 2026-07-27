@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "{version}",
+      "gh_org": "rjuju",
+      "name": "pg_track_settings",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/rjuju/pg_track_settings/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "2.1.2": {
+      "sha256": "80edae0563bcdbe2b74034836cf2a567c8d39d18a3357eb4277ae3629512bd90"
+    }
+  },
+  "metadata": {
+    "patches": [
+      {
+        "label": "//catalog/extensions/pg_track_settings/patches:0001-2.1.2-deterministic-reboot-age-test.patch",
+        "spec": ">=2.1.2/*"
+      }
+    ],
+    "compatible_with": {
+      "postgres": {
+        "2.1.2": ">=16"
+      }
+    },
+    "test_ext": {
+      "test_overrides": {
+        "regress": {
+          "expecteddir": "."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,56 @@
+From 51e3d0768b5b60dabf45c829a28e4fee53d1f97f Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sat, 25 Jul 2026 06:29:27 +0000
+Subject: [PATCH] patch: widen the gap between the two settings snapshots
+
+The suite asserts twice that the recorded reboot is in the past by more than a
+fixed interval:
+
+    SELECT now() - ts > interval '2 second' FROM "PGTS".pg_reboot;
+    SELECT now() - ts > interval '2 second' FROM "PGTS".pg_track_reboot_log();
+
+`ts` is the postmaster start time, so both hold only if the server has been up
+for over two seconds by the time the test reaches them. Run against a
+long-lived instance that is never in question. Run under a pg_regress
+`--temp-instance`, the server is started moments before the suite, and the only
+thing between startup and those two queries is the suite itself, which takes
+well under two seconds. Both then return `f` and the test fails, on a timing
+detail rather than on anything the extension did.
+
+Widening the settings-history `pg_sleep` from 1 to 3 seconds puts the elapsed
+time above the threshold before the reboot section is reached. That sleep is
+there to separate two configuration snapshots in time, and everything asserted
+about it only needs the gap to be large enough: the log still shows the same
+two `work_mem` rows, and `pg_track_settings_diff(now() - interval '500 ms',
+now())` still sees only the second change.
+---
+ expected/pg_track_settings.out | 2 +-
+ test/sql/pg_track_settings.sql | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/expected/pg_track_settings.out b/expected/pg_track_settings.out
+index 8fea4e6..2c11b6d 100644
+--- a/expected/pg_track_settings.out
++++ b/expected/pg_track_settings.out
+@@ -85,7 +85,7 @@ SELECT * FROM "PGTS".pg_track_settings_snapshot();
+  t
+ (1 row)
+ 
+-SELECT pg_catalog.pg_sleep(1);
++SELECT pg_catalog.pg_sleep(3);
+  pg_sleep 
+ ----------
+  
+diff --git a/test/sql/pg_track_settings.sql b/test/sql/pg_track_settings.sql
+index aef6131..b43a19f 100644
+--- a/test/sql/pg_track_settings.sql
++++ b/test/sql/pg_track_settings.sql
+@@ -65,7 +65,7 @@ ORDER BY descr COLLATE "C";
+ SELECT COUNT(*) FROM "PGTS".pg_track_settings_history;
+ SET work_mem = '10MB';
+ SELECT * FROM "PGTS".pg_track_settings_snapshot();
+-SELECT pg_catalog.pg_sleep(1);
++SELECT pg_catalog.pg_sleep(3);
+ SET work_mem = '5MB';
+ SELECT * FROM "PGTS".pg_track_settings_snapshot();
+ SELECT name, setting_exists, setting, setting_pretty FROM "PGTS".pg_track_settings_log('work_mem') ORDER BY ts ASC;

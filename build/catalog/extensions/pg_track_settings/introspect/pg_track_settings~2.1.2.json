@@ -1,0 +1,19 @@
+{
+    "controls": [
+        "pg_track_settings"
+    ],
+    "test_suites": [
+        {
+            "dbname": "contrib_regression",
+            "inputdir": "test",
+            "kind": "regress",
+            "slug": "regress",
+            "tests": {
+                "*": [
+                    "pg_track_settings"
+                ]
+            }
+        }
+    ],
+    "version": 1
+}
