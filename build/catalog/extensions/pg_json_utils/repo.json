@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "asotolongo",
+      "name": "pg_json_utils",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/asotolongo/pg_json_utils/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "0.1.1": {
+      "sha256": "ae333bc4d117cf376e7ed29108626debe5e93bed74351b1a15f7e6b928e24021"
+    }
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "0.1.1": ">=16"
+      }
+    }
+  }
+}

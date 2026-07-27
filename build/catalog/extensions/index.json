@@ -81,6 +81,7 @@
     "pg_dbms_job",
     "pg_financial",
     "pg_ivm",
+    "pg_json_utils",
     "pg_qualstats",
     "pg_stat_kcache",
     "pg_stat_monitor",
