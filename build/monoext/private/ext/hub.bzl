@@ -211,6 +211,18 @@ def _impl(rctx):
         archs = archs,
     ))
 
+    # The committed test introspections, as a catalog-derived
+    # `TEST_INTROSPECTIONS` manifest (`{ext: {ext_version: canonical_base}}`).
+    # Mirrors the base hub's `@pg//:introspect.bzl` `INTROSPECTIONS`, and lets
+    # `//catalog/extensions:BUILD.bazel` wire the `ext_introspect(...)` regen +
+    # freshness targets without hand-enumerating extensions, versions, or bases.
+    rctx.file("introspect.bzl", Star.file(
+        "TEST_INTROSPECTIONS = %s" % Star.igen(
+            json.decode(rctx.attr.ext_introspect_manifest),
+        ),
+        header = _HEADER,
+    ))
+
     # The contrib test introspect: one `sh_test` per contrib suite under
     # `contrib/<name>/<v>/tests`, run against the base hub's install tree. A
     # no-op when the introspect is empty.
@@ -244,6 +256,10 @@ _ATTRS = dict(
     # the external test introspect (smoke + upstream regress) rendered alongside
     # the builds. Empty when no external declares a `test_ext` block.
     external_test_meta = attr.string(default = "{}"),
+    # The regen + freshness manifest (JSON list of `[ext, ext_version,
+    # base_version]`) for the committed test introspects, derived from the
+    # catalog. Re-exposed as `introspect.bzl`'s `TEST_INTROSPECTIONS`.
+    ext_introspect_manifest = attr.string(default = "[]"),
     # The test-introspect attrs (filled by `introspect.introspect_payload`,
     # pointing at the base hub). The extensions hub now renders the contrib
     # suites alongside the extension builds.

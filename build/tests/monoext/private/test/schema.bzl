@@ -125,6 +125,56 @@ def _metadata_test_empty_test_impl(ctx):
 
 metadata_test_empty_test = unittest.make(_metadata_test_empty_test_impl)
 
+def _metadata_test_exclude_tests_impl(ctx):
+    env = unittest.begin(ctx)
+
+    # A flat `exclude_tests` drops the named test on every base version; a
+    # spec-keyed map drops it only on versions matching the spec.
+    test_meta = {
+        "*": {
+            "byver": {
+                "exclude_tests": {"<18": ["convert"]},
+                "kind": "regress",
+                "tests": {"*": ["convert", "store"]},
+            },
+            "flat": {
+                "exclude_tests": ["dropped"],
+                "kind": "regress",
+                "tests": {"*": ["keep", "dropped"]},
+            },
+        },
+    }
+
+    g16 = _TestSchema.suites_from_metadata_test(test_meta, "16.0")
+    asserts.equals(env, ["keep"], g16["flat"][0].test_names)
+    asserts.equals(env, ["store"], g16["byver"][0].test_names)
+
+    g18 = _TestSchema.suites_from_metadata_test(test_meta, "18.0")
+    asserts.equals(env, ["keep"], g18["flat"][0].test_names)
+    asserts.equals(env, ["convert", "store"], g18["byver"][0].test_names)
+
+    # A suite emptied by exclude on one major is dropped there but survives
+    # where the exclude does not match.
+    empties = {
+        "*": {
+            "only18": {
+                "exclude_tests": {"<18": ["a", "b"]},
+                "kind": "regress",
+                "tests": {"*": ["a", "b"]},
+            },
+        },
+    }
+    asserts.equals(env, {}, _TestSchema.suites_from_metadata_test(empties, "16.0"))
+    asserts.equals(
+        env,
+        ["only18"],
+        sorted(_TestSchema.suites_from_metadata_test(empties, "18.0").keys()),
+    )
+
+    return unittest.end(env)
+
+metadata_test_exclude_tests_test = unittest.make(_metadata_test_exclude_tests_impl)
+
 def _metadata_test_running_and_pure_isolation_test_impl(ctx):
     env = unittest.begin(ctx)
 
@@ -316,6 +366,7 @@ TEST_SUITE_NAME = "schema"
 
 TEST_SUITE_TESTS = dict(
     metadata_test_empty = metadata_test_empty_test,
+    metadata_test_exclude_tests = metadata_test_exclude_tests_test,
     metadata_test_running_and_pure_isolation = metadata_test_running_and_pure_isolation_test,
     metadata_test_shapes = metadata_test_shapes_test,
     metadata_test_spec_filter = metadata_test_spec_filter_test,

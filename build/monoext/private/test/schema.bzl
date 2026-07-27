@@ -554,6 +554,28 @@ def _suite_decl_to_info(slug, decl):
         pl_names = tests if is_tap else [],
     )
 
+def _resolve_tests(tests, version):
+    """Resolve a spec-keyed `tests` map to the flat list for `version`.
+
+    An external extension introspect keys a suite's `tests` by a base-version
+    spec: `{"*": [...]}` for a version-agnostic suite, or disjoint specs like
+    `{">=16,<18": [...], ">=18": [...]}` when the upstream `REGRESS` list varies
+    by base major. Every spec matching `version` contributes, in map order,
+    deduped so an overlapping wildcard does not double-list. A bare list (the
+    make-path introspect, whose `tests` is always version-exact) is returned
+    unchanged.
+    """
+    if type(tests) != "dict":
+        return tests
+    out = []
+    for spec, names in tests.items():
+        if not is_compatible_with(version, spec):
+            continue
+        for name in names:
+            if name not in out:
+                out.append(name)
+    return out
+
 def _suites_from_metadata_test(test_meta, version):
     """Decode a catalog `metadata.test` block into `{slug: [SuiteInfo]}`.
 
@@ -589,12 +611,42 @@ def _suites_from_metadata_test(test_meta, version):
     out = {}
     for slug, value in merged.items():
         decls = value if type(value) == "list" else [value]
-        by_kind = {decl["kind"]: decl for decl in decls}
-        out[slug] = [
+
+        # Resolve each decl's spec-keyed `tests` map to the flat list for this
+        # base version before classifying, so `_suite_decl_to_info` (shared with
+        # the make path) always sees a plain list.
+        by_kind = {}
+        for decl in decls:
+            resolved = dict(decl)
+            names = _resolve_tests(decl.get("tests", []), version)
+
+            # `exclude_tests` resolves the same way (flat list drops on every
+            # version; spec-keyed map drops only on matching versions), then
+            # subtracts from the resolved test list. This is how a suite keeps a
+            # test whose committed golden matches only some PG majors.
+            excluded = _resolve_tests(decl.get("exclude_tests", []), version)
+            if excluded:
+                names = [t for t in names if t not in excluded]
+
+            resolved["tests"] = names
+            resolved.pop("exclude_tests", None)
+
+            # A suite that resolves to no tests and no schedule has nothing to
+            # run on this base version (e.g. exclude_tests dropped every test on
+            # this major), so drop the decl rather than emit an unrunnable
+            # suite; a slug left with no kinds is dropped below.
+            if not names and not resolved.get("schedule"):
+                continue
+
+            by_kind[decl["kind"]] = resolved
+
+        infos = [
             _suite_decl_to_info(slug, by_kind[kind])
             for kind in _KINDS_BY_RANK
             if kind in by_kind
         ]
+        if infos:
+            out[slug] = infos
     return out
 
 def _suites_from_test_suites(test_suites):

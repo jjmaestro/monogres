@@ -47,7 +47,8 @@ def _extension_entry_new(
         is_contrib,
         metadata,
         source_repo = None,
-        lock = None):
+        lock = None,
+        introspect_versions = []):
     """Constructs an `ExtensionEntry`.
 
     Args:
@@ -58,6 +59,10 @@ def _extension_entry_new(
             (`{name}_src__{ext}`), or `None` for contrib.
         lock: Label of the external extension's lockfile (a string like
             `"@pg_ext_src--citus//:lock.json"`), or `None` for contrib.
+        introspect_versions: Sorted list of the ext versions that ship a
+            committed test introspect (`introspect/<ext>~<ver>.json`); drives
+            the regen + freshness manifest. Empty for contrib and for external
+            extensions not yet migrated onto discovery.
 
     Returns:
         An `ExtensionEntry` struct.
@@ -68,6 +73,7 @@ def _extension_entry_new(
         metadata = metadata,
         source_repo = source_repo,
         lock = lock,
+        introspect_versions = introspect_versions,
     )
 
 def _ext_source_init(dir, files, version):

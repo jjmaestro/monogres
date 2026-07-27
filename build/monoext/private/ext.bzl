@@ -17,6 +17,125 @@ load("//monoext/private/ext:hub.bzl", "ext_repo")
 load("//monoext/private/ext:schema.bzl", _ExtSchema = "schema")
 load("//monoext/private/test:introspect.bzl", "introspect_payload")
 
+def _synth_ext_test_meta(
+        ctx,
+        catalog_label,
+        ext_name,
+        ext_versions,
+        metadata,
+        base_flavor):
+    """Synthesize an extension's `test_ext` from its committed introspects.
+
+    The external test model mirrors PostgreSQL core: an extension's test
+    universe is DISCOVERED, not hand-transcribed. Each ext version ships a
+    committed `introspect/<ext>~<ver>.json` (produced by the build's `make -n
+    installcheck` dry run; see `tools/ext_introspect.py`) naming its regress
+    suite, its TAP `.pl` files, and its installed `*.control` names. This reads
+    those per-version introspects (cheap committed reads, no source fetch, so
+    the hub stays lazy) and folds the catalog `repo.json` customizations on top,
+    producing the same `test_ext` shape (`{smoke, test:
+    {version_spec: {slug: decl}}}`) the hub renderer already consumes.
+
+    The discovered suites are keyed by each version's own `compatible_with`
+    spec, so the correct suite resolves per base version. The
+    `metadata.test_ext` in `repo.json` now carries only what discovery cannot
+    know:
+
+    - `smoke`: `preload` / `cascade` (the discovered `extensions` default to
+      the installed `*.control` names, and may be overridden here).
+    - `test_overrides`: `{slug: {locale, exclusive, temp_config, encoding,
+      dbname, load_extensions, exclude, exclude_tests}}`, folded onto the
+      discovered decl for that slug (`exclude` drops the suite; `exclude_tests`
+      drops individual test / `.pl` names, either as a flat list or a
+      version-spec-keyed map resolved per base version).
+    - `test`: `{version_spec: {slug: decl}}` custom suites (integration or
+      manual) that no `installcheck` can produce, merged on top of the
+      discovered ones.
+
+    Returns `(test_ext, introspect_versions)`: the untouched `metadata.test_ext`
+    and an empty version list when the extension ships no introspects yet, so
+    extensions migrate onto discovery one at a time by committing their
+    `introspect/` files.
+    """
+    overrides = metadata.get("test_ext", {})
+    compat = metadata.get("compatible_with", {}).get(base_flavor, {})
+    smoke_over = overrides.get("smoke", {})
+    slug_over = overrides.get("test_overrides", {})
+    extra_test = overrides.get("test", {})
+
+    test = {}
+    controls = {}
+    introspect_versions = []
+
+    for ext_v in ext_versions:
+        label = catalog_label.relative(
+            ":%s/introspect/%s~%s.json" % (ext_name, ext_name, ext_v),
+        )
+
+        # Watch the introspect path (even while absent) so committing or
+        # regenerating one re-triggers this extension and updates the lockfile;
+        # `ctx.path(...).exists` alone does not register a dependency, which
+        # would leave an added introspect unseen until an unrelated input
+        # changed.
+        ctx.watch(label)
+
+        if not ctx.path(label).exists:
+            continue
+
+        introspect_versions.append(ext_v)
+        introspect = json.decode(ctx.read(label))
+        spec = compat.get(ext_v, "*")
+
+        slug_map = {}
+        for decl in introspect.get("test_suites", []):
+            slug = decl["slug"]
+            over = slug_over.get(slug, {})
+
+            if over.get("exclude"):
+                continue
+
+            merged = {k: v for k, v in decl.items() if k != "slug"}
+            for k, v in over.items():
+                if k not in ("exclude", "exclude_tests"):
+                    merged[k] = v
+
+            excluded = over.get("exclude_tests")
+            if excluded:
+                # `exclude_tests` drops individual test / `.pl` names. It is
+                # either a flat list (drop on every base version) or a
+                # version-spec-keyed map (`{spec: [name, ...]}`, drop only on
+                # versions matching the spec, e.g. a golden that lands only on
+                # one PG major). It is resolved against the concrete base
+                # version downstream, alongside the spec-keyed `tests` map.
+                merged["exclude_tests"] = excluded
+
+            slug_map[slug] = merged
+
+        for slug, decl in extra_test.get(spec, {}).items():
+            slug_map[slug] = decl
+
+        if slug_map:
+            test[spec] = slug_map
+
+        for control in introspect.get("controls", []):
+            controls[control] = None
+
+    if not introspect_versions:
+        return overrides, []
+
+    result = {}
+    smoke = dict(smoke_over)
+    if "extensions" not in smoke and controls:
+        smoke["extensions"] = sorted(controls)
+
+    if smoke:
+        result["smoke"] = smoke
+
+    if test:
+        result["test"] = test
+
+    return result, introspect_versions
+
 def create_ext_src(ctx, hub_name, catalog_label, base_flavor = "postgres"):
     """Read extension catalog, create per-ext source repos, return ExtData.
 
@@ -50,6 +169,27 @@ def create_ext_src(ctx, hub_name, catalog_label, base_flavor = "postgres"):
         metadata = repo.get("metadata", {})
         source_repo = repo_names.ext_src(hub_name, ext_name)
 
+        ext_versions = sorted(repo.get("versions", {}).keys())
+
+        # Discovery-driven testing: when an extension commits `introspect/`
+        # files, its `test_ext` is synthesized from those (discovered test
+        # universe) plus the `repo.json` customizations, converging the external
+        # lane onto PostgreSQL core's committed-introspect model.
+        synth_test_ext, introspect_versions = _synth_ext_test_meta(
+            ctx,
+            catalog_label,
+            ext_name,
+            ext_versions,
+            metadata,
+            base_flavor,
+        )
+
+        if synth_test_ext:
+            metadata = dict(metadata)
+            metadata["test_ext"] = synth_test_ext
+        elif "test_ext" in metadata:
+            metadata = {k: v for k, v in metadata.items() if k != "test_ext"}
+
         download_archives(
             ctx = ctx,
             name = source_repo,
@@ -62,11 +202,12 @@ def create_ext_src(ctx, hub_name, catalog_label, base_flavor = "postgres"):
 
         f = bind(src = source_repo)
         extensions[ext_name] = _ExtSchema.ExtensionEntry.new(
-            ext_versions = sorted(repo.get("versions", {}).keys()),
+            ext_versions = ext_versions,
             is_contrib = False,
             lock = f("@{src}//:lock.json"),
             metadata = metadata,
             source_repo = source_repo,
+            introspect_versions = introspect_versions,
         )
 
     for ext_name in sorted(catalog.get("contrib", [])):
@@ -153,6 +294,45 @@ def _build_external(extensions, versions_deps, base_versions, base_flavor, hub_n
         entries[name] = json.encode(entry)
 
     return entries
+
+def _ver_key(version):
+    return [int(part) for part in version.split(".")]
+
+def _introspect_manifest(external, base_versions, base_flavor):
+    """Derive the regen + freshness manifest from the catalog, not a hand list.
+
+    For every external ext version that ships a committed introspect, name the
+    representative base build whose discovery is canonical: the newest base
+    minor compatible with that ext version. The test universe an extension
+    discovers varies by base MAJOR (a new PG major may add or drop a regress
+    test), so the newest compatible minor is a faithful, low-churn choice.
+
+    Returns a `{ext: {ext_version: base_version}}` dict (mirroring the catalog's
+    ext -> versions nesting) that flows to the hub, which writes the
+    `introspect.bzl` the catalog loads, so nothing is hand-enumerated.
+    """
+    manifest = {}
+    for name in sorted(external):
+        ext = external[name]
+        versions = {}
+        for ext_version in ext.introspect_versions:
+            compatible = [
+                base_v
+                for base_v in base_versions
+                if is_compatible(
+                    name,
+                    ext_version,
+                    base_flavor,
+                    base_v,
+                    ext.metadata,
+                )
+            ]
+            if not compatible:
+                continue
+            versions[ext_version] = sorted(compatible, key = _ver_key)[-1]
+        if versions:
+            manifest[name] = versions
+    return manifest
 
 def _build_contrib(extensions, hub_name, base_flavor = "postgres"):
     """Builds JSON-encoded `ExtContribEntry` values for ext_repo.
@@ -249,7 +429,16 @@ def create_ext(
     # `introspect_payload` (keyed on the BASE hub, where the install trees live)
     # supplies `option_sets` + the test-introspect attrs; the extensions hub
     # renders the contrib suites under `contrib/<name>/<v>/tests` alongside the
-    # builds.
+    # builds. The regen + freshness manifest for the committed test introspects,
+    # derived from the catalog (which ext versions ship an introspect and their
+    # newest compatible base), so the catalog `ext_introspect(...)` targets are
+    # never hand-enumerated.
+    ext_introspect_manifest = _introspect_manifest(
+        external,
+        base_versions,
+        base_flavor,
+    )
+
     ext_repo(
         name = hub_name,
         archs = list(archs),
@@ -261,6 +450,7 @@ def create_ext(
         build_repo = build_repo,
         base_versions_deps = json.encode(base_versions_deps),
         external_test_meta = json.encode(external_test_meta),
+        ext_introspect_manifest = json.encode(ext_introspect_manifest),
         **introspect_payload(base_hub_name, base_data)
     )
 
