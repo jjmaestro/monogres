@@ -82,6 +82,7 @@
     "pg_stat_monitor",
     "pgagent",
     "pgaudit",
+    "pgrouting",
     "pgvector",
     "postgis",
     "sslutils",
