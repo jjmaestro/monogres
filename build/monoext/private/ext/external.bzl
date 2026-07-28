@@ -157,7 +157,8 @@ def _pg_build(
         remap_paths = {},
         crate_dir = "",
         ext_name = None,
-        cargo = None):
+        cargo = None,
+        build_data = {}):
     """Render {name}/{version}/{base_version}/BUILD.bazel for the extension build.
 
     Dispatches on `build_system`: `"cmake"` renders a `cmake_build` (via
@@ -183,10 +184,11 @@ def _pg_build(
     follows that convention, so callers only need to pass it explicitly if a
     flavor's install prefix diverges from its name.
 
-    `ext_name`, `cargo` and `crate_dir` are the pgrx path's: the extension name
-    (to reach its vendor tree), this version's `{"lock", "crates",
-    "git_sources", "pgrx"}` entry, and the crate's directory below the source
-    root when the source tree is a cargo workspace whose root the crate is not.
+    `ext_name`, `cargo`, `crate_dir` and `build_data` are the pgrx path's: the
+    extension name (to reach its vendor tree), this version's `{"lock",
+    "crates", "git_sources", "pgrx"}` entry, the crate's directory below the
+    source root when the source tree is a cargo workspace whose root the crate
+    is not, and the pinned files a build script would otherwise download.
     """
     prefix_distro = base_prefix_distro or "/" + base_flavor
     f = bind(
@@ -237,6 +239,10 @@ def _pg_build(
         # replacement it needs is rendered only where there is one.
         if cargo["git_sources"]:
             pgrx_args["git_sources"] = cargo["git_sources"]
+
+        # And for a closure whose build scripts would fetch their own data.
+        if build_data:
+            pgrx_args["build_data"] = build_data
 
         pgrx_args.update(build_system_args)
         build_call = _pgrx_build(**pgrx_args)
@@ -401,6 +407,7 @@ def write_extension_package(rctx, entry, name, archs):
                     crate_dir = entry.crate_dir,
                     ext_name = name,
                     cargo = cargo,
+                    build_data = entry.build_data,
                 ),
             )
 

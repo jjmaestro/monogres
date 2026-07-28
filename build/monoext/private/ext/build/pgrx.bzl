@@ -141,6 +141,13 @@ _COMPILE_EXTENSION = """
             # that is entirely crates.io, which is the common case.
             {git_sources}
 
+            # Files a dependency's build script would otherwise download for
+            # itself, which this sandbox cannot do and nothing would pin. Staged
+            # at the paths the catalog declares, with each declared variable
+            # pointing the fetching step at the tree. Writable, since a build
+            # script that treats it as a cache unpacks and builds in place.
+            {build_data}
+
             # cargo drives `rustc` and `rustfmt` (pgrx-pg-sys formats the
             # bindings it generates) out of its own prefix, by name off PATH.
             #
@@ -435,6 +442,45 @@ def _git_sources_config(git_sources):
         pad = pad,
     )
 
+# Where `compile_extension` stages `metadata.build_data`, and what the declared
+# variables are resolved against.
+_BUILD_DATA_DIR = "$$EXT_BUILD_ROOT/build_data"
+
+def _build_data_config(build_data):
+    """Render shell staging `build_data` and exporting what points at it.
+
+    Args:
+        build_data: `{"files": {path: label}, "env": {var: directory}}` from
+            `metadata.build_data`, with the pool labels already resolved.
+
+    Returns:
+        Shell staging the files and exporting the variables, or `""` for an
+        extension that declares no build data.
+    """
+    if not build_data:
+        return ""
+
+    files = build_data["files"]
+    pad = " " * _GIT_SOURCES_INDENT
+    lines = []
+
+    for path in sorted(files):
+        dest = '"%s/%s"' % (_BUILD_DATA_DIR, path)
+
+        lines.append('mkdir -p "$$(dirname %s)"' % dest)
+        lines.append('cp -L "$$EXT_BUILD_ROOT/$(execpath {})" {}'.format(
+            files[path],
+            dest,
+        ))
+
+    for var in sorted(build_data.get("env", {})):
+        directory = build_data["env"][var]
+        suffix = "" if directory == "." else "/" + directory
+
+        lines.append('export {}="{}{}"'.format(var, _BUILD_DATA_DIR, suffix))
+
+    return ("\n" + pad).join(lines)
+
 # Prologue staging the two action-time binaries `compile_extension` runs by
 # path: cargo (whose prefix also supplies `rustc` / `rustfmt`) and the SQL
 # generator. Both run in the action itself and ride `tools`.
@@ -459,6 +505,7 @@ def pgrx_build(
         ext_version,
         crate_dir = "",
         git_sources = {},
+        build_data = {},
         build_args = [],
         remap_paths = {},
         debug = False):
@@ -494,6 +541,10 @@ def pgrx_build(
             `pool.git_sources`, the cargo source replacement pointing every git
             dependency in the lock at the vendor tree. Empty for a closure that
             is entirely crates.io.
+        build_data (dict): `{"files": {path: label}, "env": {var: directory}}`
+            from `metadata.build_data`: the pinned files a dependency's build
+            script would otherwise download, and the variables pointing it at
+            them. Empty for a closure whose build scripts fetch nothing.
         build_args (list[str]): Extra `cargo build` arguments from
             `metadata.build_args`, templated via `PGRX_ARG_SUBST` (`{pg_config}`
             / `{sysroot}`).
@@ -517,9 +568,13 @@ def pgrx_build(
             cargo_lock,
             _RUST_TARGET_CARGO,
             _RUST_TARGET_FILES,
+        ] + [
+            build_data["files"][path]
+            for path in sorted(build_data.get("files", {}))
         ],
         extra_tools = [_CARGO, _RUST_FILES, sql_generator],
         extra_format_kwargs = {
+            "build_data": _build_data_config(build_data),
             "cargo": _CARGO,
             "cargo_lock": cargo_lock,
             # Interpolated straight onto `$src`, so it carries its own leading

@@ -5,6 +5,8 @@ Unit tests for monoext/private/ext.bzl pure helpers:
   per-extension JSON entry assembly, including is_compatible filtering and the
   pre-qualification of `entry.deps.{ext_v}.{buildtime,runtime}` alias labels.
 - `_build_contrib(extensions)`: per-contrib JSON entry assembly
+- `_declare_build_data(ext_name, build_data, declared)`: the repo holding the
+  files an extension's build stages instead of downloading them itself
 """
 
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
@@ -246,10 +248,97 @@ def _build_contrib_basic_test_impl(ctx):
 
 build_contrib_basic_test = unittest.make(_build_contrib_basic_test_impl)
 
+# --- _declare_build_data ---------------------------------------------------
+
+_BUILD_DATA = {
+    "env": {"LINDERA_CACHE": "."},
+    "files": {
+        "1.5.1/dict.tar.gz": {
+            "sha256": "ed3cf9e3ec8a80647f0ec783dc09dad43b8ccad2e994f5eab6ff13a41d0916c8",
+            "url": "https://lindera.dev/dict.tar.gz",
+        },
+    },
+}
+
+def _declare_build_data_test_impl(ctx):
+    """The pinned files become one repo, and labels the build can stage."""
+    env = unittest.begin(ctx)
+
+    created, declared = [], {}
+
+    out = _Ext._declare_build_data(
+        "pg_search",
+        _BUILD_DATA,
+        declared,
+        _build_data_repo = lambda **kwargs: created.append(kwargs),
+    )
+
+    asserts.equals(env, {
+        "env": {"LINDERA_CACHE": "."},
+        "files": {
+            "1.5.1/dict.tar.gz": "@extdata--pg_search//:1.5.1/dict.tar.gz",
+        },
+    }, out)
+
+    asserts.equals(env, 1, len(created))
+    asserts.equals(env, "extdata--pg_search", created[0]["name"])
+    asserts.equals(env, {
+        "1.5.1/dict.tar.gz": "https://lindera.dev/dict.tar.gz",
+    }, created[0]["urls"])
+
+    return unittest.end(env)
+
+declare_build_data_test = unittest.make(_declare_build_data_test_impl)
+
+def _declare_build_data_none_test_impl(ctx):
+    """An extension whose build downloads nothing declares no repo."""
+    env = unittest.begin(ctx)
+
+    created = []
+
+    out = _Ext._declare_build_data(
+        "pg_jsonschema",
+        {},
+        {},
+        _build_data_repo = lambda **kwargs: created.append(kwargs),
+    )
+
+    asserts.equals(env, {}, out)
+    asserts.equals(env, [], created)
+
+    return unittest.end(env)
+
+declare_build_data_none_test = unittest.make(
+    _declare_build_data_none_test_impl,
+)
+
+def _declare_build_data_shared_test_impl(ctx):
+    """Every flavor reads the same catalog, so the files are fetched once."""
+    env = unittest.begin(ctx)
+
+    created, declared = [], {}
+
+    kwargs = dict(_build_data_repo = lambda **kw: created.append(kw))
+
+    first = _Ext._declare_build_data("pg_search", _BUILD_DATA, declared, **kwargs)
+    second = _Ext._declare_build_data("pg_search", _BUILD_DATA, declared, **kwargs)
+
+    asserts.equals(env, 1, len(created))
+    asserts.equals(env, first, second)
+
+    return unittest.end(env)
+
+declare_build_data_shared_test = unittest.make(
+    _declare_build_data_shared_test_impl,
+)
+
 TEST_SUITE_NAME = "ext_top"
 
 TEST_SUITE_TESTS = dict(
     build_contrib_basic = build_contrib_basic_test,
+    declare_build_data = declare_build_data_test,
+    declare_build_data_none = declare_build_data_none_test,
+    declare_build_data_shared = declare_build_data_shared_test,
     build_external_basic = build_external_basic_test,
     build_external_compatible_with_filters = build_external_compatible_with_filters_test,
     build_external_no_deps_gives_empty_deps = build_external_no_deps_gives_empty_deps_test,

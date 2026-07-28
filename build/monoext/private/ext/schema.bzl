@@ -54,6 +54,7 @@ def _extension_entry_new(
         source_repo = None,
         lock = None,
         introspect_versions = [],
+        build_data = {},
         cargo = {}):
     """Constructs an `ExtensionEntry`.
 
@@ -69,6 +70,10 @@ def _extension_entry_new(
             committed test introspect (`introspect/<ext>~<ver>.json`); drives
             the regen + freshness manifest. Empty for contrib and for external
             extensions not yet migrated onto discovery.
+        build_data: `{"files": {path: label}, "env": {var: directory}}`: the
+            files this extension's build stages instead of downloading, and the
+            variables pointing a fetching build step at them. Empty unless the
+            extension declares `metadata.build_data`.
         cargo: `{ext_version: {"lock": label, "crates": {package: dir},
             "git_sources": {source: {key: value}}, "pgrx": version}}` for a pgrx
             extension: the catalog `Cargo.lock` its closure was read from, the
@@ -87,6 +92,7 @@ def _extension_entry_new(
         source_repo = source_repo,
         lock = lock,
         introspect_versions = introspect_versions,
+        build_data = build_data,
         cargo = cargo,
     )
 
@@ -237,6 +243,7 @@ def _ext_external_entry_init(
         build_args = [],
         remap_paths = {},
         crate_dir = "",
+        build_data = {},
         cargo = {}):
     """Raw initializer for external entries; sets `is_contrib = False`.
 
@@ -274,6 +281,7 @@ def _ext_external_entry_init(
         build_args = build_args,
         remap_paths = remap_paths,
         crate_dir = crate_dir,
+        build_data = build_data,
         cargo = cargo,
     )
 
@@ -290,6 +298,7 @@ def _ext_external_entry_new(
         build_args = [],
         remap_paths = {},
         crate_dir = "",
+        build_data = {},
         cargo = {}):
     """Constructs an `ExtExternalEntry`.
 
@@ -316,6 +325,9 @@ def _ext_external_entry_new(
             sysroot's `usr/bin/<file>` scripts.
         crate_dir: The pgrx extension crate's directory below the source root,
             for a cargo workspace; empty when the crate is the source root.
+        build_data: `{"files": {path: label}, "env": {var: directory}}` the
+            build stages instead of letting a build step download it; empty
+            unless declared.
         cargo: `{ext_version: {"lock": label, "crates": {package: dir},
             "git_sources": {source: {key: value}}, "pgrx": version}}` for a pgrx
             extension; empty otherwise.
@@ -372,6 +384,7 @@ def _ext_external_entry_new(
         build_args = build_args,
         remap_paths = remap_paths,
         crate_dir = crate_dir,
+        build_data = build_data,
         cargo = cargo,
     )
 
@@ -403,6 +416,7 @@ def _ext_external_entry_from_dict(d):
         build_args = d.get("build_args", []),
         remap_paths = d.get("remap_paths", {}),
         crate_dir = d.get("crate_dir", ""),
+        build_data = d.get("build_data", {}),
         cargo = d.get("cargo", {}),
     )
 

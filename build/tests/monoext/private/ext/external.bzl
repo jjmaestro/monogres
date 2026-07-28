@@ -342,12 +342,61 @@ def _pg_build_pgrx_test_impl(ctx):
     # The crate version pgrx spells `@CARGO_VERSION@`, not the base version.
     asserts.true(env, 'ext_version = "0.3.4"' in out, out)
 
-    # A single-crate source tree names no crate directory at all.
+    # A single-crate source tree names no crate directory at all, and a closure
+    # that is entirely crates.io and downloads nothing names neither of the
+    # other two optional pgrx arguments.
     asserts.false(env, "crate_dir" in out, out)
+    asserts.false(env, "git_sources" in out, out)
+    asserts.false(env, "build_data" in out, out)
 
     return unittest.end(env)
 
 pg_build_pgrx_test = unittest.make(_pg_build_pgrx_test_impl)
+
+def _pg_build_pgrx_git_and_data_test_impl(ctx):
+    """A lock with git crates, and a build script with data, render both.
+
+    Two things a pgrx build cannot reach the network for: cargo cloning a git
+    dependency, and a dependency's build script downloading its own data. The
+    first becomes a cargo source replacement, the second a staged tree.
+    """
+    env = unittest.begin(ctx)
+
+    source = "git+https://github.com/paradedb/fst.git"
+    data = "@extdata--pg_search//:1.5.1/dict.tar.gz"
+
+    out = _External._pg_build(
+        build_repo = "monogres",
+        source_repo = "pg_ext_src--pg_search",
+        version = "0.24.3",
+        base_v = "18.1",
+        base_hub_name = "pg",
+        bt_sysroot = None,
+        base_sysroot = "//_base/18.1:sysroot_tar",
+        base_flavor = "postgres",
+        build_system = "pgrx",
+        ext_name = "pg_search",
+        cargo = {
+            "crates": {},
+            "git_sources": {source: {"git": source[len("git+"):]}},
+            "lock": "//catalog/extensions:pg_search/cargo/0.24.3/Cargo.lock",
+            "pgrx": "0.18.1",
+        },
+        build_data = {
+            "env": {"LINDERA_CACHE": "."},
+            "files": {"1.5.1/dict.tar.gz": data},
+        },
+    )
+
+    asserts.true(env, '"%s": {' % source in out, out)
+    asserts.true(env, '"1.5.1/dict.tar.gz": "%s"' % data in out, out)
+    asserts.true(env, '"LINDERA_CACHE": "."' in out, out)
+
+    return unittest.end(env)
+
+pg_build_pgrx_git_and_data_test = unittest.make(
+    _pg_build_pgrx_git_and_data_test_impl,
+)
 
 def _pg_build_pgrx_workspace_test_impl(ctx):
     """A pgrx crate below the source root names its directory to the build.
@@ -419,6 +468,7 @@ TEST_SUITE_TESTS = dict(
     pg_build_ivorysql_flavor = pg_build_ivorysql_flavor_test,
     pg_build_no_sysroot = pg_build_no_sysroot_test,
     pg_build_pgrx = pg_build_pgrx_test,
+    pg_build_pgrx_git_and_data = pg_build_pgrx_git_and_data_test,
     pg_build_pgrx_workspace = pg_build_pgrx_workspace_test,
     repo_bzl = repo_bzl_test,
     src_build = src_build_test,

@@ -4,6 +4,7 @@ package(default_visibility = [
 ])
 
 exports_files([
+    "build_data.bzl",
     "compat.bzl",
     "contrib.bzl",
     "external.bzl",

@@ -44,7 +44,8 @@ def create_monogres(
         extensions = None,
         deb_lock = None,
         build_repo = "monogres",
-        crates_declared = None):
+        crates_declared = None,
+        data_declared = None):
     """Creates the full monogres repo ecosystem.
 
     This is the public API for creating monogres-managed repos. It can be called
@@ -64,6 +65,8 @@ def create_monogres(
         crates_declared: The crate pool's `{repo_name: sha256}`, mutated in
             place. The pool hangs off no hub, so a caller that creates several
             hubs passes ONE dict and they share it. A fresh dict when omitted.
+        data_declared: The build data repos' `{repo_name: files}`, mutated in
+            place and shared the same way, for the same reason.
 
     Returns:
         List of created repo names (for `root_module_direct_deps`).
@@ -81,6 +84,7 @@ def create_monogres(
         extensions,
         base_flavor = base_data.flavor,
         crates_declared = crates_declared,
+        data_declared = data_declared,
     )
 
     package_groups = [base_data.pkgs_group] + list(ext_data.pkgs_groups)
@@ -171,8 +175,10 @@ def _monoext_impl(ctx):
     seen = {}
 
     # The crate pool, shared by every hub this evaluation creates: a crate
-    # release is the same artifact whichever flavor pins it.
+    # release is the same artifact whichever flavor pins it. The build data
+    # repos hang off no hub for the same reason.
     crates_declared = {}
+    data_declared = {}
 
     for module in ctx.modules:
         for tag in module.tags.monogres:
@@ -199,6 +205,7 @@ def _monoext_impl(ctx):
                 deb_lock = tag.deb_lock,
                 build_repo = tag.build_repo,
                 crates_declared = crates_declared,
+                data_declared = data_declared,
             )
 
     return ctx.extension_metadata(

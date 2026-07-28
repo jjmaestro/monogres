@@ -39,6 +39,9 @@ hub, so every hub shares them):
 - `@crate_git--{repo}-{rev}`     : the crates one git revision publishes (crate
   pool). A revision holds a whole cargo workspace, so it is fetched once and
   keyed by the commit rather than by any one crate in it.
+- `@extdata--{ext}`        : the files one extension's build needs pre-staged
+  instead of downloading itself. Catalog-pinned data, the same whichever
+  flavor's catalog names it.
 
 Suffix conventions:
 
@@ -101,6 +104,10 @@ repo_names = struct(
         crate = crate,
         v = v,
     ).replace("+", "_"),
+    ext_data = lambda ext: "extdata{sep}{ext}".format(
+        sep = INSTANCE_SEP,
+        ext = ext,
+    ),
     # Keyed on the revision archive's top-level directory, which forges name
     # `{repo}-{rev}`: unique per commit by construction, and the one identifier
     # the crates in it already share.

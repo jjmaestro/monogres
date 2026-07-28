@@ -12,6 +12,7 @@ load(
 )
 load("//monoext/private:pkgs.bzl", "pkgs_group")
 load("//monoext/private:repo_names.bzl", "bind", "repo_names")
+load("//monoext/private/ext:build_data.bzl", "build_data_repo")
 load("//monoext/private/ext:compat.bzl", "is_compatible")
 load("//monoext/private/ext:hub.bzl", "ext_repo")
 load("//monoext/private/ext:schema.bzl", _ExtSchema = "schema")
@@ -273,12 +274,61 @@ def _read_pgrx_tools(ctx, pgrx_versions, declared):
 
     return crates
 
+def _declare_build_data(
+        ext_name,
+        build_data,
+        declared,
+        _build_data_repo = build_data_repo):
+    """Create the repo holding one extension's pinned build data.
+
+    Args:
+        ext_name: Extension name.
+        build_data: `metadata.build_data`: `{"files": {path: {url, sha256}},
+            "env": {var: directory}}`. Empty for an extension whose build
+            downloads nothing.
+        declared: `{repo_name: files}` of the data repos already created,
+            mutated in place. Hub-independent, as for the crate pool.
+        _build_data_repo: The repo rule, injectable for testing.
+
+    Returns:
+        `{"files": {path: label}, "env": {var: directory}}`, or `{}` when the
+        extension declares no build data.
+    """
+    if not build_data:
+        return {}
+
+    files = build_data["files"]
+    repo = repo_names.ext_data(ext_name)
+    prev = declared.get(repo)
+
+    if prev == None:
+        declared[repo] = files
+
+        _build_data_repo(
+            name = repo,
+            urls = {path: pin["url"] for path, pin in files.items()},
+            sha256s = {path: pin["sha256"] for path, pin in files.items()},
+        )
+    elif prev != files:
+        # One repo per extension, so two flavors reading the same catalog have
+        # to agree on it; disagreeing means the catalog was read twice and
+        # changed in between.
+        msg = "{}: build data conflict between reads: {} != {}"
+        fail(msg.format(repo, prev, files))
+
+    f = bind(data = repo)
+    return {
+        "env": build_data.get("env", {}),
+        "files": {path: f("@{data}//:%s" % path) for path in sorted(files)},
+    }
+
 def create_ext_src(
         ctx,
         hub_name,
         catalog_label,
         base_flavor = "postgres",
-        crates_declared = None):
+        crates_declared = None,
+        data_declared = None):
     """Read extension catalog, create per-ext source repos, return ExtData.
 
     Reads the catalog `index.json` and each extension's `repo.json`. For
@@ -299,6 +349,8 @@ def create_ext_src(
             mutated in place. Hub-independent, so callers pass ONE for the whole
             extension evaluation and every flavor shares the pool. A fresh dict
             when omitted, which is right for a single-hub caller.
+        data_declared: The build data repos' `{repo_name: files}`, mutated in
+            place. Hub-independent for the same reason, and passed the same way.
 
     Returns:
         An `ExtData` struct (see `//monoext/private/ext:schema.bzl`).
@@ -308,6 +360,9 @@ def create_ext_src(
 
     if crates_declared == None:
         crates_declared = {}
+
+    if data_declared == None:
+        data_declared = {}
 
     catalog = json.decode(ctx.read(catalog_label))
     extensions = {}
@@ -362,6 +417,12 @@ def create_ext_src(
                 crates_declared,
             )
 
+        build_data = _declare_build_data(
+            ext_name,
+            metadata.get("build_data", {}),
+            data_declared,
+        )
+
         f = bind(src = source_repo)
         extensions[ext_name] = _ExtSchema.ExtensionEntry.new(
             ext_versions = ext_versions,
@@ -370,6 +431,7 @@ def create_ext_src(
             metadata = metadata,
             source_repo = source_repo,
             introspect_versions = introspect_versions,
+            build_data = build_data,
             cargo = cargo,
         )
 
@@ -470,6 +532,7 @@ def _build_external(extensions, versions_deps, base_versions, base_flavor, hub_n
             build_args = metadata.get("build_args", []),
             remap_paths = metadata.get("remap_paths", {}),
             crate_dir = metadata.get("crate_dir", ""),
+            build_data = ext.build_data,
             cargo = ext.cargo,
         )
         entries[name] = json.encode(entry)
@@ -644,4 +707,5 @@ def create_ext(
 testing = struct(
     _build_external = _build_external,
     _build_contrib = _build_contrib,
+    _declare_build_data = _declare_build_data,
 )
