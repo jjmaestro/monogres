@@ -1,0 +1,38 @@
+From 4794efe9daa2000d6a4acc164c3756cdea5db5e7 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Mon, 27 Jul 2026 09:42:29 +0000
+Subject: [PATCH] patch: give the control file a module_pathname
+
+The extension's SQL reaches its C functions through pgrx's `@MODULE_PATHNAME@`
+placeholder, which the SQL generator resolves one of two ways. With a VERSIONED
+shared object, pgrx writes the library's own versioned stem (`vectorscale-0.9.0`)
+straight into the SQL and no control entry is involved, which is what upstream's
+`cargo pgrx install` produces and why upstream can leave `module_pathname`
+commented out. Unversioned, pgrx emits PostgreSQL's `MODULE_PATHNAME` token
+instead and the server substitutes it from the control file, so a control file
+without the entry leaves the token literal:
+
+    ERROR:  could not access file "MODULE_PATHNAME": No such file or directory
+    CONTEXT: ... extension script file "vectorscale--0.9.0.sql", near line 13
+
+This build installs one unversioned `vectorscale.so` per Postgres major, because
+the catalog already keys artifacts by extension version a level up, so the entry
+is required and `$libdir/vectorscale` is what it resolves to. Upstream's
+commented-out line names `pgvectorscale`, the repository rather than the crate,
+which would not resolve either.
+---
+ pgvectorscale/vectorscale.control | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pgvectorscale/vectorscale.control b/pgvectorscale/vectorscale.control
+index ad197c0..6c348f7 100644
+--- a/pgvectorscale/vectorscale.control
++++ b/pgvectorscale/vectorscale.control
+@@ -1,6 +1,6 @@
+ comment = 'diskann access method for vector search'
+ default_version = '@CARGO_VERSION@'
+-#module_pathname = '$libdir/pgvectorscale'
++module_pathname = '$libdir/vectorscale'
+ relocatable = false
+ superuser = true
+ requires = 'vector'

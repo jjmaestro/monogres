@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "{version}",
+      "gh_org": "timescale",
+      "name": "pgvectorscale",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "0.9.0": {
+      "sha256": "a6ad1138a2dfd3662a219693552a661cd7d0b2b79e0dbcbee2522997f3eadf08"
+    }
+  },
+  "metadata": {
+    "build_system": "pgrx",
+    "crate_dir": "pgvectorscale",
+    "build_args": ["--features", "build_parallel"],
+    "patches": [
+      {
+        "label": "//catalog/extensions/vectorscale/patches:0001-0.9.0-pgrx-0.18.patch",
+        "spec": ">=0.9.0/*"
+      },
+      {
+        "label": "//catalog/extensions/vectorscale/patches:0002-0.9.0-control-module-pathname.patch",
+        "spec": ">=0.9.0/*"
+      }
+    ],
+    "compatible_with": {
+      "postgres": {
+        "0.9.0": ">=16"
+      }
+    },
+    "test_ext": {
+      "requires": ["pgvector"],
+      "smoke": {
+        "extensions": ["vectorscale"],
+        "cascade": true
+      }
+    }
+  }
+}
