@@ -11,6 +11,7 @@ package(default_visibility = [
 exports_files([
     "crate_repo.bzl",
     "git_crates_repo.bzl",
+    "manifest.bzl",
     "pool.bzl",
 ])
 
@@ -30,6 +31,13 @@ bzl_library(
 bzl_library(
     name = "git_crates_repo",
     srcs = ["git_crates_repo.bzl"],
+    deps = [":manifest"],
+)
+
+bzl_library(
+    name = "manifest",
+    srcs = ["manifest.bzl"],
+    deps = ["@toml.bzl//:toml"],
 )
 
 bzl_library(
