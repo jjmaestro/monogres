@@ -10,6 +10,7 @@ package(default_visibility = [
 
 exports_files([
     "crate_repo.bzl",
+    "git_crates_repo.bzl",
     "pool.bzl",
 ])
 
@@ -27,9 +28,17 @@ bzl_library(
 )
 
 bzl_library(
+    name = "git_crates_repo",
+    srcs = ["git_crates_repo.bzl"],
+)
+
+bzl_library(
     name = "pool",
     srcs = ["pool.bzl"],
-    deps = [":crate_repo"],
+    deps = [
+        ":crate_repo",
+        ":git_crates_repo",
+    ],
 )
 
 bzl_library(

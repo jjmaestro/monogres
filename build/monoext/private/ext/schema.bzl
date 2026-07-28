@@ -33,8 +33,8 @@ def _ext_data_new(pkgs_groups = [], extensions = {}, pgrx_crates = {}):
         pkgs_groups: List of `pkgs_group` structs (non-contribs only; contribs
             have no external deb deps).
         extensions: `{ext_name: ExtensionEntry}` dict.
-        pgrx_crates: `{pgrx_version: {repo_name: dir_name}}`, the crate pool
-            repos backing one pgrx SQL generator per pgrx version the catalog's
+        pgrx_crates: `{pgrx_version: {package: dir_name}}`, the crate pool repos
+            backing one pgrx SQL generator per pgrx version the catalog's
             extensions pin. Empty when no extension declares `build_system`
             `"pgrx"`, in which case no generator is built at all.
 
@@ -69,11 +69,13 @@ def _extension_entry_new(
             committed test introspect (`introspect/<ext>~<ver>.json`); drives
             the regen + freshness manifest. Empty for contrib and for external
             extensions not yet migrated onto discovery.
-        cargo: `{ext_version: {"lock": label, "crates": {repo_name: dir},
-            "pgrx": version}}` for a pgrx extension: the catalog `Cargo.lock`
-            its closure was read from, the crate pool repos that closure
-            resolved to, and the pgrx version the lock pins (which selects the
-            SQL generator). Empty for contrib and for every other build system.
+        cargo: `{ext_version: {"lock": label, "crates": {package: dir},
+            "git_sources": {source: {key: value}}, "pgrx": version}}` for a pgrx
+            extension: the catalog `Cargo.lock` its closure was read from, the
+                crate pool packages that closure resolved to, the cargo source
+                replacement its git dependencies need (empty without any), and
+                the pgrx version the lock pins (which selects the SQL
+                generator). Empty for contrib and for every other build system.
 
     Returns:
         An `ExtensionEntry` struct.
@@ -238,11 +240,12 @@ def _ext_external_entry_init(
         cargo = {}):
     """Raw initializer for external entries; sets `is_contrib = False`.
 
-    `cargo` is `{ext_version: {"lock": label, "crates": {repo_name: dir},
-    "pgrx": version}}` for a `"pgrx"` extension: the catalog `Cargo.lock` the
-    build is held to, the crate pool repos its closure resolved to, and the pgrx
-    version it pins (which selects the SQL generator). Empty for every other
-    build system.
+    `cargo` is `{ext_version: {"lock": label, "crates": {package: dir},
+    "git_sources": {source: {key: value}}, "pgrx": version}}` for a `"pgrx"`
+    extension: the catalog `Cargo.lock` the build is held to, the crate pool
+    packages its closure resolved to, the cargo source replacement its git
+    dependencies need, and the pgrx version it pins (which selects the SQL
+    generator). Empty for every other build system.
 
     `build_system` selects the build rule the hub renders for this extension
     (`"pgxs"`, the default, `"cmake"` or `"pgrx"`). `build_args` is the list of
@@ -313,8 +316,9 @@ def _ext_external_entry_new(
             sysroot's `usr/bin/<file>` scripts.
         crate_dir: The pgrx extension crate's directory below the source root,
             for a cargo workspace; empty when the crate is the source root.
-        cargo: `{ext_version: {"lock": label, "crates": {repo_name: dir},
-            "pgrx": version}}` for a pgrx extension; empty otherwise.
+        cargo: `{ext_version: {"lock": label, "crates": {package: dir},
+            "git_sources": {source: {key: value}}, "pgrx": version}}` for a pgrx
+            extension; empty otherwise.
 
     Returns:
         An `ExtExternalEntry` struct.

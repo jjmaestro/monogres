@@ -17,10 +17,13 @@ exports_files(
         [
             # A pgrx extension's committed `Cargo.lock`, per version: read at
             # module-extension time to declare the crate pool, and staged as a
-            # build input so `--locked` holds the build to the same lock.
+            # build input so `--locked` holds the build to the same lock. Beside
+            # it, `git.json` pins the git revisions the lock takes crates from,
+            # which is the one thing a lock does not pin by content.
             "*/cargo/*/Cargo.lock",
+            "*/cargo/*/git.json",
         ],
-        # Its own glob, because this one is empty in a catalog that carries no
+        # Its own glob, because these are empty in a catalog that carries no
         # pgrx extension, and the workspace disallows an empty glob by default.
         allow_empty = True,
     ),

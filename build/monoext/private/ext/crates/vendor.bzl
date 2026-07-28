@@ -12,9 +12,9 @@ travel as tars. One tar per (extension, version) is built once and extracted by
 each of the PG majors that extension builds for, since the closure is identical
 across majors (a major is only a cargo feature).
 
-A crate's directory is found through its `Cargo.toml`: every published crate has
-one at its root, and its `execpath` is the only handle a generated BUILD file
-has on a repo whose canonical name it never spells out.
+A crate's directory is found through its `Cargo.toml`: every crate has one at
+its root, and its `execpath` is the only handle a generated BUILD file has on a
+package whose canonical repo name it never spells out.
 """
 
 _CMD = """
@@ -47,17 +47,17 @@ def cargo_vendor(name, crates, visibility = None):
 
     Args:
         name: Target name; the output is `<name>.tar`.
-        crates: `{repo_name: dir_name}` as returned by `pool.declare`: the pool
-            repo holding each crate, and the `<crate>-<version>` directory it
-            takes in the tree.
+        crates: `{package: dir_name}` as returned by `pool.declare`: the pool
+            package holding each crate, as a label prefix, and the
+            `<crate>-<version>` directory it takes in the tree.
         visibility: Target visibility.
     """
     tar_out = "%s.tar" % name
-    manifests = ["@%s//:Cargo.toml" % crate for crate in crates]
+    manifests = ["%s:Cargo.toml" % crate for crate in crates]
 
     native.genrule(
         name = name,
-        srcs = ["@%s//:files" % crate for crate in crates] + manifests,
+        srcs = ["%s:files" % crate for crate in crates] + manifests,
         outs = [tar_out],
         cmd = _CMD.format(
             name = name,

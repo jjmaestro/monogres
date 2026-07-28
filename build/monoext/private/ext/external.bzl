@@ -184,9 +184,9 @@ def _pg_build(
     flavor's install prefix diverges from its name.
 
     `ext_name`, `cargo` and `crate_dir` are the pgrx path's: the extension name
-    (to reach its vendor tree), this version's `{"lock", "crates", "pgrx"}`
-    entry, and the crate's directory below the source root when the source tree
-    is a cargo workspace whose root the crate is not.
+    (to reach its vendor tree), this version's `{"lock", "crates",
+    "git_sources", "pgrx"}` entry, and the crate's directory below the source
+    root when the source tree is a cargo workspace whose root the crate is not.
     """
     prefix_distro = base_prefix_distro or "/" + base_flavor
     f = bind(
@@ -232,6 +232,11 @@ def _pg_build(
         # same call it did before workspaces were supported at all.
         if crate_dir:
             pgrx_args["crate_dir"] = crate_dir
+
+        # Likewise for a lock that takes crates from a git revision: the source
+        # replacement it needs is rendered only where there is one.
+        if cargo["git_sources"]:
+            pgrx_args["git_sources"] = cargo["git_sources"]
 
         pgrx_args.update(build_system_args)
         build_call = _pgrx_build(**pgrx_args)

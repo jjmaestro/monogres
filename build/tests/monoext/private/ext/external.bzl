@@ -122,7 +122,7 @@ def _version_build_test_impl(ctx):
 version_build_test = unittest.make(_version_build_test_impl)
 
 def _version_build_pgrx_test_impl(ctx):
-    """A pgrx version also gets the vendor tree, keyed pool repo -> dir."""
+    """A pgrx version also gets the vendor tree, keyed pool package -> dir."""
     env = unittest.begin(ctx)
 
     out = _External._version_build(
@@ -130,7 +130,7 @@ def _version_build_pgrx_test_impl(ctx):
         "0.3.4",
         "",
         build_repo = "monogres",
-        crates = {"crate--toml-0.9.12_spec-1.1.0": "toml-0.9.12+spec-1.1.0"},
+        crates = {"@crate--toml-0.9.12_spec-1.1.0//": "toml-0.9.12+spec-1.1.0"},
     )
 
     asserts.true(
@@ -140,11 +140,11 @@ def _version_build_pgrx_test_impl(ctx):
     )
     asserts.true(env, 'name = "vendor"' in out, out)
 
-    # The pool repo spells `+` as `_`; the vendor directory keeps the real
+    # The pool package spells `+` as `_`; the vendor directory keeps the real
     # version, which is what cargo resolves against.
     asserts.true(
         env,
-        '"crate--toml-0.9.12_spec-1.1.0": "toml-0.9.12+spec-1.1.0"' in out,
+        '"@crate--toml-0.9.12_spec-1.1.0//": "toml-0.9.12+spec-1.1.0"' in out,
         out,
     )
 
@@ -312,7 +312,12 @@ def _pg_build_pgrx_test_impl(ctx):
         base_flavor = "postgres",
         build_system = "pgrx",
         ext_name = "pg_jsonschema",
-        cargo = {"crates": {}, "lock": lock, "pgrx": "0.18.1"},
+        cargo = {
+            "crates": {},
+            "git_sources": {},
+            "lock": lock,
+            "pgrx": "0.18.1",
+        },
     )
 
     asserts.true(
@@ -365,7 +370,12 @@ def _pg_build_pgrx_workspace_test_impl(ctx):
         build_system = "pgrx",
         crate_dir = "extension",
         ext_name = "timescaledb_toolkit",
-        cargo = {"crates": {}, "lock": lock, "pgrx": "0.18.1"},
+        cargo = {
+            "crates": {},
+            "git_sources": {},
+            "lock": lock,
+            "pgrx": "0.18.1",
+        },
     )
 
     asserts.true(env, 'crate_dir = "extension"' in out, out)

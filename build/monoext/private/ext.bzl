@@ -31,6 +31,11 @@ _PGRX_TOOL_LOCK = "//tools/pgrxsc_sql/{}:Cargo.lock"
 # The crate whose pin in an extension's own lock selects that generator.
 _PGRX_CRATE = "pgrx"
 
+# Beside a `Cargo.lock`, pinning the git revisions the lock takes crates from,
+# which is the one thing a lock does not pin by content. Absent for a lock whose
+# closure is entirely crates.io, which is the common case.
+_CARGO_GIT_JSON = "git.json"
+
 def _synth_ext_test_meta(
         ctx,
         catalog_label,
@@ -169,17 +174,24 @@ def _read_cargo(ctx, catalog_label, ext_name, ext_versions, declared):
     not download the extension and the hub stays lazy (the same trade the
     committed introspect JSONs make for the base hub).
 
+    A `git.json` beside the lock pins what the lock cannot: the archive and
+    sha256 of every git revision it takes crates from. Optional, since most
+    locks take everything from crates.io.
+
     Args:
         ctx: Module extension context.
         catalog_label: Label of the catalog `index.json`.
         ext_name: Extension name.
         ext_versions: The extension's versions.
-        declared: The pool's `{repo_name: sha256}`, mutated in place.
+        declared: The pool's `{repo_name: struct(sha256, crates)}`, mutated in
+            place.
 
     Returns:
-        `{ext_version: {"lock": label, "crates": {repo_name: dir_name}, "pgrx":
-        version}}`, where `pgrx` is the version the lock pins and so the
-        generator that can read the SQL section this version will emit.
+        `{ext_version: {"lock": label, "crates": {package: dir_name},
+        "git_sources": {source: {key: value}}, "pgrx": version}}`, where `pgrx`
+        is the version the lock pins and so the generator that can read the SQL
+        section this version will emit, and `git_sources` is the cargo source
+        replacement the build needs to resolve git dependencies offline.
     """
     cargo = {}
 
@@ -196,10 +208,24 @@ def _read_cargo(ctx, catalog_label, ext_name, ext_versions, declared):
                 "the lock is what the catalog has to carry."
             ) % (ext_name, ext_v, label))
 
-        crates = pool.parse_lock(ctx.read(label), lock_label = str(label))
+        git_label = catalog_label.relative(
+            ":%s/cargo/%s/%s" % (ext_name, ext_v, _CARGO_GIT_JSON),
+        )
+        ctx.watch(git_label)
+
+        git = {}
+        if ctx.path(git_label).exists:
+            git = json.decode(ctx.read(git_label)).get("sources", {})
+
+        crates = pool.parse_lock(
+            ctx.read(label),
+            lock_label = str(label),
+            git = git,
+        )
 
         cargo[ext_v] = {
             "crates": pool.declare(crates, declared),
+            "git_sources": pool.git_sources(crates, lock_label = str(label)),
             "lock": str(label),
             "pgrx": pool.pinned_version(
                 crates,
@@ -220,10 +246,11 @@ def _read_pgrx_tools(ctx, pgrx_versions, declared):
     Args:
         ctx: Module extension context.
         pgrx_versions: The pgrx versions the catalog's extensions pin.
-        declared: The pool's `{repo_name: sha256}`, mutated in place.
+        declared: The pool's `{repo_name: struct(sha256, crates)}`, mutated in
+            place.
 
     Returns:
-        `{pgrx_version: {repo_name: dir_name}}`, the closure per generator.
+        `{pgrx_version: {package: dir_name}}`, the closure per generator.
     """
     crates = {}
 
@@ -268,8 +295,8 @@ def create_ext_src(
         catalog_label: Label of the catalog `index.json`, or `None`.
         base_flavor: Base flavor identity (e.g. "postgres", "ivorysql"). Used to
             filter contrib metadata to the flavor's slice.
-        crates_declared: The crate pool's `{repo_name: sha256}`, mutated in
-            place. Hub-independent, so callers pass ONE for the whole module
+        crates_declared: The crate pool's `{repo_name: struct(sha256, crates)}`,
+            mutated in place. Hub-independent, so callers pass ONE for the whole
             extension evaluation and every flavor shares the pool. A fresh dict
             when omitted, which is right for a single-hub caller.
 

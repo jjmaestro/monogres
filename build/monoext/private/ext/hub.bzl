@@ -99,7 +99,7 @@ def _pgrx_build_bzl(build_repo, crates):
 
     Args:
         build_repo: Repo containing the build rules.
-        crates: `{pgrx_version: {repo_name: dir_name}}`, one closure per pgrx
+        crates: `{pgrx_version: {package: dir_name}}`, one closure per pgrx
             version, as `ExtData.pgrx_crates`.
     """
     f = bind(build = build_repo)
@@ -317,10 +317,9 @@ _ATTRS = dict(
     base_flavor = attr.string(mandatory = True),
     locks = attr.string_keyed_label_dict(default = {}),
     build_repo = attr.string(default = "monogres"),
-    # `{pgrx_version: {repo_name: dir_name}}` (JSON): the crate pool repos
-    # backing one SQL generator per pgrx version the extensions pin. Non-empty
-    # only when some extension is pgrx, which is also when `_pgrx/` gets
-    # rendered at all.
+    # `{pgrx_version: {package: dir_name}}` (JSON): the crate pool repos backing
+    # one SQL generator per pgrx version the extensions pin. Non-empty only when
+    # some extension is pgrx, which is also when `_pgrx/` gets rendered at all.
     pgrx_crates = attr.string(default = "{}"),
     base_versions_deps = attr.string(mandatory = True),
     # The flavor's OPTION_SETS (JSON list); the contrib introspect runs against

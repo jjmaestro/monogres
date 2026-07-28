@@ -36,6 +36,9 @@ hub, so every hub shares them):
 - `@crate--{crate}-{v}`    : one crates.io crate release (crate pool). A crate
   release is the same artifact whatever hub pins it, and the closures overlap
   heavily, so the pool hangs off no hub at all.
+- `@crate_git--{repo}-{rev}`     : the crates one git revision publishes (crate
+  pool). A revision holds a whole cargo workspace, so it is fetched once and
+  keyed by the commit rather than by any one crate in it.
 
 Suffix conventions:
 
@@ -98,4 +101,11 @@ repo_names = struct(
         crate = crate,
         v = v,
     ).replace("+", "_"),
+    # Keyed on the revision archive's top-level directory, which forges name
+    # `{repo}-{rev}`: unique per commit by construction, and the one identifier
+    # the crates in it already share.
+    git_crates = lambda strip_prefix: "crate_git{sep}{prefix}".format(
+        sep = INSTANCE_SEP,
+        prefix = strip_prefix,
+    ),
 )

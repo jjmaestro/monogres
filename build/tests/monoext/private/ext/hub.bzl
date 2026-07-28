@@ -222,11 +222,11 @@ def _pgrx_build_bzl_test_impl(ctx):
     env = unittest.begin(ctx)
 
     out = _ExtHub._pgrx_build_bzl("monogres", {
-        "0.18.1": {"crate--eyre-0.6.12": "eyre-0.6.12"},
+        "0.18.1": {"@crate--eyre-0.6.12//": "eyre-0.6.12"},
     })
 
     asserts.true(env, 'name = "vendor-0.18.1"' in out, out)
-    asserts.true(env, '"crate--eyre-0.6.12": "eyre-0.6.12"' in out, out)
+    asserts.true(env, '"@crate--eyre-0.6.12//": "eyre-0.6.12"' in out, out)
 
     # The crate sources live in the build repo; only the closure has to come
     # from repos the module extension created.
@@ -255,8 +255,8 @@ def _pgrx_build_bzl_per_version_test_impl(ctx):
     env = unittest.begin(ctx)
 
     out = _ExtHub._pgrx_build_bzl("monogres", {
-        "0.18.1": {"crate--eyre-0.6.12": "eyre-0.6.12"},
-        "0.19.1": {"crate--eyre-0.6.13": "eyre-0.6.13"},
+        "0.18.1": {"@crate--eyre-0.6.12//": "eyre-0.6.12"},
+        "0.19.1": {"@crate--eyre-0.6.13//": "eyre-0.6.13"},
     })
 
     for pgrx_v in ("0.18.1", "0.19.1"):
@@ -271,8 +271,8 @@ def _pgrx_build_bzl_per_version_test_impl(ctx):
 
     # Each generator resolves its own `pgrx-sql-entity-graph`, so the closures
     # are not shared even where they overlap.
-    asserts.true(env, '"crate--eyre-0.6.12": "eyre-0.6.12"' in out, out)
-    asserts.true(env, '"crate--eyre-0.6.13": "eyre-0.6.13"' in out, out)
+    asserts.true(env, '"@crate--eyre-0.6.12//": "eyre-0.6.12"' in out, out)
+    asserts.true(env, '"@crate--eyre-0.6.13//": "eyre-0.6.13"' in out, out)
 
     return unittest.end(env)
 

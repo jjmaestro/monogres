@@ -1,9 +1,11 @@
 """
 Unit tests for monoext/private/ext/crates/pool.bzl.
 
-Tests `parse_lock` (the `Cargo.lock` reader), `declare` (the dedup that makes
-the pool shared instead of per-extension) and `pinned_version` (the lookup that
-reads an extension's pgrx pin, which selects its SQL generator).
+Tests `parse_lock` (the `Cargo.lock` reader, against the catalog `git.json` that
+pins what a lock cannot), `declare` (the dedup that makes the pool shared
+instead of per-extension), `git_sources` (the cargo source replacement a git
+dependency needs to resolve offline) and `pinned_version` (the lookup that reads
+an extension's pgrx pin, which selects its SQL generator).
 """
 
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
@@ -44,6 +46,29 @@ dependencies = [
  "pgrx",
 ]
 """.format(sha_a = _SHA_A, sha_b = _SHA_B)
+
+_GIT_SOURCE = "git+https://github.com/paradedb/tantivy.git?branch=pdb#2c73e8ca"
+
+_LOCK_GIT = """\
+[[package]]
+name = "tantivy"
+version = "0.26.0"
+source = "{source}"
+
+[[package]]
+name = "tantivy-bitpacker"
+version = "0.9.0"
+source = "{source}"
+""".format(source = _GIT_SOURCE)
+
+_GIT = {
+    _GIT_SOURCE: {
+        "crates": {"tantivy": ".", "tantivy-bitpacker": "bitpacker"},
+        "sha256": _SHA_A,
+        "strip_prefix": "tantivy-2c73e8ca",
+        "url": "https://github.com/paradedb/tantivy/archive/2c73e8ca.tar.gz",
+    },
+}
 
 _LOCK_PGRX = """\
 [[package]]
@@ -122,15 +147,15 @@ def _parse_lock__empty_test_impl(ctx):
 
 parse_lock__empty_test = unittest.make(_parse_lock__empty_test_impl)
 
-def _parse_lock__git_dependency_fails_test_impl(ctx):
-    """A git dep has no checksum in the lock, so it cannot be pinned here."""
+def _parse_lock__unsupported_source_fails_test_impl(ctx):
+    """A dependency is pinned by content or it is not pinned at all."""
     env = unittest.begin(ctx)
 
     lock = """\
 [[package]]
 name = "tantivy"
 version = "0.24.2"
-source = "git+https://github.com/paradedb/tantivy?rev=41d1a5c#41d1a5c"
+source = "sparse+https://crates.example/index/"
 """
 
     res = pool.parse_lock(lock, lock_label = "l.lock", _fail = Mock.fail)
@@ -139,8 +164,162 @@ source = "git+https://github.com/paradedb/tantivy?rev=41d1a5c#41d1a5c"
 
     return unittest.end(env)
 
-parse_lock__git_dependency_fails_test = unittest.make(
-    _parse_lock__git_dependency_fails_test_impl,
+parse_lock__unsupported_source_fails_test = unittest.make(
+    _parse_lock__unsupported_source_fails_test_impl,
+)
+
+def _parse_lock__git_packages_test_impl(ctx):
+    """A git package takes its pin from `git.json`, the lock having none."""
+    env = unittest.begin(ctx)
+
+    crates = pool.parse_lock(_LOCK_GIT, git = _GIT)
+
+    asserts.equals(env, 2, len(crates))
+
+    asserts.equals(env, "tantivy", crates[0].crate)
+    asserts.equals(env, "0.26.0", crates[0].version)
+    asserts.equals(env, _SHA_A, crates[0].sha256)
+    asserts.equals(env, pool.__test__._GIT_ROOT, crates[0].git.subdir)
+    asserts.equals(env, "tantivy-2c73e8ca", crates[0].git.strip_prefix)
+    asserts.equals(env, _GIT_SOURCE, crates[0].git.source)
+
+    # Two crates out of ONE revision: the archive pin is shared, and only the
+    # subdirectory tells them apart.
+    asserts.equals(env, "bitpacker", crates[1].git.subdir)
+    asserts.equals(env, crates[0].sha256, crates[1].sha256)
+
+    return unittest.end(env)
+
+parse_lock__git_packages_test = unittest.make(
+    _parse_lock__git_packages_test_impl,
+)
+
+def _parse_lock__git_unpinned_fails_test_impl(ctx):
+    """A git source the catalog does not pin cannot be fetched by content."""
+    env = unittest.begin(ctx)
+
+    res = pool.parse_lock(_LOCK_GIT, lock_label = "l.lock", _fail = Mock.fail)
+
+    asserts.true(env, "no `git.json` pin" in res, res)
+    asserts.true(env, _GIT_SOURCE in res, res)
+
+    return unittest.end(env)
+
+parse_lock__git_unpinned_fails_test = unittest.make(
+    _parse_lock__git_unpinned_fails_test_impl,
+)
+
+def _parse_lock__git_incomplete_pin_fails_test_impl(ctx):
+    """A pin missing a key would fetch, or vendor, nothing identifiable."""
+    env = unittest.begin(ctx)
+
+    git = {_GIT_SOURCE: dict(_GIT[_GIT_SOURCE])}
+    git[_GIT_SOURCE].pop("sha256")
+
+    res = pool.parse_lock(
+        _LOCK_GIT,
+        lock_label = "l.lock",
+        git = git,
+        _fail = Mock.fail,
+    )
+
+    asserts.true(env, "is missing: sha256" in res, res)
+
+    return unittest.end(env)
+
+parse_lock__git_incomplete_pin_fails_test = unittest.make(
+    _parse_lock__git_incomplete_pin_fails_test_impl,
+)
+
+def _parse_lock__git_unmapped_crate_fails_test_impl(ctx):
+    """A crate name is not a directory name, so every crate needs a mapping."""
+    env = unittest.begin(ctx)
+
+    git = {_GIT_SOURCE: dict(_GIT[_GIT_SOURCE])}
+    git[_GIT_SOURCE]["crates"] = {"tantivy": "."}
+
+    res = pool.parse_lock(
+        _LOCK_GIT,
+        lock_label = "l.lock",
+        git = git,
+        _fail = Mock.fail,
+    )
+
+    asserts.true(env, "no subdirectory for `tantivy-bitpacker`" in res, res)
+
+    return unittest.end(env)
+
+parse_lock__git_unmapped_crate_fails_test = unittest.make(
+    _parse_lock__git_unmapped_crate_fails_test_impl,
+)
+
+def _git_sources__ref_kinds_test_impl(ctx):
+    """One stanza per source, carrying the ref the lock spells, if any."""
+    env = unittest.begin(ctx)
+
+    branch = "git+https://example.com/a.git?branch=pdb#aaaa"
+    rev = "git+https://example.com/b?rev=bbb#bbbbbb"
+    default = "git+https://example.com/c.git#cccc"
+
+    crates = [
+        struct(crate = "a", version = "1", sha256 = "", git = struct(
+            source = source,
+            url = "",
+            strip_prefix = "",
+            subdir = ".",
+        ))
+        for source in [branch, rev, default, branch]
+    ]
+
+    asserts.equals(env, {
+        "git+https://example.com/a.git?branch=pdb": {
+            "branch": "pdb",
+            "git": "https://example.com/a.git",
+        },
+        "git+https://example.com/b?rev=bbb": {
+            "git": "https://example.com/b",
+            "rev": "bbb",
+        },
+        "git+https://example.com/c.git": {
+            "git": "https://example.com/c.git",
+        },
+    }, pool.git_sources(crates))
+
+    return unittest.end(env)
+
+git_sources__ref_kinds_test = unittest.make(_git_sources__ref_kinds_test_impl)
+
+def _git_sources__registry_only_test_impl(ctx):
+    """A crates.io-only closure needs no source replacement at all."""
+    env = unittest.begin(ctx)
+
+    asserts.equals(env, {}, pool.git_sources(pool.parse_lock(_LOCK)))
+
+    return unittest.end(env)
+
+git_sources__registry_only_test = unittest.make(
+    _git_sources__registry_only_test_impl,
+)
+
+def _git_sources__unknown_ref_fails_test_impl(ctx):
+    """An unrecognized query would drop silently out of the stanza."""
+    env = unittest.begin(ctx)
+
+    crates = [struct(crate = "a", version = "1", sha256 = "", git = struct(
+        source = "git+https://example.com/a.git?ref=pdb#aaaa",
+        url = "",
+        strip_prefix = "",
+        subdir = ".",
+    ))]
+
+    res = pool.git_sources(crates, lock_label = "l.lock", _fail = Mock.fail)
+
+    asserts.true(env, "unsupported git source ref: ref=pdb" in res, res)
+
+    return unittest.end(env)
+
+git_sources__unknown_ref_fails_test = unittest.make(
+    _git_sources__unknown_ref_fails_test_impl,
 )
 
 def _parse_lock__missing_checksum_fails_test_impl(ctx):
@@ -179,8 +358,8 @@ def _declare__creates_one_repo_per_crate_test_impl(ctx):
     )
 
     asserts.equals(env, {
-        "crate--ahash-0.8.12": "ahash-0.8.12",
-        "crate--aho-corasick-1.1.4": "aho-corasick-1.1.4",
+        "@crate--ahash-0.8.12//": "ahash-0.8.12",
+        "@crate--aho-corasick-1.1.4//": "aho-corasick-1.1.4",
     }, names)
 
     asserts.equals(env, 2, len(created))
@@ -209,8 +388,12 @@ def _declare__shared_across_locks_test_impl(ctx):
     # the second lock creates nothing new ...
     asserts.equals(env, 2, len(created))
 
-    # ... and still resolves to the same repos
-    asserts.equals(env, {"crate--ahash-0.8.12": first["crate--ahash-0.8.12"]}, second)
+    # ... and still resolves to the same packages
+    asserts.equals(
+        env,
+        {"@crate--ahash-0.8.12//": first["@crate--ahash-0.8.12//"]},
+        second,
+    )
 
     return unittest.end(env)
 
@@ -241,7 +424,7 @@ checksum = "{sha}"
     # resolves the crate by, keeps the version verbatim.
     asserts.equals(
         env,
-        {"crate--toml-0.9.12_spec-1.1.0": "toml-0.9.12+spec-1.1.0"},
+        {"@crate--toml-0.9.12_spec-1.1.0//": "toml-0.9.12+spec-1.1.0"},
         names,
     )
     asserts.equals(env, "0.9.12+spec-1.1.0", created[0]["version"])
@@ -250,6 +433,64 @@ checksum = "{sha}"
 
 declare__build_metadata_version_test = unittest.make(
     _declare__build_metadata_version_test_impl,
+)
+
+def _declare__git_revision_test_impl(ctx):
+    """One repo per revision, and one Bazel package per crate inside it."""
+    env = unittest.begin(ctx)
+
+    created, git_created = [], []
+
+    names = pool.declare(
+        pool.parse_lock(_LOCK_GIT, git = _GIT),
+        {},
+        _crate_repo = _mock_crate_repo(created),
+        _git_crates_repo = _mock_crate_repo(git_created),
+    )
+
+    # The root crate is the repo's own package; a member is a subpackage. Both
+    # keep the `<crate>-<version>` vendor directory a registry crate gets, since
+    # that is what cargo resolves the crate by.
+    asserts.equals(env, {
+        "@crate_git--tantivy-2c73e8ca//": "tantivy-0.26.0",
+        "@crate_git--tantivy-2c73e8ca//bitpacker": "tantivy-bitpacker-0.9.0",
+    }, names)
+
+    # Two crates, ONE fetch: a revision is a whole checkout, and the crates in
+    # it are the subdirectories it hands to the vendor tree.
+    asserts.equals(env, [], created)
+    asserts.equals(env, 1, len(git_created))
+    asserts.equals(env, "crate_git--tantivy-2c73e8ca", git_created[0]["name"])
+    asserts.equals(env, _SHA_A, git_created[0]["sha256"])
+    asserts.equals(env, "tantivy-2c73e8ca", git_created[0]["strip_prefix"])
+    asserts.equals(env, {
+        "tantivy": ".",
+        "tantivy-bitpacker": "bitpacker",
+    }, git_created[0]["crates"])
+
+    return unittest.end(env)
+
+declare__git_revision_test = unittest.make(_declare__git_revision_test_impl)
+
+def _declare__git_revision_shared_test_impl(ctx):
+    """A revision two extensions pin is fetched once, as a crate release is."""
+    env = unittest.begin(ctx)
+
+    git_created, declared = [], {}
+
+    kwargs = dict(_git_crates_repo = _mock_crate_repo(git_created))
+    crates = pool.parse_lock(_LOCK_GIT, git = _GIT)
+
+    first = pool.declare(crates, declared, **kwargs)
+    second = pool.declare(crates, declared, **kwargs)
+
+    asserts.equals(env, 1, len(git_created))
+    asserts.equals(env, first, second)
+
+    return unittest.end(env)
+
+declare__git_revision_shared_test = unittest.make(
+    _declare__git_revision_shared_test_impl,
 )
 
 def _pinned_version__found_test_impl(ctx):
@@ -289,13 +530,22 @@ TEST_SUITE_NAME = "monoext/private/ext/crates/pool"
 TEST_SUITE_TESTS = {
     "declare/build_metadata_version": declare__build_metadata_version_test,
     "declare/creates_one_repo_per_crate": declare__creates_one_repo_per_crate_test,
+    "declare/git_revision": declare__git_revision_test,
+    "declare/git_revision_shared": declare__git_revision_shared_test,
     "declare/shared_across_locks": declare__shared_across_locks_test,
+    "git_sources/ref_kinds": git_sources__ref_kinds_test,
+    "git_sources/registry_only": git_sources__registry_only_test,
+    "git_sources/unknown_ref_fails": git_sources__unknown_ref_fails_test,
     "parse_lock/empty": parse_lock__empty_test,
-    "parse_lock/git_dependency_fails": parse_lock__git_dependency_fails_test,
+    "parse_lock/git_incomplete_pin_fails": parse_lock__git_incomplete_pin_fails_test,
+    "parse_lock/git_packages": parse_lock__git_packages_test,
+    "parse_lock/git_unmapped_crate_fails": parse_lock__git_unmapped_crate_fails_test,
+    "parse_lock/git_unpinned_fails": parse_lock__git_unpinned_fails_test,
     "parse_lock/ignores_dependency_lists": parse_lock__ignores_dependency_lists_test,
     "parse_lock/missing_checksum_fails": parse_lock__missing_checksum_fails_test,
     "parse_lock/registry_packages": parse_lock__registry_packages_test,
     "parse_lock/skips_workspace_members": parse_lock__skips_workspace_members_test,
+    "parse_lock/unsupported_source_fails": parse_lock__unsupported_source_fails_test,
     "pinned_version/found": pinned_version__found_test,
     "pinned_version/missing_fails": pinned_version__missing_fails_test,
 }

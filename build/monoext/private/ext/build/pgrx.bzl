@@ -135,6 +135,12 @@ _COMPILE_EXTENSION = """
                 echo "directory = \\"$$vendor\\""
             }} > "$$CARGO_HOME/config.toml"
 
+            # One more replacement per git source the lock names, resolving out
+            # of that same tree: cargo would otherwise clone the repository,
+            # which an offline sandbox cannot do. Empty (no lines) for a closure
+            # that is entirely crates.io, which is the common case.
+            {git_sources}
+
             # cargo drives `rustc` and `rustfmt` (pgrx-pg-sys formats the
             # bindings it generates) out of its own prefix, by name off PATH.
             #
@@ -386,6 +392,49 @@ _COMPILE_EXTENSION = """
         }}
 """
 
+# The cargo config keys one source-replacement stanza carries, in the order
+# `cargo vendor` writes them. A source names at most one of the three refs.
+_GIT_SOURCE_KEYS = ("git", "branch", "tag", "rev")
+
+# Continuation indent of the rendered stanzas, matching `compile_extension`.
+_GIT_SOURCES_INDENT = 12
+
+def _git_sources_config(git_sources):
+    """Render shell appending `git_sources` to the cargo config.
+
+    Args:
+        git_sources: `{source: {key: value}}` from `pool.git_sources`.
+
+    Returns:
+        A `printf` call writing the stanzas, or `""` for no git sources.
+    """
+    if not git_sources:
+        return ""
+
+    lines = []
+
+    for source in sorted(git_sources):
+        entry = git_sources[source]
+
+        lines.append("")
+        lines.append('[source."%s"]' % source)
+        lines += [
+            '%s = "%s"' % (key, entry[key])
+            for key in _GIT_SOURCE_KEYS
+            if key in entry
+        ]
+        lines.append('replace-with = "vendor"')
+
+    # One single-quoted argument per line, so nothing a URL or a branch name can
+    # hold is read as shell.
+    pad = " " * (_GIT_SOURCES_INDENT + 4)
+    args = ["%s'%s'" % (pad, line) for line in lines]
+
+    return "printf '%s\\n' \\\n{args} \\\n{pad}>> \"$$CARGO_HOME/config.toml\"".format(
+        args = " \\\n".join(args),
+        pad = pad,
+    )
+
 # Prologue staging the two action-time binaries `compile_extension` runs by
 # path: cargo (whose prefix also supplies `rustc` / `rustfmt`) and the SQL
 # generator. Both run in the action itself and ride `tools`.
@@ -409,6 +458,7 @@ def pgrx_build(
         sql_generator,
         ext_version,
         crate_dir = "",
+        git_sources = {},
         build_args = [],
         remap_paths = {},
         debug = False):
@@ -440,6 +490,10 @@ def pgrx_build(
             IS the crate. Set it when the tree is a cargo workspace: the root
             stays the source root, so path dependencies and the workspace
             `[profile.release]` resolve, while cargo runs in the crate.
+        git_sources (dict[str, dict[str, str]]): `{source: {key: value}}` from
+            `pool.git_sources`, the cargo source replacement pointing every git
+            dependency in the lock at the vendor tree. Empty for a closure that
+            is entirely crates.io.
         build_args (list[str]): Extra `cargo build` arguments from
             `metadata.build_args`, templated via `PGRX_ARG_SUBST` (`{pg_config}`
             / `{sysroot}`).
@@ -472,6 +526,7 @@ def pgrx_build(
             # separator and stays empty for a single-crate tree.
             "crate_dir": "/" + crate_dir if crate_dir else "",
             "ext_version": ext_version,
+            "git_sources": _git_sources_config(git_sources),
             "pg_major": base_version["version"].split(".")[0],
             "sql_generator": sql_generator,
             "target_cargo": _RUST_TARGET_CARGO,
