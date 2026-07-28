@@ -408,6 +408,11 @@ def _suite_info_classify(entries):
         # core/contrib suite, which carry neither.
         temp_config = "",
         expecteddir = "",
+        # An external regress suite whose upstream REGRESS_OPTS place the temp
+        # instance INSIDE its own source tree (age: `regress/instance`), which
+        # its tests then name by that relative path. "" for every core/contrib
+        # suite, which take the harness-private instance.
+        temp_instance = "",
         # The shared_preload_libraries an external regress suite needs but ships
         # no .conf for; empty for every core/contrib suite.
         preload = [],
@@ -556,6 +561,12 @@ def _suite_decl_to_info(slug, decl):
         # introspect.
         temp_config = decl.get("temp_config", ""),
         expecteddir = decl.get("expecteddir", ""),
+        # An external regress suite whose upstream REGRESS_OPTS place the temp
+        # instance inside its own source tree (age's `regress/instance`). A test
+        # that names the resulting datadir relatively (age_load copies its CSVs
+        # into `regress/instance/data`, because a backend resolves a relative
+        # path against PGDATA) only resolves if the instance lands there.
+        temp_instance = decl.get("temp_instance", ""),
         # The shared_preload_libraries the suite needs but ships no .conf for.
         preload = decl.get("preload", []),
         # Per-.pl basenames for a TAP suite (its `tests` IS the .pl list); the

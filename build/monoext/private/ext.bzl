@@ -43,11 +43,11 @@ def _synth_ext_test_meta(
 
     - `smoke`: `preload` / `cascade` (the discovered `extensions` default to
       the installed `*.control` names, and may be overridden here).
-    - `test_overrides`: `{slug: {locale, exclusive, temp_config, encoding,
-      dbname, load_extensions, exclude, exclude_tests}}`, folded onto the
-      discovered decl for that slug (`exclude` drops the suite; `exclude_tests`
-      drops individual test / `.pl` names, either as a flat list or a
-      version-spec-keyed map resolved per base version).
+    - `test_overrides`: `{slug: {locale, exclusive, temp_config, temp_instance,
+      encoding, dbname, load_extensions, exclude, exclude_tests}}`, folded onto
+      the discovered decl for that slug (`exclude` drops the suite;
+      `exclude_tests` drops individual test / `.pl` names, either as a flat list
+      or a version-spec-keyed map resolved per base version).
     - `test`: `{version_spec: {slug: decl}}` custom suites (integration or
       manual) that no `installcheck` can produce, merged on top of the
       discovered ones.

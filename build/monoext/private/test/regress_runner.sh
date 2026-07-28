@@ -101,6 +101,7 @@ ext_srcdir=""
 ext_inputdir=""
 ext_temp_config=""
 ext_expecteddir=""
+ext_temp_instance=""
 ext_names=""
 preload_libs=""
 cascade=""
@@ -199,6 +200,10 @@ while [ "$#" -gt 0 ]; do
     # its --inputdir (pg_qualstats: sql under test/, expected/ at the source root).
     --ext-temp-config) ext_temp_config="$2"; shift 2 ;;
     --ext-expecteddir) ext_expecteddir="$2"; shift 2 ;;
+    # External regress: the suite's own --temp-instance, relative to --ext-srcdir
+    # (age's `regress/instance`), for a test that names the resulting datadir by
+    # that relative path.
+    --ext-temp-instance) ext_temp_instance="$2"; shift 2 ;;
     # External smoke lane: the extension name(s) to CREATE EXTENSION (repeatable;
     # the catalog dir is not always the extension name, e.g. pgvector -> vector),
     # the libraries to put in shared_preload_libraries before boot (repeatable,
@@ -848,9 +853,46 @@ if [ -n "$ext_srcdir" ] && [ "$kind" = "regress" ]; then
   done
   ln -sfn "$OUT/results" "$EXTROOT/results"
   run_cwd="$EXTROOT"
+
+  # A suite whose upstream --temp-instance sits inside the source tree (age's
+  # `regress/instance`) has tests that name the datadir by that relative path,
+  # because a backend resolves a relative path against its PGDATA: age_load
+  # copies its CSVs to `regress/instance/data/age_load` and then loads
+  # `age_load/countries.csv`. So put the instance exactly where upstream puts it.
+  # Each mirrored component along the way has to become a real directory first
+  # (nothing can be written through a symlink to the read-only source), with the
+  # source's own entries re-linked beneath it.
+  if [ -n "$ext_temp_instance" ]; then
+    __dir="$EXTROOT"
+    __src="$ext_srcdir"
+    __rest="$ext_temp_instance"
+    while [ -n "$__rest" ]; do
+      __comp="${__rest%%/*}"
+      case "$__rest" in
+        */*) __rest="${__rest#*/}" ;;
+        *) __rest="" ;;
+      esac
+      [ -n "$__comp" ] || continue
+      __src="$__src/$__comp"
+      if [ -L "$__dir/$__comp" ]; then
+        rm -f "$__dir/$__comp"
+        mkdir -p "$__dir/$__comp"
+        for __e in "$__src"/*; do
+          [ -e "$__e" ] || continue
+          ln -sfn "$__e" "$__dir/$__comp/"
+        done
+      else
+        mkdir -p "$__dir/$__comp"
+      fi
+      __dir="$__dir/$__comp"
+    done
+    # pg_regress rmtree()s an existing --temp-instance and recreates it, so
+    # handing it a directory is fine; it is the writable PARENT that matters.
+    ext_temp_instance_abs="$__dir"
+  fi
 fi
 
-TMPINST="$TEST_TMPDIR/inst-${suite:-$kind}"
+TMPINST="${ext_temp_instance_abs:-$TEST_TMPDIR/inst-${suite:-$kind}}"
 # Short socket dir: the runfiles/TEST_TMPDIR paths exceed sun_path (107).
 SOCK="$(mktemp -d /tmp/pgr.XXXXXX 2>/dev/null || mktemp -d)"
 

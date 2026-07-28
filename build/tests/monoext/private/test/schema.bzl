@@ -175,6 +175,33 @@ def _metadata_test_exclude_tests_impl(ctx):
 
 metadata_test_exclude_tests_test = unittest.make(_metadata_test_exclude_tests_impl)
 
+def _metadata_test_temp_instance_impl(ctx):
+    env = unittest.begin(ctx)
+
+    # An external regress decl's `temp_instance` names the suite's own
+    # --temp-instance, relative to the extension source root.
+    groups = _TestSchema.suites_from_metadata_test({
+        "*": {
+            "regress": {
+                "kind": "regress",
+                "temp_instance": "regress/instance",
+                "tests": ["age_load", "index"],
+            },
+        },
+    }, "16.11")
+    asserts.equals(env, "regress/instance", groups["regress"][0].temp_instance)
+
+    # a decl naming none takes the harness-private instance.
+    plain = _TestSchema.suites_from_metadata_test(
+        {"*": {"regress": {"kind": "regress", "tests": ["t"]}}},
+        "16.11",
+    )["regress"][0]
+    asserts.equals(env, "", plain.temp_instance)
+
+    return unittest.end(env)
+
+metadata_test_temp_instance_test = unittest.make(_metadata_test_temp_instance_impl)
+
 def _metadata_test_running_and_pure_isolation_test_impl(ctx):
     env = unittest.begin(ctx)
 
@@ -370,6 +397,7 @@ TEST_SUITE_TESTS = dict(
     metadata_test_running_and_pure_isolation = metadata_test_running_and_pure_isolation_test,
     metadata_test_shapes = metadata_test_shapes_test,
     metadata_test_spec_filter = metadata_test_spec_filter_test,
+    metadata_test_temp_instance = metadata_test_temp_instance_test,
     suites_from_test_suites = suites_from_test_suites_test,
     suites_from_test_suites_tap = suites_from_test_suites_tap_test,
     suites_from_tests_smoke = suites_from_tests_smoke_test,

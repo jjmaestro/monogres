@@ -1526,6 +1526,11 @@ def _ext_regress_test(
     if info.expecteddir:
         args += ["--ext-expecteddir", info.expecteddir]
 
+    # A suite whose upstream --temp-instance sits inside its own source tree, so
+    # a test that names the datadir relatively resolves (see the harness).
+    if info.temp_instance:
+        args += ["--ext-temp-instance", info.temp_instance]
+
     return Star.igen(Star.fn("sh_test", **dict(
         name = target_name,
         srcs = [rlocs.runner],
