@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "sources": {
+    "static.rust-lang.org": {
+      "url": "https://static.rust-lang.org/dist/{component}-{version}-{triple}.tar.xz",
+      "strip_prefix": "{component}-{version}-{triple}/{piece}"
+    }
+  },
+  "matrix": [
+    {
+      "key": "triple",
+      "values": [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-unknown-linux-gnu"
+      ]
+    },
+    {
+      "key": "component",
+      "values": {
+        "cargo": {"piece": "cargo"},
+        "rust-std": {"piece": "rust-std-{triple}"},
+        "rustc": {"piece": "rustc"},
+        "rustfmt": {"piece": "rustfmt-preview"}
+      }
+    }
+  ],
+  "output": "{triple}",
+  "versions": {
+    "1.97.1": {
+      "aarch64-unknown-linux-gnu": {
+        "cargo": "8f70bcaccea5ba4db187c3fd4d64e24592b4e16af513497201f5909d61691dbe",
+        "rust-std": "46aed8e63186350004d8ec6afca798811e6530b514352e5a8a26f3dc4939b3be",
+        "rustc": "b344b81f0cd4c2246c7da8b197fe7a339d7dd02bb15cb69b2524115d9c75224c",
+        "rustfmt": "3dbde15d30794924195ae446f3d2ceb542a131306d22ae7912c7634d414622a8"
+      },
+      "x86_64-unknown-linux-gnu": {
+        "cargo": "e1be5f5ff7f7f80ca506fb65770b759edbdc6d303781ed71c5de8ec8a8394779",
+        "rust-std": "1c1e704ae80126b7de34f72ea2825f7fd01736dec20732faed47374b95282fba",
+        "rustc": "9819d0a32d56bd339585319c80260e332779f5541fd66838ab7e016d6c814819",
+        "rustfmt": "907fe97d6afbde1eca1b34c992c76e1406d422e2e6f137813d382acec7eb4d14"
+      }
+    }
+  },
+  "metadata": {
+    "default_version": "1.97.1"
+  }
+}

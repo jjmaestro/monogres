@@ -1,0 +1,27 @@
+load("//platforms:targets.bzl", "arch_select")
+
+package(default_visibility = ["//visibility:public"])
+
+# Hermetic Rust toolchain for the pgrx extension engine: the upstream component
+# archives (`rustc`, `cargo`, `rust-std`, `rustfmt`), sha256-pinned in
+# `rust.json` and merged by the index `matrix` into one prefix per target
+# triple.
+#
+# Deliberately NOT apt-sourced, unlike `//toolchains/perl` and
+# `//toolchains/python`: those exist to hold a Debian ABI lockstep because they
+# are also RUNTIME dependencies of what we ship. Rust is only ever a build tool
+# here, so the constraint does not apply and we track upstream stable instead.
+
+exports_files(["rust.json"])
+
+# The active exec arch's prefix, i.e. the `matrix` partition of its triple.
+# `cargo` drives `rustc` and reads `rust-std` out of the same tree, so consumers
+# stage `:files` as a unit and run `bin/cargo` from it. Selected on the EXEC
+# arch (where cargo RUNS); the target arch is chosen per build with `--target`.
+alias(
+    name = "files",
+    actual = arch_select({
+        "amd64": "@rust_toolchain//:x86_64-unknown-linux-gnu",
+        "arm64": "@rust_toolchain//:aarch64-unknown-linux-gnu",
+    }),
+)

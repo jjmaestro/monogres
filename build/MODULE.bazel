@@ -229,6 +229,21 @@ register_toolchains(
     dev_dependency = True,
 )
 
+# Hermetic Rust for the pgrx extension engine. Rust is a pure build-time tool
+# (nothing it produces links a distro Rust runtime), so unlike perl/python it is
+# NOT taken from the apt snapshot: there is no ABI lockstep to honour and the
+# apt release lags the versions pgrx requires. One prefix per EXEC arch (where
+# cargo RUNS); the target arch is selected per build with `--target`.
+rust = use_extension(
+    "@download_archives//download/archives:extensions.bzl",
+    "download_archives",
+)
+rust.archives(
+    name = "rust_toolchain",
+    index = "//toolchains/rust:rust.json",
+)
+use_repo(rust, "rust_toolchain")
+
 bison = use_extension(
     "@rules_bison//bison/extensions:bison_repository_ext.bzl",
     "bison_repository_ext",
