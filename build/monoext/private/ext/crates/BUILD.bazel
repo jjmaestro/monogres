@@ -1,7 +1,8 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 
-# The pool is created from the module extension, not from generated
-# `@{name}_ext//...` BUILD files, so nothing here needs public visibility.
+# The pool itself is created from the module extension, but the two macros that
+# consume it (`vendor.bzl`, `cargo_bin.bzl`) are loaded from generated
+# `@{name}_ext//...` BUILD files, so those need to be publicly visible.
 package(default_visibility = [
     "//monoext/private:__subpackages__",
     "//tests/monoext:__subpackages__",
@@ -12,6 +13,14 @@ exports_files([
     "pool.bzl",
 ])
 
+exports_files(
+    [
+        "cargo_bin.bzl",
+        "vendor.bzl",
+    ],
+    visibility = ["//visibility:public"],
+)
+
 bzl_library(
     name = "crate_repo",
     srcs = ["crate_repo.bzl"],
@@ -21,4 +30,16 @@ bzl_library(
     name = "pool",
     srcs = ["pool.bzl"],
     deps = [":crate_repo"],
+)
+
+bzl_library(
+    name = "vendor",
+    srcs = ["vendor.bzl"],
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "cargo_bin",
+    srcs = ["cargo_bin.bzl"],
+    visibility = ["//visibility:public"],
 )

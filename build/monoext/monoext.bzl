@@ -43,7 +43,8 @@ def create_monogres(
         base,
         extensions = None,
         deb_lock = None,
-        build_repo = "monogres"):
+        build_repo = "monogres",
+        crates_declared = None):
     """Creates the full monogres repo ecosystem.
 
     This is the public API for creating monogres-managed repos. It can be called
@@ -60,6 +61,9 @@ def create_monogres(
         deb_lock: Label of the deb lockfile (optional). When set, skips live
             Debian package resolution. See `//apt:apt_lock.bzl`.
         build_repo: Repo containing build rules (default `"monogres"`).
+        crates_declared: The crate pool's `{repo_name: sha256}`, mutated in
+            place. The pool hangs off no hub, so a caller that creates several
+            hubs passes ONE dict and they share it. A fresh dict when omitted.
 
     Returns:
         List of created repo names (for `root_module_direct_deps`).
@@ -76,6 +80,7 @@ def create_monogres(
         ext_name,
         extensions,
         base_flavor = base_data.flavor,
+        crates_declared = crates_declared,
     )
 
     package_groups = [base_data.pkgs_group] + list(ext_data.pkgs_groups)
@@ -137,6 +142,7 @@ def create_monogres(
             base_flavor = base_data.flavor,
             base_data = base_data,
             archs = ARCHS,
+            pgrx_crates = ext_data.pgrx_crates,
             build_repo = build_repo,
         )
         repos.append(ext_name)
@@ -164,6 +170,10 @@ def _monoext_impl(ctx):
     direct_deps = []
     seen = {}
 
+    # The crate pool, shared by every hub this evaluation creates: a crate
+    # release is the same artifact whichever flavor pins it.
+    crates_declared = {}
+
     for module in ctx.modules:
         for tag in module.tags.monogres:
             key = tag_key(tag, exclude = ["name", "deb_lock"])
@@ -188,6 +198,7 @@ def _monoext_impl(ctx):
                 extensions = tag.extensions,
                 deb_lock = tag.deb_lock,
                 build_repo = tag.build_repo,
+                crates_declared = crates_declared,
             )
 
     return ctx.extension_metadata(

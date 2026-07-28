@@ -1,8 +1,9 @@
 """
 Unit tests for monoext/private/ext/crates/pool.bzl.
 
-Tests `parse_lock` (the `Cargo.lock` reader) and `declare` (the dedup that makes
-the pool shared instead of per-extension).
+Tests `parse_lock` (the `Cargo.lock` reader), `declare` (the dedup that makes
+the pool shared instead of per-extension) and `pinned_version` (the lookup that
+reads an extension's pgrx pin, which selects its SQL generator).
 """
 
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
@@ -43,6 +44,21 @@ dependencies = [
  "pgrx",
 ]
 """.format(sha_a = _SHA_A, sha_b = _SHA_B)
+
+_LOCK_PGRX = """\
+[[package]]
+name = "pgrx"
+version = "0.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "{sha_a}"
+
+[[package]]
+name = "graph"
+version = "1.0.0"
+dependencies = [
+ "pgrx",
+]
+""".format(sha_a = _SHA_A)
 
 def _parse_lock__registry_packages_test_impl(ctx):
     """Every crates.io package, in lock order, with its pinned checksum."""
@@ -236,6 +252,38 @@ declare__build_metadata_version_test = unittest.make(
     _declare__build_metadata_version_test_impl,
 )
 
+def _pinned_version__found_test_impl(ctx):
+    """The version a lock pins for one crate, which selects the SQL generator."""
+    env = unittest.begin(ctx)
+
+    crates = pool.parse_lock(_LOCK_PGRX)
+
+    asserts.equals(env, "0.19.1", pool.pinned_version(crates, "pgrx"))
+
+    return unittest.end(env)
+
+pinned_version__found_test = unittest.make(_pinned_version__found_test_impl)
+
+def _pinned_version__missing_fails_test_impl(ctx):
+    """A pgrx extension whose lock pins no pgrx cannot have its SQL emitted."""
+    env = unittest.begin(ctx)
+
+    crates = pool.parse_lock(_LOCK)
+
+    res = pool.pinned_version(
+        crates,
+        "pgrx",
+        lock_label = "l.lock",
+        _fail = Mock.fail,
+    )
+    asserts.true(env, "no `pgrx` in the lock" in res, res)
+
+    return unittest.end(env)
+
+pinned_version__missing_fails_test = unittest.make(
+    _pinned_version__missing_fails_test_impl,
+)
+
 TEST_SUITE_NAME = "monoext/private/ext/crates/pool"
 
 TEST_SUITE_TESTS = {
@@ -248,6 +296,8 @@ TEST_SUITE_TESTS = {
     "parse_lock/missing_checksum_fails": parse_lock__missing_checksum_fails_test,
     "parse_lock/registry_packages": parse_lock__registry_packages_test,
     "parse_lock/skips_workspace_members": parse_lock__skips_workspace_members_test,
+    "pinned_version/found": pinned_version__found_test,
+    "pinned_version/missing_fails": pinned_version__missing_fails_test,
 }
 
 test_suite = lambda: _test_suite(TEST_SUITE_NAME, TEST_SUITE_TESTS)

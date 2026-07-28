@@ -1,4 +1,5 @@
 load("//platforms:targets.bzl", "arch_select")
+load(":rust.bzl", "rust_bin")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -24,4 +25,32 @@ alias(
         "amd64": "@rust_toolchain//:x86_64-unknown-linux-gnu",
         "arm64": "@rust_toolchain//:aarch64-unknown-linux-gnu",
     }),
+)
+
+# `cargo` on its own, so an action can name it with `execpath` and reach the
+# rest of the prefix from there. Stage `:files` alongside it.
+rust_bin(
+    name = "cargo",
+    bin = "cargo",
+    toolchain = ":files",
+)
+
+# The same two targets again, for a consumer that needs the TARGET arch's tree
+# rather than the EXEC arch's. `arch_select` resolves per configuration, so
+# these are only distinct labels, not distinct definitions: what separates them
+# is that a consumer puts these in `srcs` (TARGET) and the pair above in `tools`
+# (EXEC). Two labels rather than one because `$(execpath)` could not otherwise
+# tell which configuration's path is being asked for.
+#
+# Cross-compiling is what needs this. rustup ships one `rust-std` per prefix,
+# for that prefix's own arch, so the EXEC tree cannot compile TARGET code: an
+# action has to borrow `lib/rustlib/<target-triple>` from here.
+alias(
+    name = "target_files",
+    actual = ":files",
+)
+
+alias(
+    name = "target_cargo",
+    actual = ":cargo",
 )

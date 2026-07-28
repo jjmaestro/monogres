@@ -1,0 +1,29 @@
+package(default_visibility = ["//visibility:public"])
+
+# The pgrx SQL generator, built against pgrx 0.18.1.
+#
+# One package per pgrx version, because this generator is part of a pgrx release
+# rather than something we get to version ourselves. `.pgrxsc` is a bespoke
+# binary wire format between an encoder that pgrx's macros expand INTO the
+# extension and the decoder in that same `pgrx-sql-entity-graph` release, and
+# the SQL emitter behind it changes between releases as well. An extension is
+# compiled against the pgrx its own `Cargo.lock` pins, so its SQL has to be
+# emitted by the generator built against that same pgrx.
+# `//monoext/private:ext.bzl` reads the pin out of the lock and picks the
+# matching package by it.
+#
+# The source only touches APIs that have held still across releases, so copies
+# for two pgrx versions may well come out identical. They stay separate copies
+# anyway: what would hold them together is pgrx's API, which is not ours to keep
+# stable.
+
+# The manifest is named on its own so an action can locate the crate root from
+# its `execpath`; `cargo_bin` copies that directory and builds in the copy.
+exports_files(["Cargo.toml"])
+
+# Everything else the build reads: the sources and the `Cargo.lock` that pins
+# the closure, both for the crate pool and for the build's own `--locked`.
+filegroup(
+    name = "srcs",
+    srcs = ["Cargo.lock"] + glob(["src/**"]),
+)

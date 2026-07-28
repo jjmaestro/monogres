@@ -13,7 +13,17 @@ exports_files(
     ["index.json"] + glob([
         "**/repo.json",
         "*/introspect/*.json",
-    ]),
+    ]) + glob(
+        [
+            # A pgrx extension's committed `Cargo.lock`, per version: read at
+            # module-extension time to declare the crate pool, and staged as a
+            # build input so `--locked` holds the build to the same lock.
+            "*/cargo/*/Cargo.lock",
+        ],
+        # Its own glob, because this one is empty in a catalog that carries no
+        # pgrx extension, and the workspace disallows an empty glob by default.
+        allow_empty = True,
+    ),
 )
 
 _EXT_REPO_JSONS = glob(["*/repo.json"])

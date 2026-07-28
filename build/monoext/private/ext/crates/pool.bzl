@@ -97,6 +97,30 @@ def _parse_lock(content, lock_label = "Cargo.lock", _fail = fail):
 def _repo_name(crate):
     return repo_names.crate(crate.crate, crate.version)
 
+def _pinned_version(crates, crate_name, lock_label = "Cargo.lock", _fail = fail):
+    """The version `crates` pins for one crate.
+
+    Used to read a pgrx extension's `pgrx` pin, which decides which SQL
+    generator can read the `.pgrxsc` section it will emit. Taken from the lock
+    rather than from catalog metadata so the two cannot disagree: the lock is
+    also what the build is held to with `--locked`.
+
+    Args:
+        crates: `struct(crate, version, sha256)` list, from `parse_lock`.
+        crate_name: The crate to look up.
+        lock_label: Where the lock came from, for error messages.
+        _fail: Fail function for errors.
+
+    Returns:
+        The pinned version string.
+    """
+    for crate in crates:
+        if crate.crate == crate_name:
+            return crate.version
+
+    msg = "{}: no `{}` in the lock"
+    return _fail(msg.format(lock_label, crate_name))
+
 def _declare(crates, declared, _crate_repo = crate_repo):
     """Create the pool repos for `crates` that are not declared yet.
 
@@ -145,6 +169,7 @@ def _declare(crates, declared, _crate_repo = crate_repo):
 pool = struct(
     parse_lock = _parse_lock,
     declare = _declare,
+    pinned_version = _pinned_version,
     repo_name = _repo_name,
     __test__ = struct(
         _REGISTRY = _REGISTRY,

@@ -26,6 +26,13 @@ CMAKE_ARG_SUBST = {
     "{pg_config}": "$$abs_pg_install_dir/bin/pg_config",
 }
 
+# pgrx (cargo) tokens: resolve to `compile_extension()` locals in `pgrx.bzl`
+# (`abs_pg_install_dir`, `sysroot_dir`), the same two the PGXS path exposes.
+PGRX_ARG_SUBST = {
+    "{pg_config}": "$$abs_pg_install_dir/bin/pg_config",
+    "{sysroot}": "$$sysroot_dir",
+}
+
 def render_build_args(build_args, subst, indent):
     """Renders `build_args` as the body of a bash array (or empty string).
 

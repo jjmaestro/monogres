@@ -217,9 +217,74 @@ root_all_bzl_hub_name_is_baked_test = unittest.make(
     _root_all_bzl_hub_name_is_baked_test_impl,
 )
 
+def _pgrx_build_bzl_test_impl(ctx):
+    """`_pgrx/BUILD.bazel`: the generator, vendored off the crate pool."""
+    env = unittest.begin(ctx)
+
+    out = _ExtHub._pgrx_build_bzl("monogres", {
+        "0.18.1": {"crate--eyre-0.6.12": "eyre-0.6.12"},
+    })
+
+    asserts.true(env, 'name = "vendor-0.18.1"' in out, out)
+    asserts.true(env, '"crate--eyre-0.6.12": "eyre-0.6.12"' in out, out)
+
+    # The crate sources live in the build repo; only the closure has to come
+    # from repos the module extension created.
+    asserts.true(
+        env,
+        'manifest = "@monogres//tools/pgrxsc_sql/0.18.1:Cargo.toml"' in out,
+        out,
+    )
+    asserts.true(env, 'vendor_tar = ":vendor-0.18.1.tar"' in out, out)
+
+    # cargo names the binary after the crate; only the target is versioned.
+    asserts.true(env, 'name = "pgrxsc-sql-0.18.1"' in out, out)
+    asserts.true(env, 'bin = "pgrxsc-sql"' in out, out)
+
+    return unittest.end(env)
+
+pgrx_build_bzl_test = unittest.make(_pgrx_build_bzl_test_impl)
+
+def _pgrx_build_bzl_per_version_test_impl(ctx):
+    """Two pinned pgrx versions render two generators, each with its own tree.
+
+    The `.pgrxsc` wire format and the SQL emitter behind it both belong to a
+    pgrx release, so an extension's SQL can only be emitted by the generator
+    built against the pgrx that extension was compiled against.
+    """
+    env = unittest.begin(ctx)
+
+    out = _ExtHub._pgrx_build_bzl("monogres", {
+        "0.18.1": {"crate--eyre-0.6.12": "eyre-0.6.12"},
+        "0.19.1": {"crate--eyre-0.6.13": "eyre-0.6.13"},
+    })
+
+    for pgrx_v in ("0.18.1", "0.19.1"):
+        asserts.true(env, 'name = "vendor-%s"' % pgrx_v in out, out)
+        asserts.true(env, 'name = "pgrxsc-sql-%s"' % pgrx_v in out, out)
+        asserts.true(
+            env,
+            'manifest = "@monogres//tools/pgrxsc_sql/%s:Cargo.toml"' % pgrx_v in out,
+            out,
+        )
+        asserts.true(env, 'vendor_tar = ":vendor-%s.tar"' % pgrx_v in out, out)
+
+    # Each generator resolves its own `pgrx-sql-entity-graph`, so the closures
+    # are not shared even where they overlap.
+    asserts.true(env, '"crate--eyre-0.6.12": "eyre-0.6.12"' in out, out)
+    asserts.true(env, '"crate--eyre-0.6.13": "eyre-0.6.13"' in out, out)
+
+    return unittest.end(env)
+
+pgrx_build_bzl_per_version_test = unittest.make(
+    _pgrx_build_bzl_per_version_test_impl,
+)
+
 TEST_SUITE_NAME = "hub"
 
 TEST_SUITE_TESTS = dict(
+    pgrx_build_bzl = pgrx_build_bzl_test,
+    pgrx_build_bzl_per_version = pgrx_build_bzl_per_version_test,
     root_all_bzl_contribs_only = root_all_bzl_contribs_only_test,
     root_all_bzl_empty = root_all_bzl_empty_test,
     root_all_bzl_externals_only = root_all_bzl_externals_only_test,

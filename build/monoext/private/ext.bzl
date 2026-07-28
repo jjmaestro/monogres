@@ -15,7 +15,21 @@ load("//monoext/private:repo_names.bzl", "bind", "repo_names")
 load("//monoext/private/ext:compat.bzl", "is_compatible")
 load("//monoext/private/ext:hub.bzl", "ext_repo")
 load("//monoext/private/ext:schema.bzl", _ExtSchema = "schema")
+load("//monoext/private/ext/crates:pool.bzl", "pool")
 load("//monoext/private/test:introspect.bzl", "introspect_payload")
+
+# The SQL generator a pgrx extension build runs, as a `Cargo.lock` per pgrx
+# version: the `.pgrxsc` decoder and the SQL emitter behind it both live in
+# `pgrx-sql-entity-graph`, so the generator has to be built against the same
+# pgrx release the extension was. See
+# `//tools/pgrxsc_sql/<version>:BUILD.bazel`.
+#
+# Each of these locks goes through the same crate pool as the extensions', so
+# their closures are declared once, alongside theirs, sharing whatever overlaps.
+_PGRX_TOOL_LOCK = "//tools/pgrxsc_sql/{}:Cargo.lock"
+
+# The crate whose pin in an extension's own lock selects that generator.
+_PGRX_CRATE = "pgrx"
 
 def _synth_ext_test_meta(
         ctx,
@@ -147,7 +161,97 @@ def _synth_ext_test_meta(
 
     return result, introspect_versions
 
-def create_ext_src(ctx, hub_name, catalog_label, base_flavor = "postgres"):
+def _read_cargo(ctx, catalog_label, ext_name, ext_versions, declared):
+    """Read a pgrx extension's committed locks into the shared crate pool.
+
+    One `Cargo.lock` per extension version, committed to the catalog rather than
+    taken from the extension's source archive, so declaring the crate repos does
+    not download the extension and the hub stays lazy (the same trade the
+    committed introspect JSONs make for the base hub).
+
+    Args:
+        ctx: Module extension context.
+        catalog_label: Label of the catalog `index.json`.
+        ext_name: Extension name.
+        ext_versions: The extension's versions.
+        declared: The pool's `{repo_name: sha256}`, mutated in place.
+
+    Returns:
+        `{ext_version: {"lock": label, "crates": {repo_name: dir_name}, "pgrx":
+        version}}`, where `pgrx` is the version the lock pins and so the
+        generator that can read the SQL section this version will emit.
+    """
+    cargo = {}
+
+    for ext_v in ext_versions:
+        label = catalog_label.relative(
+            ":%s/cargo/%s/Cargo.lock" % (ext_name, ext_v),
+        )
+        ctx.watch(label)
+
+        if not ctx.path(label).exists:
+            fail((
+                "%s %s declares build_system pgrx but has no lock at %s. " +
+                "A pgrx build resolves its crates from the lock alone, so " +
+                "the lock is what the catalog has to carry."
+            ) % (ext_name, ext_v, label))
+
+        crates = pool.parse_lock(ctx.read(label), lock_label = str(label))
+
+        cargo[ext_v] = {
+            "crates": pool.declare(crates, declared),
+            "lock": str(label),
+            "pgrx": pool.pinned_version(
+                crates,
+                _PGRX_CRATE,
+                lock_label = str(label),
+            ),
+        }
+
+    return cargo
+
+def _read_pgrx_tools(ctx, pgrx_versions, declared):
+    """Read the SQL generator locks for `pgrx_versions` into the crate pool.
+
+    One generator per pgrx version any pgrx extension pins, and only for the
+    versions actually pinned: a catalog with no pgrx extension builds no
+    generator at all, and adding one pgrx version does not build the others'.
+
+    Args:
+        ctx: Module extension context.
+        pgrx_versions: The pgrx versions the catalog's extensions pin.
+        declared: The pool's `{repo_name: sha256}`, mutated in place.
+
+    Returns:
+        `{pgrx_version: {repo_name: dir_name}}`, the closure per generator.
+    """
+    crates = {}
+
+    for pgrx_v in sorted(pgrx_versions):
+        lock = Label(_PGRX_TOOL_LOCK.format(pgrx_v))
+        ctx.watch(lock)
+
+        if not ctx.path(lock).exists:
+            fail((
+                "no pgrx SQL generator for pgrx %s (looked for %s). An " +
+                "extension pinning that pgrx emits a `.pgrxsc` section only " +
+                "the generator built against the same release can read, so " +
+                "adding the pin means adding the generator package too."
+            ) % (pgrx_v, lock))
+
+        crates[pgrx_v] = pool.declare(
+            pool.parse_lock(ctx.read(lock), lock_label = str(lock)),
+            declared,
+        )
+
+    return crates
+
+def create_ext_src(
+        ctx,
+        hub_name,
+        catalog_label,
+        base_flavor = "postgres",
+        crates_declared = None):
     """Read extension catalog, create per-ext source repos, return ExtData.
 
     Reads the catalog `index.json` and each extension's `repo.json`. For
@@ -164,12 +268,19 @@ def create_ext_src(ctx, hub_name, catalog_label, base_flavor = "postgres"):
         catalog_label: Label of the catalog `index.json`, or `None`.
         base_flavor: Base flavor identity (e.g. "postgres", "ivorysql"). Used to
             filter contrib metadata to the flavor's slice.
+        crates_declared: The crate pool's `{repo_name: sha256}`, mutated in
+            place. Hub-independent, so callers pass ONE for the whole module
+            extension evaluation and every flavor shares the pool. A fresh dict
+            when omitted, which is right for a single-hub caller.
 
     Returns:
         An `ExtData` struct (see `//monoext/private/ext:schema.bzl`).
     """
     if not catalog_label:
         return _ExtSchema.ExtData.new()
+
+    if crates_declared == None:
+        crates_declared = {}
 
     catalog = json.decode(ctx.read(catalog_label))
     extensions = {}
@@ -211,6 +322,19 @@ def create_ext_src(ctx, hub_name, catalog_label, base_flavor = "postgres"):
             },
         )
 
+        # A pgrx extension resolves its Rust dependency closure from a committed
+        # lock, which becomes crate pool repos shared with every other pgrx
+        # extension (and with the SQL generator declared below).
+        cargo = {}
+        if metadata.get("build_system") == "pgrx":
+            cargo = _read_cargo(
+                ctx,
+                catalog_label,
+                ext_name,
+                ext_versions,
+                crates_declared,
+            )
+
         f = bind(src = source_repo)
         extensions[ext_name] = _ExtSchema.ExtensionEntry.new(
             ext_versions = ext_versions,
@@ -219,6 +343,7 @@ def create_ext_src(ctx, hub_name, catalog_label, base_flavor = "postgres"):
             metadata = metadata,
             source_repo = source_repo,
             introspect_versions = introspect_versions,
+            cargo = cargo,
         )
 
     for ext_name in sorted(catalog.get("contrib", [])):
@@ -257,9 +382,22 @@ def create_ext_src(ctx, hub_name, catalog_label, base_flavor = "postgres"):
         if not ext.is_contrib
     ]
 
+    # A generator is only built when something needs it, so its closure is only
+    # declared then too: one per pgrx version the catalog's extensions pin.
+    pgrx_crates = _read_pgrx_tools(
+        ctx,
+        {
+            version["pgrx"]: None
+            for ext in extensions.values()
+            for version in ext.cargo.values()
+        },
+        crates_declared,
+    )
+
     return _ExtSchema.ExtData.new(
         pkgs_groups = pkgs_groups,
         extensions = extensions,
+        pgrx_crates = pgrx_crates,
     )
 
 def _build_external(extensions, versions_deps, base_versions, base_flavor, hub_name):
@@ -304,6 +442,7 @@ def _build_external(extensions, versions_deps, base_versions, base_flavor, hub_n
             build_system = metadata.get("build_system", "pgxs"),
             build_args = metadata.get("build_args", []),
             remap_paths = metadata.get("remap_paths", {}),
+            cargo = ext.cargo,
         )
         entries[name] = json.encode(entry)
 
@@ -379,6 +518,7 @@ def create_ext(
         base_flavor,
         base_data,
         archs,
+        pgrx_crates = {},
         build_repo = "monogres"):
     """Build entries and create the extensions hub repo.
 
@@ -402,6 +542,10 @@ def create_ext(
             suites the extensions hub now renders under
             `contrib/<name>/<v>/tests`.
         archs: List of architecture names for per-arch targets.
+        pgrx_crates: `{pgrx_version: {repo_name: dir_name}}` from
+            `create_ext_src`: the crate pool repos backing one SQL generator per
+            pgrx version the extensions pin. Empty when no extension is pgrx, in
+            which case the hub renders no generator at all.
         build_repo: Repo containing the build rules (default `"monogres"`).
     """
     external = {n: e for n, e in extensions.items() if not e.is_contrib}
@@ -462,6 +606,7 @@ def create_ext(
         base_flavor = base_flavor,
         locks = locks,
         build_repo = build_repo,
+        pgrx_crates = json.encode(pgrx_crates),
         base_versions_deps = json.encode(base_versions_deps),
         external_test_meta = json.encode(external_test_meta),
         ext_introspect_manifest = json.encode(ext_introspect_manifest),

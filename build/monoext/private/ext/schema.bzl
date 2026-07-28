@@ -26,20 +26,25 @@ constructed; see `ext/hub.bzl::_impl()`.
 load("//monoext/private:repo_names.bzl", "bind")
 load("//monoext/private/pkgs:schema.bzl", _PkgsSchema = "schema")
 
-def _ext_data_new(pkgs_groups = [], extensions = {}):
+def _ext_data_new(pkgs_groups = [], extensions = {}, pgrx_crates = {}):
     """Constructs an `ExtData`.
 
     Args:
         pkgs_groups: List of `pkgs_group` structs (non-contribs only; contribs
             have no external deb deps).
         extensions: `{ext_name: ExtensionEntry}` dict.
+        pgrx_crates: `{pgrx_version: {repo_name: dir_name}}`, the crate pool
+            repos backing one pgrx SQL generator per pgrx version the catalog's
+            extensions pin. Empty when no extension declares `build_system`
+            `"pgrx"`, in which case no generator is built at all.
 
     Returns:
-        A `struct(pkgs_groups, extensions)`.
+        A `struct(pkgs_groups, extensions, pgrx_crates)`.
     """
     return struct(
         pkgs_groups = pkgs_groups,
         extensions = extensions,
+        pgrx_crates = pgrx_crates,
     )
 
 def _extension_entry_new(
@@ -48,7 +53,8 @@ def _extension_entry_new(
         metadata,
         source_repo = None,
         lock = None,
-        introspect_versions = []):
+        introspect_versions = [],
+        cargo = {}):
     """Constructs an `ExtensionEntry`.
 
     Args:
@@ -63,6 +69,11 @@ def _extension_entry_new(
             committed test introspect (`introspect/<ext>~<ver>.json`); drives
             the regen + freshness manifest. Empty for contrib and for external
             extensions not yet migrated onto discovery.
+        cargo: `{ext_version: {"lock": label, "crates": {repo_name: dir},
+            "pgrx": version}}` for a pgrx extension: the catalog `Cargo.lock`
+            its closure was read from, the crate pool repos that closure
+            resolved to, and the pgrx version the lock pins (which selects the
+            SQL generator). Empty for contrib and for every other build system.
 
     Returns:
         An `ExtensionEntry` struct.
@@ -74,6 +85,7 @@ def _extension_entry_new(
         source_repo = source_repo,
         lock = lock,
         introspect_versions = introspect_versions,
+        cargo = cargo,
     )
 
 def _ext_source_init(dir, files, version):
@@ -221,12 +233,19 @@ def _ext_external_entry_init(
         lock = None,
         build_system = "pgxs",
         build_args = [],
-        remap_paths = {}):
+        remap_paths = {},
+        cargo = {}):
     """Raw initializer for external entries; sets `is_contrib = False`.
 
+    `cargo` is `{ext_version: {"lock": label, "crates": {repo_name: dir},
+    "pgrx": version}}` for a `"pgrx"` extension: the catalog `Cargo.lock` the
+    build is held to, the crate pool repos its closure resolved to, and the pgrx
+    version it pins (which selects the SQL generator). Empty for every other
+    build system.
+
     `build_system` selects the build rule the hub renders for this extension
-    (`"pgxs"`, the default, or `"cmake"`). `build_args` is the extension's list
-    of extra build flags (PGXS/autoconf `configure` args, or CMake `-D` cache
+    (`"pgxs"`, the default, `"cmake"` or `"pgrx"`). `build_args` is the list of
+    extra build flags (PGXS/autoconf `configure` args, or CMake `-D` cache
     entries), templated with `{pg_config}` / `{sysroot}` resolved to action-time
     sysroot paths by the build rule. `remap_paths` is a `{file: {from: to}}` map
     whose `from`->`to` substitutions the build applies to the sysroot's
@@ -247,6 +266,7 @@ def _ext_external_entry_init(
         build_system = build_system,
         build_args = build_args,
         remap_paths = remap_paths,
+        cargo = cargo,
     )
 
 def _ext_external_entry_new(
@@ -260,7 +280,8 @@ def _ext_external_entry_new(
         base_flavor = "postgres",
         build_system = "pgxs",
         build_args = [],
-        remap_paths = {}):
+        remap_paths = {},
+        cargo = {}):
     """Constructs an `ExtExternalEntry`.
 
     Derives deps, sources, and targets from primitive inputs. The
@@ -277,11 +298,15 @@ def _ext_external_entry_new(
             pool.
         lock: Decoded lockfile contents, or `None` (default at encode time).
         base_flavor: Base flavor identity (e.g. "postgres", "ivorysql").
-        build_system: Build rule selector (`"pgxs"` default, or `"cmake"`).
-        build_args: Extra build flags (autoconf/PGXS `configure` args or CMake
-            `-D` cache entries), templated to sysroot paths by the build rule.
+        build_system: Build rule selector (`"pgxs"` default, `"cmake"` or
+            `"pgrx"`).
+        build_args: Extra build flags (autoconf/PGXS `configure` args, CMake
+            `-D` cache entries or `cargo build` arguments), templated to sysroot
+            paths by the build rule.
         remap_paths: `{file: {from: to}}` substitutions the build applies to the
             sysroot's `usr/bin/<file>` scripts.
+        cargo: `{ext_version: {"lock": label, "crates": {repo_name: dir},
+            "pgrx": version}}` for a pgrx extension; empty otherwise.
 
     Returns:
         An `ExtExternalEntry` struct.
@@ -334,6 +359,7 @@ def _ext_external_entry_new(
         build_system = build_system,
         build_args = build_args,
         remap_paths = remap_paths,
+        cargo = cargo,
     )
 
 def _ext_external_entry_from_dict(d):
@@ -363,6 +389,7 @@ def _ext_external_entry_from_dict(d):
         build_system = d.get("build_system", "pgxs"),
         build_args = d.get("build_args", []),
         remap_paths = d.get("remap_paths", {}),
+        cargo = d.get("cargo", {}),
     )
 
 def _ext_contrib_entry_init(ext_versions, metadata, name, targets = []):

@@ -121,6 +121,37 @@ def _version_build_test_impl(ctx):
 
 version_build_test = unittest.make(_version_build_test_impl)
 
+def _version_build_pgrx_test_impl(ctx):
+    """A pgrx version also gets the vendor tree, keyed pool repo -> dir."""
+    env = unittest.begin(ctx)
+
+    out = _External._version_build(
+        "pg_jsonschema",
+        "0.3.4",
+        "",
+        build_repo = "monogres",
+        crates = {"crate--toml-0.9.12_spec-1.1.0": "toml-0.9.12+spec-1.1.0"},
+    )
+
+    asserts.true(
+        env,
+        '"@monogres//monoext/private/ext/crates:vendor.bzl"' in out,
+        out,
+    )
+    asserts.true(env, 'name = "vendor"' in out, out)
+
+    # The pool repo spells `+` as `_`; the vendor directory keeps the real
+    # version, which is what cargo resolves against.
+    asserts.true(
+        env,
+        '"crate--toml-0.9.12_spec-1.1.0": "toml-0.9.12+spec-1.1.0"' in out,
+        out,
+    )
+
+    return unittest.end(env)
+
+version_build_pgrx_test = unittest.make(_version_build_pgrx_test_impl)
+
 # --- src_build -------------------------------------------------------------
 
 def _src_build_test_impl(ctx):
@@ -265,6 +296,51 @@ def _pg_build_no_sysroot_test_impl(ctx):
 
 pg_build_no_sysroot_test = unittest.make(_pg_build_no_sysroot_test_impl)
 
+def _pg_build_pgrx_test_impl(ctx):
+    """`build_system = "pgrx"` renders pgrx_build against vendor + generator."""
+    env = unittest.begin(ctx)
+
+    lock = "//catalog/extensions:pg_jsonschema/cargo/0.3.4/Cargo.lock"
+    out = _External._pg_build(
+        build_repo = "monogres",
+        source_repo = "pg_ext_src--pg_jsonschema",
+        version = "0.3.4",
+        base_v = "18.1",
+        base_hub_name = "pg",
+        bt_sysroot = None,
+        base_sysroot = "//_base/18.1:sysroot_tar",
+        base_flavor = "postgres",
+        build_system = "pgrx",
+        ext_name = "pg_jsonschema",
+        cargo = {"crates": {}, "lock": lock, "pgrx": "0.18.1"},
+    )
+
+    asserts.true(
+        env,
+        '"@monogres//monoext/private/ext/build:pgrx.bzl", "pgrx_build"' in out,
+        out,
+    )
+
+    # The vendor tree sits one package above the per-base-version build, so the
+    # three majors share the one closure.
+    asserts.true(
+        env,
+        'vendor_tar = "//pg_jsonschema/0.3.4:vendor.tar"' in out,
+        out,
+    )
+    asserts.true(env, 'cargo_lock = "%s"' % lock in out, out)
+
+    # The generator built against the pgrx this version's lock pins: that pgrx
+    # release owns both the `.pgrxsc` format and the SQL emitter reading it.
+    asserts.true(env, 'sql_generator = "//_pgrx:pgrxsc-sql-0.18.1"' in out, out)
+
+    # The crate version pgrx spells `@CARGO_VERSION@`, not the base version.
+    asserts.true(env, 'ext_version = "0.3.4"' in out, out)
+
+    return unittest.end(env)
+
+pg_build_pgrx_test = unittest.make(_pg_build_pgrx_test_impl)
+
 # --- deps_kind_build -------------------------------------------------------
 
 def _deps_kind_build_test_impl(ctx):
@@ -297,10 +373,12 @@ TEST_SUITE_TESTS = dict(
     pg_build = pg_build_test,
     pg_build_ivorysql_flavor = pg_build_ivorysql_flavor_test,
     pg_build_no_sysroot = pg_build_no_sysroot_test,
+    pg_build_pgrx = pg_build_pgrx_test,
     repo_bzl = repo_bzl_test,
     src_build = src_build_test,
     src_leaf_build = src_leaf_build_test,
     version_build = version_build_test,
+    version_build_pgrx = version_build_pgrx_test,
 )
 
 test_suite = lambda: _test_suite(TEST_SUITE_NAME, TEST_SUITE_TESTS)
