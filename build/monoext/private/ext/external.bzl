@@ -155,6 +155,7 @@ def _pg_build(
         build_system = "pgxs",
         build_args = [],
         remap_paths = {},
+        crate_dir = "",
         ext_name = None,
         cargo = None):
     """Render {name}/{version}/{base_version}/BUILD.bazel for the extension build.
@@ -182,8 +183,10 @@ def _pg_build(
     follows that convention, so callers only need to pass it explicitly if a
     flavor's install prefix diverges from its name.
 
-    `ext_name` and `cargo` are the pgrx path's: the extension name (to reach its
-    vendor tree) and this version's `{"lock", "crates", "pgrx"}` entry.
+    `ext_name`, `cargo` and `crate_dir` are the pgrx path's: the extension name
+    (to reach its vendor tree), this version's `{"lock", "crates", "pgrx"}`
+    entry, and the crate's directory below the source root when the source tree
+    is a cargo workspace whose root the crate is not.
     """
     prefix_distro = base_prefix_distro or "/" + base_flavor
     f = bind(
@@ -215,7 +218,7 @@ def _pg_build(
         # The vendor tree sits one package up, shared by every base version; the
         # SQL generator sits in `_pgrx`, shared by every extension pinning the
         # same pgrx (and only those: it is that release's decoder and emitter).
-        build_call = _pgrx_build(
+        pgrx_args = dict(
             vendor_tar = f("//{ext}/{v}:vendor.tar"),
             cargo_lock = cargo["lock"],
             sql_generator = "%s:%s" % (
@@ -223,8 +226,15 @@ def _pg_build(
                 pgrx_generator_name(cargo["pgrx"]),
             ),
             ext_version = version,
-            **build_system_args
         )
+
+        # Only a cargo workspace names one, so the single-crate case renders the
+        # same call it did before workspaces were supported at all.
+        if crate_dir:
+            pgrx_args["crate_dir"] = crate_dir
+
+        pgrx_args.update(build_system_args)
+        build_call = _pgrx_build(**pgrx_args)
     else:
         fail("Invalid build system: %s" % build_system)
 
@@ -383,6 +393,7 @@ def write_extension_package(rctx, entry, name, archs):
                     build_system = entry.build_system,
                     build_args = entry.build_args,
                     remap_paths = entry.remap_paths,
+                    crate_dir = entry.crate_dir,
                     ext_name = name,
                     cargo = cargo,
                 ),

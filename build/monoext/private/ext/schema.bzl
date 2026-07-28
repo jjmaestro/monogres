@@ -234,6 +234,7 @@ def _ext_external_entry_init(
         build_system = "pgxs",
         build_args = [],
         remap_paths = {},
+        crate_dir = "",
         cargo = {}):
     """Raw initializer for external entries; sets `is_contrib = False`.
 
@@ -250,8 +251,11 @@ def _ext_external_entry_init(
     sysroot paths by the build rule. `remap_paths` is a `{file: {from: to}}` map
     whose `from`->`to` substitutions the build applies to the sysroot's
     `usr/bin/<file>` scripts (re-rooting baked paths a build step reads
-    verbatim). All come from the extension's `repo.json` `metadata` and are
-    extension-wide (not per-version).
+    verbatim). `crate_dir` (the pgrx path only) is the extension crate's
+    directory below the source root, for a cargo WORKSPACE whose root has to
+    stay the source root so path dependencies and the workspace profile resolve;
+    empty means the crate IS the source root. All come from the extension's
+    `repo.json` `metadata` and are extension-wide (not per-version).
     """
     return struct(
         name = name,
@@ -266,6 +270,7 @@ def _ext_external_entry_init(
         build_system = build_system,
         build_args = build_args,
         remap_paths = remap_paths,
+        crate_dir = crate_dir,
         cargo = cargo,
     )
 
@@ -281,6 +286,7 @@ def _ext_external_entry_new(
         build_system = "pgxs",
         build_args = [],
         remap_paths = {},
+        crate_dir = "",
         cargo = {}):
     """Constructs an `ExtExternalEntry`.
 
@@ -305,6 +311,8 @@ def _ext_external_entry_new(
             paths by the build rule.
         remap_paths: `{file: {from: to}}` substitutions the build applies to the
             sysroot's `usr/bin/<file>` scripts.
+        crate_dir: The pgrx extension crate's directory below the source root,
+            for a cargo workspace; empty when the crate is the source root.
         cargo: `{ext_version: {"lock": label, "crates": {repo_name: dir},
             "pgrx": version}}` for a pgrx extension; empty otherwise.
 
@@ -359,6 +367,7 @@ def _ext_external_entry_new(
         build_system = build_system,
         build_args = build_args,
         remap_paths = remap_paths,
+        crate_dir = crate_dir,
         cargo = cargo,
     )
 
@@ -389,6 +398,7 @@ def _ext_external_entry_from_dict(d):
         build_system = d.get("build_system", "pgxs"),
         build_args = d.get("build_args", []),
         remap_paths = d.get("remap_paths", {}),
+        crate_dir = d.get("crate_dir", ""),
         cargo = d.get("cargo", {}),
     )
 

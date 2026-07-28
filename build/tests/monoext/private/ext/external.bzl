@@ -337,9 +337,44 @@ def _pg_build_pgrx_test_impl(ctx):
     # The crate version pgrx spells `@CARGO_VERSION@`, not the base version.
     asserts.true(env, 'ext_version = "0.3.4"' in out, out)
 
+    # A single-crate source tree names no crate directory at all.
+    asserts.false(env, "crate_dir" in out, out)
+
     return unittest.end(env)
 
 pg_build_pgrx_test = unittest.make(_pg_build_pgrx_test_impl)
+
+def _pg_build_pgrx_workspace_test_impl(ctx):
+    """A pgrx crate below the source root names its directory to the build.
+
+    The source root stays the cargo WORKSPACE root, so the crate's path
+    dependencies and the workspace profile resolve; only cargo's cwd moves.
+    """
+    env = unittest.begin(ctx)
+
+    lock = "//catalog/extensions:timescaledb_toolkit/cargo/1.24.0/Cargo.lock"
+    out = _External._pg_build(
+        build_repo = "monogres",
+        source_repo = "pg_ext_src--timescaledb_toolkit",
+        version = "1.24.0",
+        base_v = "18.1",
+        base_hub_name = "pg",
+        bt_sysroot = None,
+        base_sysroot = "//_base/18.1:sysroot_tar",
+        base_flavor = "postgres",
+        build_system = "pgrx",
+        crate_dir = "extension",
+        ext_name = "timescaledb_toolkit",
+        cargo = {"crates": {}, "lock": lock, "pgrx": "0.18.1"},
+    )
+
+    asserts.true(env, 'crate_dir = "extension"' in out, out)
+
+    return unittest.end(env)
+
+pg_build_pgrx_workspace_test = unittest.make(
+    _pg_build_pgrx_workspace_test_impl,
+)
 
 # --- deps_kind_build -------------------------------------------------------
 
@@ -374,6 +409,7 @@ TEST_SUITE_TESTS = dict(
     pg_build_ivorysql_flavor = pg_build_ivorysql_flavor_test,
     pg_build_no_sysroot = pg_build_no_sysroot_test,
     pg_build_pgrx = pg_build_pgrx_test,
+    pg_build_pgrx_workspace = pg_build_pgrx_workspace_test,
     repo_bzl = repo_bzl_test,
     src_build = src_build_test,
     src_leaf_build = src_leaf_build_test,

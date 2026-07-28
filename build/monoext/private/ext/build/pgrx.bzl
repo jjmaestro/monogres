@@ -85,6 +85,14 @@ _COMPILE_EXTENSION = """
             cp -raL "$$pgrx_src" "$$src"
             chmod -R u+w "$$src"
 
+            # Where the extension crate itself lives. `$$src` for the usual
+            # single-crate source tree; a subdirectory when the tree is a cargo
+            # WORKSPACE, whose root has to stay `$$src` so the crate's path
+            # dependencies and the workspace `[profile.release]` still resolve.
+            # cargo walks up from the cwd to find that root on its own, which is
+            # also what running it from the crate dir makes `--lib` unambiguous.
+            local crate_dir="$$src{crate_dir}"
+
             # Shared sysroot compile environment: sets the `target_multiarch`,
             # `exec_multiarch`, `cflags`, `ldflags` globals and exports
             # PKG_CONFIG_*. See `setup_compile_env` in the shared engine.
@@ -98,7 +106,7 @@ _COMPILE_EXTENSION = """
             # every installed artifact after it, so the control file is where
             # the extension's identity comes from here too.
             local control extname
-            control="$$(echo "$$src"/*.control)"
+            control="$$(echo "$$crate_dir"/*.control)"
             extname="$$(basename "$$control" .control)"
 
             # The dependency closure as a cargo directory source. Built once per
@@ -334,13 +342,14 @@ _COMPILE_EXTENSION = """
 
             echo "# $$(date) - pgrx_build"
             echo "src: $$src"
+            echo "crate_dir: $$crate_dir"
             echo "extname: $$extname"
             echo "rust_target: $$rust_target"
             echo "pg_config: $${{pg_config_env[*]}}"
             echo
 
             (
-                cd "$$src" &&
+                cd "$$crate_dir" &&
                     env "$${{pg_config_env[@]}}" \
                         "$$CARGO" build "$${{cargo_args[@]}}"
             ) || return $$?
@@ -399,6 +408,7 @@ def pgrx_build(
         cargo_lock,
         sql_generator,
         ext_version,
+        crate_dir = "",
         build_args = [],
         remap_paths = {},
         debug = False):
@@ -425,6 +435,11 @@ def pgrx_build(
             `.pgrxsc` section and writes the extension SQL.
         ext_version (str): The extension version, i.e. the crate version pgrx
             spells `@CARGO_VERSION@`.
+        crate_dir (str): The extension crate's directory below the source root,
+            from `metadata.crate_dir`. Empty (the default) means the source root
+            IS the crate. Set it when the tree is a cargo workspace: the root
+            stays the source root, so path dependencies and the workspace
+            `[profile.release]` resolve, while cargo runs in the crate.
         build_args (list[str]): Extra `cargo build` arguments from
             `metadata.build_args`, templated via `PGRX_ARG_SUBST` (`{pg_config}`
             / `{sysroot}`).
@@ -453,6 +468,9 @@ def pgrx_build(
         extra_format_kwargs = {
             "cargo": _CARGO,
             "cargo_lock": cargo_lock,
+            # Interpolated straight onto `$src`, so it carries its own leading
+            # separator and stays empty for a single-crate tree.
+            "crate_dir": "/" + crate_dir if crate_dir else "",
             "ext_version": ext_version,
             "pg_major": base_version["version"].split(".")[0],
             "sql_generator": sql_generator,
