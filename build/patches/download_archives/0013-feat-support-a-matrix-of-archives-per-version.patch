@@ -1,0 +1,2231 @@
+From 483839770b819f1a5dbd08666a4672055e341998 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sun, 26 Jul 2026 03:08:47 +0000
+Subject: [PATCH 13/14] feat: support a matrix of archives per version
+
+Some archives are published as a set of files per version rather than
+as a single file: a toolchain publishes one archive per (target triple,
+component) and all of them together make up the toolchain. The index
+can only describe one archive per (version, source), so those have to
+be spread over one repo per component, losing the shared version, the
+shared sources and the shared integrity bookkeeping.
+
+Add an optional `matrix` to the index: an ordered list of axes, each an
+object with a `key` (the context property the axis sets) and `values`,
+either a list of values or a map of value to the extra context
+properties that apply when that value is selected. The version is
+downloaded once per combination of the axes, in matrix order and with
+the last axis varying fastest, and the integrities are nested by axis
+value, in the same order, with the same "global" or per-source leaf as
+a regular version property.
+
+The combination's properties join the materialized repo context right
+after the default context, so the `url` and the `strip_prefix` of a
+source can reference them, and they are materialized in axis order so
+an axis can reference the axes before it.
+
+Add an optional `output` template to lay the combinations out: those
+that render the same `output` merge into a single tree, the rest
+partition it, and each rendered `output` also gets a target of its own,
+so consumers can depend on one partition instead of on the whole tree.
+
+A source is only used if all of its combinations download successfully,
+so a partial mirror falls through to the next source instead of leaving
+behind a half-materialized tree.
+
+Without a `matrix` there is exactly one combination, with no properties
+and no `output`, which is the behavior of every existing index.
+---
+ README.md                             |  20 +++
+ docs/download/archives/extensions.md  |   1 +
+ docs/download/archives/repository.md  |  83 +++++++++
+ docs/lib/index.md                     | 121 +++++++++++++
+ download/archives/repository.bzl      | 144 ++++++++++++++-
+ examples/MODULE.bazel                 |   8 +
+ examples/repos/BUILD.bazel            |  30 ++++
+ examples/repos/rust_toolchain.bzl     |  61 +++++++
+ examples/third-party/rust/BUILD.bazel |   2 +
+ examples/third-party/rust/repo.json   |  41 +++++
+ lib/BUILD.bazel                       |   8 +
+ lib/download.bzl                      |  84 +++++++--
+ lib/index.bzl                         | 248 +++++++++++++++++++++++---
+ lib/matrix.bzl                        | 110 ++++++++++++
+ lib/schema.bzl                        |  76 +++++++-
+ lib/utils.bzl                         |   5 +
+ tests/lib/BUILD.bazel                 |   3 +
+ tests/lib/download.bzl                | 163 ++++++++++++++++-
+ tests/lib/index.bzl                   | 138 ++++++++++++++
+ tests/lib/matrix.bzl                  | 233 ++++++++++++++++++++++++
+ tests/lib/utils.bzl                   |  26 +++
+ 21 files changed, 1547 insertions(+), 58 deletions(-)
+ create mode 100644 examples/repos/rust_toolchain.bzl
+ create mode 100644 examples/third-party/rust/BUILD.bazel
+ create mode 100644 examples/third-party/rust/repo.json
+ create mode 100644 lib/matrix.bzl
+ create mode 100644 tests/lib/matrix.bzl
+
+diff --git a/README.md b/README.md
+index 3350300..6d0e257 100644
+--- a/README.md
++++ b/README.md
+@@ -165,6 +165,10 @@ cc_binary(
+ 
+ - **Lazy per-version downloads**: only fetch what your build needs
+ - **Multi-source failover**: mirrors tried in order, transparent to the build
++- **Archive [`matrix`]**: for versions published as a *set* of archives (e.g. a
++  toolchain, one archive per target triple and component), download every
++  combination and either merge them into one tree or partition it, one target
++  per partition
+ - **Patching**: apply patches selectively by version and/or source using
+   [version spec][patching] patterns (e.g. `>=1.24.5/*`, `<2.0.0/github.com`)
+ - **Integrity checking**: [SRI hashes][Subresource Integrity (SRI)] per source
+@@ -201,6 +205,21 @@ versions.
+ Sources are tried in order. If a download fails, the next source is attempted.
+ The download only fails if all sources are exhausted.
+ 
++### Archive `matrix`
++
++Some archives are published as a *set* of files per version rather than as a
++single file. The index [`matrix`] declares the axes of that set (e.g. `triple`
++and `component`) and the version is downloaded once per combination.
++
++The index `output` template then decides the subpath each combination is
++extracted into: combinations that render the same `output` *merge* into one
++tree, the rest *partition* it, and every rendered `output` gets a target of its
++own, e.g. `@rust_toolchain//1.97.1:x86_64-unknown-linux-gnu`.
++
++A source is only used if *all* of its combinations download, so a partial
++mirror falls through to the next source instead of leaving behind a
++half-materialized tree.
++
+ ### Source tracking
+ 
+ Each version's package includes a `source.bzl` file that exports `SOURCE` (the
+@@ -232,6 +251,7 @@ See [CONTRIBUTING.md] for more info on how to work with this repo.
+ [`download/archives` module extension]: docs/download/archives/extensions.md
+ [`download/archives` repository rule]: docs/download/archives/repository.md
+ [`lib/index`]: docs/lib/index.md
++[`matrix`]: docs/lib/index.md#matrix
+ [`strict_integrity`]: docs/download/archives/repository.md
+ [`version_utils`]: https://github.com/jjmaestro/bazel_version_utils
+ [issues]: ../../issues
+diff --git a/docs/download/archives/extensions.md b/docs/download/archives/extensions.md
+index e30eaa5..b9c40a0 100644
+--- a/docs/download/archives/extensions.md
++++ b/docs/download/archives/extensions.md
+@@ -164,6 +164,7 @@ use_repo(download, "my_src", "my_src-18.1")
+ ```
+ 
+ ["Patching"]: #patching
++[`matrix`]: ../../lib/index.md#matrix
+ [Subresource Integrity (SRI)]: https://w3c.github.io/webappsec-subresource-integrity/
+ ["materialized repo `context`"]: ../../lib/index.md#materialized-repo-context
+ [`rctx.download_and_extract`]: https://bazel.build/rules/lib/builtins/repository_ctx#download_and_extract
+diff --git a/docs/download/archives/repository.md b/docs/download/archives/repository.md
+index c4ecbf5..b0e16b7 100644
+--- a/docs/download/archives/repository.md
++++ b/docs/download/archives/repository.md
+@@ -69,6 +69,9 @@ Each `//<VERSION>` package has three targets:
+ - `:files`: to access all the files in the downloaded archive.
+ - `:dir`: the path to the directory where the archive was extracted.
+ - `:<VERSION>`: `alias` of `:files`.
++- `:<OUTPUT>`: one per subpath rendered by the index [`matrix`] `output`, to
++  access only the files of that partition of the extracted tree. There are
++  none of these when the index has no `matrix` or no `output`.
+ 
+ and two constants:
+ - `VERSION`: the version of the archive.
+@@ -83,6 +86,8 @@ The root package `//` has three targets:
+ - `:files`: to access all the files in the `DEFAULT_VERSION` package.
+ - `:dir`: the path to the directory of the `DEFAULT_VERSION` package.
+ - `:<NAME>`: `alias` of `:files`.
++- `:<OUTPUT>`: one per [`matrix`] `output` of the `DEFAULT_VERSION` package,
++  as above.
+ 
+ and two constants:
+ - `VERSION`: the `DEFAULT_VERSION` of the archive.
+@@ -118,6 +123,83 @@ Users can also override the default selection of versions and sources with the
+ Note that selecting specific versions and/or arguments will change the values
+ of `VERSIONS` and `DEFAULT_VERSION`.
+ 
++### Downloading a `matrix` of archives
++
++Some archives are published as a *set* of files per version rather than as a
++single file, e.g. a toolchain that publishes one archive per (target triple,
++component). The index [`matrix`] describes that set, and the index `output`
++decides how the combinations lay out in the extracted tree: combinations that
++render the same `output` merge into a single tree, the rest partition it.
++
++E.g. this index downloads four archives for version `1.97.1`, one per
++(`triple`, `component`) combination, and partitions them by `triple`:
++
++```json
++{
++  "version": 1,
++  "sources": {
++    "static.rust-lang.org": {
++      "url": "https://{source}/dist/{component}-{version}-{triple}.tar.xz",
++      "strip_prefix": "{component}-{version}-{triple}/{piece}"
++    }
++  },
++  "matrix": [
++    {
++      "key": "triple",
++      "values": ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
++    },
++    {
++      "key": "component",
++      "values": {
++        "cargo": {"piece": "cargo"},
++        "rustfmt": {"piece": "rustfmt-preview"}
++      }
++    }
++  ],
++  "output": "{triple}",
++  "versions": {
++    "1.97.1": {
++      "x86_64-unknown-linux-gnu": {
++        "cargo": "sha256-4b5Xkw2Cfk73/RSNy0jgUv/AqIsGpKKO9EhIOqvsG2E=",
++        "rustfmt": "sha256-kH/pfWr73h7KGzTJksduFAbUIuLm8TeBPTgqzsfrTRQ="
++      },
++      "aarch64-unknown-linux-gnu": {
++        "cargo": "sha256-j3C8rM6lukvRh8P9TWTiRZK04Wr1E0lyAfWQnWFpHb4=",
++        "rustfmt": "sha256-Pb3hXTB5SSQZWuRG89LOtUKhMTBtIq55EsdjTUFGIqg="
++      }
++    }
++  }
++}
++```
++
++which lays out the repo as:
++
++```
++  @rust_toolchain/
++   |
++   |-- 1.97.1/
++   |   |-- BUILD.bazel
++   |   `-- static.rust-lang.org/
++   |       |-- BUILD.bazel
++   |       |-- aarch64-unknown-linux-gnu/
++   |       |   |-- bin/
++   |       |   `-- ...
++   |       `-- x86_64-unknown-linux-gnu/
++   |           |-- bin/
++   |           `-- ...
++   (...)
++```
++
++So, on top of `:files`, which is all of the combinations, each rendered
++`output` gets its own target:
++
++- `@rust_toolchain//1.97.1:x86_64-unknown-linux-gnu`
++- `@rust_toolchain//1.97.1:aarch64-unknown-linux-gnu`
++
++Note that the `cargo` and `rustfmt` archives of a triple *merge* into that
++triple's tree, giving one usable prefix with both binaries in `bin/`, while the
++two triples stay apart.
++
+ ### Version scheme
+ 
+ The `version_scheme` attribute defines the format used for versions in both the
+@@ -422,6 +504,7 @@ Building `@my_src//18.1:files` downloads only version 18.1, not all versions
+ in the index.
+ 
+ ["Patching"]: #patching
++[`matrix`]: ../../lib/index.md#matrix
+ [Subresource Integrity (SRI)]: https://w3c.github.io/webappsec-subresource-integrity/
+ ["materialized repo `context`"]: ../../lib/index.md#materialized-repo-context
+ [`rctx.download_and_extract`]: https://bazel.build/rules/lib/builtins/repository_ctx#download_and_extract
+diff --git a/docs/lib/index.md b/docs/lib/index.md
+index b67ed33..b399268 100644
+--- a/docs/lib/index.md
++++ b/docs/lib/index.md
+@@ -18,6 +18,10 @@ The index JSON object has the following properties:
+   be expanded to a `dict` of `version`s mapped to empty `version` contexts.
+ - `sources` (`dict[source, source_context]`): maps `source` names to [URL
+   `source` context]s.
++- `matrix` (`list[axis]`, optional): expands each `version` into a *combination
++  of archives* instead of a single one. See [`matrix`].
++- `output` (`str`, optional): template that decides the subpath each `matrix`
++  combination is extracted into. See [`output`: merging and partitioning].
+ - `metadata` (`dict[any, any]`): free-form "metadata map", useful to add
+   information about the archive that we want to have available in the repo
+   (e.g. requirements, version compatibility, external dependencies, etc).
+@@ -37,6 +41,10 @@ Each `repo` `struct` has the following properties:
+   - `source`: the `source` name
+   - `context`: the [`materialized` repo context] which will have, at the very
+     least, the `url` from which to download the archive.
++  - `contexts`: the list of `struct(output, context)`, one per [`matrix`]
++    combination, each with the combination's `materialized` repo `context` and
++    its materialized `output` subpath. Without a `matrix` this is a
++    single-element list holding `context` and an empty `output`.
+ 
+ ## Contexts
+ 
+@@ -186,6 +194,117 @@ templated using string replacements. See [`materialized` repo context] for more
+ details.
+ 
+ 
++## `matrix`
++
++Some archives are not published as *one* file per version but as a *set* of
++files. E.g. a toolchain publishes one archive per (target triple, component)
++and all of them together make up the toolchain.
++
++The `matrix` describes that set as an ordered list of *axes*:
++
++```json
++{
++  "version": 1,
++  "sources": {
++    "static.rust-lang.org": {
++      "url": "https://{source}/dist/{component}-{version}-{triple}.tar.xz",
++      "strip_prefix": "{component}-{version}-{triple}/{piece}"
++    }
++  },
++  "matrix": [
++    {
++      "key": "triple",
++      "values": ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
++    },
++    {
++      "key": "component",
++      "values": {
++        "cargo": {"piece": "cargo"},
++        "rust-std": {"piece": "rust-std-{triple}"},
++        "rustfmt": {"piece": "rustfmt-preview"}
++      }
++    }
++  ],
++  "output": "{triple}"
++}
++```
++
++Each axis is an object with two mandatory properties:
++
++- `key` (`str`): the name of the context property that the axis sets. The value
++  selected for the axis is available for string replacement as `{<key>}`.
++- `values` (`list[str] | dict[str, dict]`): the values of the axis. The `dict`
++  form maps each value to *extra context properties* that apply only when that
++  value is selected (`piece`, above, which is the sub-directory to strip
++  because it differs per component).
++
++The archive is downloaded once *per combination*, i.e. the cartesian product of
++all the axes, in matrix order and with the last axis varying fastest. Without a
++`matrix` there's exactly one combination with no properties, which is the
++pre-`matrix` behavior.
++
++### `matrix` combinations and the repo `context`
++
++The properties of a combination are added to the [`materialized` repo context]
++right after the [`default` context] and before the [`version` context] and the
++[URL `source` context], so both of those can reference them (e.g. the `url` and
++the `strip_prefix` above).
++
++They are materialized in axis order, so an axis can reference the axes before
++it: `rust-std`'s `piece` is `"rust-std-{triple}"` because `triple` is the first
++axis.
++
++### `matrix` integrity
++
++With a `matrix` there is one archive, and thus one integrity, per combination,
++so the [`version` context] nests the integrities by axis value, in matrix
++order:
++
++```json
++{
++  (...)
++  "versions": {
++    "1.97.1": {
++      "x86_64-unknown-linux-gnu": {
++        "cargo": "sha256-4b5Xkw2Cfk73/RSNy0jgUv/AqIsGpKKO9EhIOqvsG2E=",
++        "rust-std": "sha256-HB5wSugBJrfeNPcuooJffQFzbewgcy5aiibz3Ek5s74="
++      }
++    }
++  }
++}
++```
++
++As with the non-`matrix` [`version` context], the leaf is either the integrity
++itself ("global", the same archive in all sources) or a `dict` that maps each
++`source` to its integrity ("per-source").
++
++### `output`: merging and partitioning
++
++`output` is a template, materialized with each combination's context, that
++decides the subpath *under the archive's `<VERSION>/<SOURCE>` directory* into
++which that combination is extracted.
++
++Combinations that render the *same* `output` are extracted on top of each other
++and *merge* into a single tree; combinations that render *different* `output`s
++*partition* the tree. In the example above, `"output": "{triple}"` merges all
++the components of a triple into one usable toolchain prefix while keeping the
++two triples apart.
++
++Every rendered `output` also gets its own `filegroup` in the generated repo, so
++consumers can depend on one partition instead of on the whole tree.
++
++When `output` is not set, all combinations extract into the same directory,
++i.e. everything merges.
++
++Finally, note that a `source` is only used if *all* of its combinations
++download successfully. Otherwise, the next source is tried. This keeps a
++partial mirror from leaving behind a half-materialized tree.
++
++TODO: combinations are always downloaded eagerly, all of them, even in the
++per-version lazy mode of the `download_archives` module extension. Consider a
++hub-and-spoke layout with one download repo per combination so that e.g. only
++the triple that's actually built gets downloaded.
++
+ ### Special context properties
+ 
+ There are two context properties that are "special": `integrity` and `sha256`.
+@@ -385,6 +504,8 @@ And the final `materialized` context for e.g. version `1.1` and `source`
+ [`default` context]: #default-context
+ [`version` context]: #version-context
+ [URL `source` context]: #url-source-context
++[`matrix`]: #matrix
++[`output`: merging and partitioning]: #output-merging-and-partitioning
+ [Special context properties]: #special-context-properties
+ [Subresource Integrity (SRI)]: https://w3c.github.io/webappsec-subresource-integrity/
+ 
+diff --git a/download/archives/repository.bzl b/download/archives/repository.bzl
+index a930b97..1a0bce2 100644
+--- a/download/archives/repository.bzl
++++ b/download/archives/repository.bzl
+@@ -11,6 +11,7 @@ load("@version_utils//spec:spec.bzl", Spec = "spec")
+ load("@version_utils//version:version.bzl", Version = "version")
+ load("//lib:download.bzl", Download = "download")
+ load("//lib:index.bzl", Index = "index")
++load("//lib:utils.bzl", Utils = "utils")
+ 
+ _DOC_INTRO = """
+ This repository rule wraps [`rctx.download_and_extract`] and creates a Bazel
+@@ -64,6 +65,9 @@ Each `//<VERSION>` package has three targets:
+ - `:files`: to access all the files in the downloaded archive.
+ - `:dir`: the path to the directory where the archive was extracted.
+ - `:<VERSION>`: `alias` of `:files`.
++- `:<OUTPUT>`: one per subpath rendered by the index [`matrix`] `output`, to
++  access only the files of that partition of the extracted tree. There are
++  none of these when the index has no `matrix` or no `output`.
+ 
+ and two constants:
+ - `VERSION`: the version of the archive.
+@@ -78,6 +82,8 @@ The root package `//` has three targets:
+ - `:files`: to access all the files in the `DEFAULT_VERSION` package.
+ - `:dir`: the path to the directory of the `DEFAULT_VERSION` package.
+ - `:<NAME>`: `alias` of `:files`.
++- `:<OUTPUT>`: one per [`matrix`] `output` of the `DEFAULT_VERSION` package,
++  as above.
+ 
+ and two constants:
+ - `VERSION`: the `DEFAULT_VERSION` of the archive.
+@@ -108,6 +114,7 @@ object" with the following properties:
+ 
+ DOC_LINK_REFS = """
+ ["Patching"]: #patching
++[`matrix`]: ../../lib/index.md#matrix
+ [Subresource Integrity (SRI)]: https://w3c.github.io/webappsec-subresource-integrity/
+ ["materialized repo `context`"]: ../../lib/index.md#materialized-repo-context
+ [`rctx.download_and_extract`]: https://bazel.build/rules/lib/builtins/repository_ctx#download_and_extract
+@@ -124,6 +131,85 @@ Note that selecting specific versions and/or arguments will change the values
+ of `VERSIONS` and `DEFAULT_VERSION`.
+ """
+ 
++_DOC_MATRIX = """
++### Downloading a `matrix` of archives
++
++Some archives are published as a *set* of files per version rather than as a
++single file, e.g. a toolchain that publishes one archive per (target triple,
++component). The index [`matrix`] describes that set, and the index `output`
++decides how the combinations lay out in the extracted tree: combinations that
++render the same `output` merge into a single tree, the rest partition it.
++
++E.g. this index downloads four archives for version `1.97.1`, one per
++(`triple`, `component`) combination, and partitions them by `triple`:
++
++```json
++{
++  "version": 1,
++  "sources": {
++    "static.rust-lang.org": {
++      "url": "https://{source}/dist/{component}-{version}-{triple}.tar.xz",
++      "strip_prefix": "{component}-{version}-{triple}/{piece}"
++    }
++  },
++  "matrix": [
++    {
++      "key": "triple",
++      "values": ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
++    },
++    {
++      "key": "component",
++      "values": {
++        "cargo": {"piece": "cargo"},
++        "rustfmt": {"piece": "rustfmt-preview"}
++      }
++    }
++  ],
++  "output": "{triple}",
++  "versions": {
++    "1.97.1": {
++      "x86_64-unknown-linux-gnu": {
++        "cargo": "sha256-4b5Xkw2Cfk73/RSNy0jgUv/AqIsGpKKO9EhIOqvsG2E=",
++        "rustfmt": "sha256-kH/pfWr73h7KGzTJksduFAbUIuLm8TeBPTgqzsfrTRQ="
++      },
++      "aarch64-unknown-linux-gnu": {
++        "cargo": "sha256-j3C8rM6lukvRh8P9TWTiRZK04Wr1E0lyAfWQnWFpHb4=",
++        "rustfmt": "sha256-Pb3hXTB5SSQZWuRG89LOtUKhMTBtIq55EsdjTUFGIqg="
++      }
++    }
++  }
++}
++```
++
++which lays out the repo as:
++
++```
++  @rust_toolchain/
++   |
++   |-- 1.97.1/
++   |   |-- BUILD.bazel
++   |   `-- static.rust-lang.org/
++   |       |-- BUILD.bazel
++   |       |-- aarch64-unknown-linux-gnu/
++   |       |   |-- bin/
++   |       |   `-- ...
++   |       `-- x86_64-unknown-linux-gnu/
++   |           |-- bin/
++   |           `-- ...
++   (...)
++```
++
++So, on top of `:files`, which is all of the combinations, each rendered
++`output` gets its own target:
++
++- `@rust_toolchain//1.97.1:x86_64-unknown-linux-gnu`
++- `@rust_toolchain//1.97.1:aarch64-unknown-linux-gnu`
++
++Note that the `cargo` and `rustfmt` archives of a triple *merge* into that
++triple's tree, giving one usable prefix with both binaries in `bin/`, while the
++two triples stay apart.
++"""
++
+ DOC_VERSION_SCHEME = """
+ ### Version scheme
+ 
+@@ -436,6 +522,7 @@ in the index.
+ _DOC = (
+     _DOC_INTRO +
+     _DOC_SELECTING +
++    _DOC_MATRIX +
+     DOC_VERSION_SCHEME +
+     DOC_PATCHING +
+     _DOC_USAGE +
+@@ -467,6 +554,24 @@ alias(
+     name = "{alias}",
+     actual = ":files",
+ )
++{outputs}"""
++
++# One target per `output` subpath rendered by the index `matrix`, so that
++# consumers can depend on one partition of the extracted tree instead of on
++# all of it. Without a `matrix`, or without an `output`, there are none of
++# these and ':files' is the only way in, as before.
++_BUILD_OUTPUT_FILEGROUP = """
++filegroup(
++    name = "{output}",
++    srcs = glob(["{output}/**"]),
++)
++"""
++
++_BUILD_OUTPUT_ALIAS = """
++alias(
++    name = "{output}",
++    actual = "{actual_prefix}:{output}",
++)
+ """
+ 
+ _BUILD_ROOT_EXPORTS = """
+@@ -538,7 +643,14 @@ alias(
+     name = "{alias}",
+     actual = ":files",
+ )
+-'''
++{outputs}'''
++
++def _build_outputs(template, outputs, **kwargs):
++    """Render one `template` block per `output`, in index `matrix` order."""
++    return "".join([
++        template.format(output = output, **kwargs)
++        for output in outputs
++    ])
+ 
+ def _apparent_repo_name(rctx):
+     # HACK to get the apparent repo name ("short name"). This should be
+@@ -570,6 +682,7 @@ def _impl(rctx, _print = print, _fail = fail):
+ 
+     lazy = rctx.attr.lazy
+     repo_lock = {}
++    repo_outputs = {}
+     failed_versions = []
+ 
+     for version, repos in index.repos.items():
+@@ -581,6 +694,14 @@ def _impl(rctx, _print = print, _fail = fail):
+                 source = first_repo.source,
+                 url = first_repo.context["url"],
+                 integrity = first_repo.context.get("integrity", ""),
++                # The outputs don't depend on the source that ends up winning
++                # the download, so they can be rendered here, without knowing
++                # it, and aliased into the download repo.
++                outputs = Utils.dedupe([
++                    ctx.output
++                    for ctx in first_repo.contexts
++                    if ctx.output
++                ]),
+                 patches = [],
+             )
+             actual_prefix = "@%s//%s" % (dl_repo_name, version)
+@@ -612,10 +733,19 @@ def _impl(rctx, _print = print, _fail = fail):
+ 
+             rctx.file(
+                 "%s/%s/BUILD.bazel" % (version, dl.source),
+-                _BUILD_SOURCE.format(alias = dl.source, version = version),
++                _BUILD_SOURCE.format(
++                    alias = dl.source,
++                    version = version,
++                    outputs = _build_outputs(
++                        _BUILD_OUTPUT_FILEGROUP,
++                        dl.outputs,
++                    ),
++                ),
+                 executable = False,
+             )
+ 
++        repo_outputs[version] = dl.outputs
++
+         repo_lock[version] = dict(
+             source = dl.source,
+             url = dl.url,
+@@ -629,6 +759,11 @@ def _impl(rctx, _print = print, _fail = fail):
+                 version = version,
+                 actual_prefix = actual_prefix,
+                 alias = version,
++                outputs = _build_outputs(
++                    _BUILD_OUTPUT_ALIAS,
++                    dl.outputs,
++                    actual_prefix = actual_prefix,
++                ),
+             ),
+             executable = False,
+         )
+@@ -651,6 +786,11 @@ def _impl(rctx, _print = print, _fail = fail):
+             version = default_version,
+             actual_prefix = actual_prefix,
+             alias = repo_name,
++            outputs = _build_outputs(
++                _BUILD_OUTPUT_ALIAS,
++                repo_outputs[default_version],
++                actual_prefix = actual_prefix,
++            ),
+         ),
+         executable = False,
+     )
+diff --git a/examples/MODULE.bazel b/examples/MODULE.bazel
+index d9b2386..b448819 100644
+--- a/examples/MODULE.bazel
++++ b/examples/MODULE.bazel
+@@ -64,3 +64,11 @@ download.archives(
+     versions = ["1.24.5"],
+ )
+ use_repo(download, "wget_ext")
++
++# matrix: one archive per (triple, component) combination, partitioned by
++# triple so that each triple is a usable toolchain prefix of its own
++download.archives(
++    name = "rust_toolchain",
++    index = "//third-party/rust:repo.json",
++)
++use_repo(download, "rust_toolchain")
+diff --git a/examples/repos/BUILD.bazel b/examples/repos/BUILD.bazel
+index c8a2c8b..94459a4 100644
+--- a/examples/repos/BUILD.bazel
++++ b/examples/repos/BUILD.bazel
+@@ -1,12 +1,42 @@
++load("@bazel_skylib//rules:build_test.bzl", "build_test")
+ load(":pg_src.bzl", pg_src_suite = "examples_suite")
++load(":rust_toolchain.bzl", rust_toolchain_suite = "examples_suite")
+ load(":wget_ext.bzl", wget_ext_suite = "examples_suite")
+ load(":wget_lazy.bzl", wget_lazy_suite = "examples_suite")
+ load(":wget_src.bzl", wget_src_suite = "examples_suite")
+ 
+ pg_src_suite()
+ 
++rust_toolchain_suite()
++
+ wget_ext_suite()
+ 
+ wget_lazy_suite()
+ 
+ wget_src_suite()
++
++# The rust index has `"output": "{triple}"`, so each triple is a target of its
++# own with the `cargo` and `rustfmt` archives of that triple merged into it:
++# one usable toolchain prefix per triple, and no files from the other triple.
++genrule(
++    name = "rust_toolchain_x86_64",
++    srcs = ["@rust_toolchain//1.97.1:x86_64-unknown-linux-gnu"],
++    outs = ["rust_toolchain_x86_64.txt"],
++    cmd = """
++set -euo pipefail
++
++for src in $(SRCS); do
++    echo "$${src##*/x86_64-unknown-linux-gnu/}"
++done | sort > $@
++
++grep -qx "bin/cargo" $@
++grep -qx "bin/rustfmt" $@
++
++! grep -q "aarch64" $@
++""",
++)
++
++build_test(
++    name = "rust_toolchain_x86_64_test",
++    targets = [":rust_toolchain_x86_64"],
++)
+diff --git a/examples/repos/rust_toolchain.bzl b/examples/repos/rust_toolchain.bzl
+new file mode 100644
+index 0000000..e51b1c5
+--- /dev/null
++++ b/examples/repos/rust_toolchain.bzl
+@@ -0,0 +1,61 @@
++"""e2e rust_toolchain tests (an index with a `matrix` of archives)"""
++
++load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
++load("@rust_toolchain//:repo.bzl", "DEFAULT_VERSION", "LOCK", "REPO_NAME")
++load("@rust_toolchain//1.97.1:source.bzl", "SOURCE", "URL")
++load("//:suite.bzl", _examples_suite = "test_suite")
++
++_VERSION = "1.97.1"
++
++_TRIPLES = [
++    "x86_64-unknown-linux-gnu",
++    "aarch64-unknown-linux-gnu",
++]
++
++def _repo_name_impl(ctx):
++    env = unittest.begin(ctx)
++
++    asserts.equals(env, "rust_toolchain", REPO_NAME)
++    asserts.equals(env, _VERSION, DEFAULT_VERSION)
++
++    return unittest.end(env)
++
++repo_name_test = unittest.make(_repo_name_impl)
++
++def _source_impl(ctx):
++    env = unittest.begin(ctx)
++
++    asserts.equals(env, "static.rust-lang.org", SOURCE)
++
++    # the URL of the first combination of the matrix, in matrix order
++    expected = "https://static.rust-lang.org/dist/cargo-{}-{}.tar.xz".format(
++        _VERSION,
++        _TRIPLES[0],
++    )
++    asserts.equals(env, expected, URL)
++
++    return unittest.end(env)
++
++source_test = unittest.make(_source_impl)
++
++def _lock_impl(ctx):
++    env = unittest.begin(ctx)
++
++    lock = LOCK[_VERSION]
++
++    asserts.equals(env, "static.rust-lang.org", lock["source"])
++    asserts.true(env, lock["integrity"].startswith("sha256-"))
++
++    return unittest.end(env)
++
++lock_test = unittest.make(_lock_impl)
++
++SUITE_NAME = "rust_toolchain"
++
++SUITE = dict(
++    lock = lock_test,
++    repo_name = repo_name_test,
++    source = source_test,
++)
++
++examples_suite = lambda: _examples_suite(SUITE_NAME, SUITE)
+diff --git a/examples/third-party/rust/BUILD.bazel b/examples/third-party/rust/BUILD.bazel
+new file mode 100644
+index 0000000..8a5e9a8
+--- /dev/null
++++ b/examples/third-party/rust/BUILD.bazel
+@@ -0,0 +1,2 @@
++# `repo.json` is read by the `download_archives` module extension, from the
++# `//third-party/rust:repo.json` label in `MODULE.bazel`.
+diff --git a/examples/third-party/rust/repo.json b/examples/third-party/rust/repo.json
+new file mode 100644
+index 0000000..e781657
+--- /dev/null
++++ b/examples/third-party/rust/repo.json
+@@ -0,0 +1,41 @@
++{
++  "version": 1,
++  "sources": {
++    "static.rust-lang.org": {
++      "url": "https://{source}/dist/{component}-{version}-{triple}.tar.xz",
++      "strip_prefix": "{component}-{version}-{triple}/{piece}"
++    }
++  },
++  "matrix": [
++    {
++      "key": "triple",
++      "values": [
++        "x86_64-unknown-linux-gnu",
++        "aarch64-unknown-linux-gnu"
++      ]
++    },
++    {
++      "key": "component",
++      "values": {
++        "cargo": {"piece": "cargo"},
++        "rustfmt": {"piece": "rustfmt-preview"}
++      }
++    }
++  ],
++  "output": "{triple}",
++  "versions": {
++    "1.97.1": {
++      "x86_64-unknown-linux-gnu": {
++        "cargo": "e1be5f5ff7f7f80ca506fb65770b759edbdc6d303781ed71c5de8ec8a8394779",
++        "rustfmt": "907fe97d6afbde1eca1b34c992c76e1406d422e2e6f137813d382acec7eb4d14"
++      },
++      "aarch64-unknown-linux-gnu": {
++        "cargo": "8f70bcaccea5ba4db187c3fd4d64e24592b4e16af513497201f5909d61691dbe",
++        "rustfmt": "3dbde15d30794924195ae446f3d2ceb542a131306d22ae7912c7634d414622a8"
++      }
++    }
++  },
++  "metadata": {
++    "default_version": "1.97.1"
++  }
++}
+diff --git a/lib/BUILD.bazel b/lib/BUILD.bazel
+index 44eb9b4..43c212c 100644
+--- a/lib/BUILD.bazel
++++ b/lib/BUILD.bazel
+@@ -6,6 +6,7 @@ exports_files([
+     "download.bzl",
+     "index.bzl",
+     "integrity.bzl",
++    "matrix.bzl",
+     "schema.bzl",
+     "utils.bzl",
+ ])
+@@ -36,11 +37,17 @@ bzl_library(
+     ],
+ )
+ 
++bzl_library(
++    name = "matrix",
++    srcs = ["matrix.bzl"],
++)
++
+ bzl_library(
+     name = "schema",
+     srcs = ["schema.bzl"],
+     deps = [
+         ":integrity",
++        ":matrix",
+     ],
+ )
+ 
+@@ -49,6 +56,7 @@ bzl_library(
+     srcs = ["index.bzl"],
+     deps = [
+         ":integrity",
++        ":matrix",
+         ":schema",
+         ":utils",
+     ],
+diff --git a/lib/download.bzl b/lib/download.bzl
+index 48f0a39..62bef20 100644
+--- a/lib/download.bzl
++++ b/lib/download.bzl
+@@ -23,18 +23,35 @@ exports_files(glob(
+ ))
+ '''
+ 
++def _contexts(repo):
++    """The repo's contexts, one per matrix combination (one without a matrix)."""
++    contexts = getattr(repo, "contexts", None)
++
++    if contexts != None:
++        return contexts
++
++    return [struct(output = "", context = repo.context)]
++
+ def _check_strict_integrity(repos, version, _fail):
+     """Fail if repos for a version have different integrity hashes."""
+-    integrities = {
+-        repo.context["integrity"]: None
+-        for repo in repos
+-        if repo.context.get("integrity", None) != None
+-    }
++    contexts = [_contexts(repo) for repo in repos]
+ 
+-    if len(integrities) >= 2:
+-        msg = "Version {} has {} different integrities "
+-        msg += "while strict_integrity=True"
+-        return _fail(msg.format(version, len(integrities)))
++    # With a matrix, the sources have to agree combination by combination, so
++    # there's one comparison per combination and not just one for the version
++    combos = max([len(c) for c in contexts]) if contexts else 0
++
++    for combo in range(combos):
++        integrities = {
++            repo_contexts[combo].context["integrity"]: None
++            for repo_contexts in contexts
++            if combo < len(repo_contexts) and
++               repo_contexts[combo].context.get("integrity", None) != None
++        }
++
++        if len(integrities) >= 2:
++            msg = "Version {} has {} different integrities "
++            msg += "while strict_integrity=True"
++            return _fail(msg.format(version, len(integrities)))
+ 
+     return None
+ 
+@@ -152,21 +169,51 @@ def _try_sources(
+ 
+     for repo in repos:
+         repo_path = "%s/%s" % (version, repo.source)
+-        download_args = _make_download_args(repo_path, repo.context, _print)
+ 
+-        result = rctx.download_and_extract(
+-            output = repo_path,
+-            allow_fail = True,
+-            **download_args
+-        )
++        # A source provides every combination of the index `matrix` (just one
++        # when there is no matrix). Combinations whose `output` renders the
++        # same subpath merge into one extracted tree; the rest partition it.
++        # A source counts as usable only if ALL of its combinations download,
++        # so a partial mirror falls through to the next source rather than
++        # leaving a half-materialized tree.
++        result = None
++        results = []
++
++        for combo in _contexts(repo):
++            combo_path = "/".join([repo_path, combo.output]) if combo.output else repo_path
++            download_args = _make_download_args(combo_path, combo.context, _print)
++
++            result = rctx.download_and_extract(
++                output = combo_path,
++                allow_fail = True,
++                **download_args
++            )
++
++            if not result.success:
++                break
+ 
+-        if not result.success:
++            results.append(struct(
++                path = combo_path,
++                output = combo.output,
++                context = combo.context,
++                result = result,
++            ))
++
++        if not result or not result.success:
+             continue
+ 
+-        if "integrity" not in repo.context:
++        for downloaded in results:
++            if "integrity" in downloaded.context:
++                continue
++
+             msg = "{}/{}: WARNING: integrity missing. "
+             msg += "Please add the integrity / sha256 to the index: {} / {}"
+-            _print(msg.format(repo_name, repo_path, result.integrity, result.sha256))
++            _print(msg.format(
++                repo_name,
++                downloaded.path,
++                downloaded.result.integrity,
++                downloaded.result.sha256,
++            ))
+ 
+         rctx.file(
+             "%s/source.bzl" % version,
+@@ -191,6 +238,7 @@ def _try_sources(
+             integrity = result.integrity,
+             sha256 = result.sha256,
+             output = repo_path,
++            outputs = Utils.dedupe([d.output for d in results if d.output]),
+             patches = matched_patches,
+         )
+ 
+diff --git a/lib/index.bzl b/lib/index.bzl
+index 9df4195..0f39ea8 100644
+--- a/lib/index.bzl
++++ b/lib/index.bzl
+@@ -17,6 +17,10 @@ The index JSON object has the following properties:
+   be expanded to a `dict` of `version`s mapped to empty `version` contexts.
+ - `sources` (`dict[source, source_context]`): maps `source` names to [URL
+   `source` context]s.
++- `matrix` (`list[axis]`, optional): expands each `version` into a *combination
++  of archives* instead of a single one. See [`matrix`].
++- `output` (`str`, optional): template that decides the subpath each `matrix`
++  combination is extracted into. See [`output`: merging and partitioning].
+ - `metadata` (`dict[any, any]`): free-form "metadata map", useful to add
+   information about the archive that we want to have available in the repo
+   (e.g. requirements, version compatibility, external dependencies, etc).
+@@ -36,6 +40,10 @@ Each `repo` `struct` has the following properties:
+   - `source`: the `source` name
+   - `context`: the [`materialized` repo context] which will have, at the very
+     least, the `url` from which to download the archive.
++  - `contexts`: the list of `struct(output, context)`, one per [`matrix`]
++    combination, each with the combination's `materialized` repo `context` and
++    its materialized `output` subpath. Without a `matrix` this is a
++    single-element list holding `context` and an empty `output`.
+ 
+ ## Contexts
+ 
+@@ -185,6 +193,117 @@ templated using string replacements. See [`materialized` repo context] for more
+ details.
+ 
+ 
++## `matrix`
++
++Some archives are not published as *one* file per version but as a *set* of
++files. E.g. a toolchain publishes one archive per (target triple, component)
++and all of them together make up the toolchain.
++
++The `matrix` describes that set as an ordered list of *axes*:
++
++```json
++{
++  "version": 1,
++  "sources": {
++    "static.rust-lang.org": {
++      "url": "https://{source}/dist/{component}-{version}-{triple}.tar.xz",
++      "strip_prefix": "{component}-{version}-{triple}/{piece}"
++    }
++  },
++  "matrix": [
++    {
++      "key": "triple",
++      "values": ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
++    },
++    {
++      "key": "component",
++      "values": {
++        "cargo": {"piece": "cargo"},
++        "rust-std": {"piece": "rust-std-{triple}"},
++        "rustfmt": {"piece": "rustfmt-preview"}
++      }
++    }
++  ],
++  "output": "{triple}"
++}
++```
++
++Each axis is an object with two mandatory properties:
++
++- `key` (`str`): the name of the context property that the axis sets. The value
++  selected for the axis is available for string replacement as `{<key>}`.
++- `values` (`list[str] | dict[str, dict]`): the values of the axis. The `dict`
++  form maps each value to *extra context properties* that apply only when that
++  value is selected (`piece`, above, which is the sub-directory to strip
++  because it differs per component).
++
++The archive is downloaded once *per combination*, i.e. the cartesian product of
++all the axes, in matrix order and with the last axis varying fastest. Without a
++`matrix` there's exactly one combination with no properties, which is the
++pre-`matrix` behavior.
++
++### `matrix` combinations and the repo `context`
++
++The properties of a combination are added to the [`materialized` repo context]
++right after the [`default` context] and before the [`version` context] and the
++[URL `source` context], so both of those can reference them (e.g. the `url` and
++the `strip_prefix` above).
++
++They are materialized in axis order, so an axis can reference the axes before
++it: `rust-std`'s `piece` is `"rust-std-{triple}"` because `triple` is the first
++axis.
++
++### `matrix` integrity
++
++With a `matrix` there is one archive, and thus one integrity, per combination,
++so the [`version` context] nests the integrities by axis value, in matrix
++order:
++
++```json
++{
++  (...)
++  "versions": {
++    "1.97.1": {
++      "x86_64-unknown-linux-gnu": {
++        "cargo": "sha256-4b5Xkw2Cfk73/RSNy0jgUv/AqIsGpKKO9EhIOqvsG2E=",
++        "rust-std": "sha256-HB5wSugBJrfeNPcuooJffQFzbewgcy5aiibz3Ek5s74="
++      }
++    }
++  }
++}
++```
++
++As with the non-`matrix` [`version` context], the leaf is either the integrity
++itself ("global", the same archive in all sources) or a `dict` that maps each
++`source` to its integrity ("per-source").
++
++### `output`: merging and partitioning
++
++`output` is a template, materialized with each combination's context, that
++decides the subpath *under the archive's `<VERSION>/<SOURCE>` directory* into
++which that combination is extracted.
++
++Combinations that render the *same* `output` are extracted on top of each other
++and *merge* into a single tree; combinations that render *different* `output`s
++*partition* the tree. In the example above, `"output": "{triple}"` merges all
++the components of a triple into one usable toolchain prefix while keeping the
++two triples apart.
++
++Every rendered `output` also gets its own `filegroup` in the generated repo, so
++consumers can depend on one partition instead of on the whole tree.
++
++When `output` is not set, all combinations extract into the same directory,
++i.e. everything merges.
++
++Finally, note that a `source` is only used if *all* of its combinations
++download successfully. Otherwise, the next source is tried. This keeps a
++partial mirror from leaving behind a half-materialized tree.
++
++TODO: combinations are always downloaded eagerly, all of them, even in the
++per-version lazy mode of the `download_archives` module extension. Consider a
++hub-and-spoke layout with one download repo per combination so that e.g. only
++the triple that's actually built gets downloaded.
++
+ ### Special context properties
+ 
+ There are two context properties that are "special": `integrity` and `sha256`.
+@@ -384,15 +503,25 @@ And the final `materialized` context for e.g. version `1.1` and `source`
+ [`default` context]: #default-context
+ [`version` context]: #version-context
+ [URL `source` context]: #url-source-context
++[`matrix`]: #matrix
++[`output`: merging and partitioning]: #output-merging-and-partitioning
+ [Special context properties]: #special-context-properties
+ [Subresource Integrity (SRI)]: https://w3c.github.io/webappsec-subresource-integrity/
+ """
+ 
+ load(":integrity.bzl", Integrity = "integrity")
++load(":matrix.bzl", Matrix = "matrix")
+ load(":schema.bzl", Schema = "schema")
+ load(":utils.bzl", Utils = "utils")
+ 
+-def _materialize_context_v1(repo_name, version_name, version, source_name, source):
++def _materialize_context_v1(
++        repo_name,
++        version_name,
++        version,
++        source_name,
++        source,
++        matrix = [],
++        combo = {}):
+     # First, we build the context that we are going to use to materialize all
+     # of the templated strings in the URL sources
+ 
+@@ -402,32 +531,49 @@ def _materialize_context_v1(repo_name, version_name, version, source_name, sourc
+         source = source_name,
+     )
+ 
++    # A matrix combination's properties come next: they are known before the
++    # source properties (they select WHICH archive a source points at), so the
++    # source's `url` / `strip_prefix` can reference them. Their own values are
++    # materialized below with everything else, in axis order, so a later axis
++    # can reference an earlier one.
++
++    context |= combo
++
+     # Then we add all of the "versions" properties that match the source_name
+-    # and all of the source properties
++    # and all of the source properties. With a matrix, the top-level keys of
++    # the version context that are values of its first axis are the nested
++    # integrities, not properties, so they are skipped here (see below).
++
++    axis_values = Matrix.axis_values(matrix)
+ 
+     context |= {
+         property: v
+         for property, values in version.items()
++        if property not in axis_values
+         for k, v in values.items()
+         if k == source_name
+     }
+ 
+-    context |= {
+-        property: v
+-        for property, v in source.items()
+-    }
+-
+     # The integrity properties are special, it's processed into an Integrity
+     # object so that we can always expand it and add to the context the
+     # integrity algo, hex digest and SRI.
+ 
+-    integrity_property = "sha256" if "sha256" in version else "integrity"
+-    integrity = version.get(integrity_property, {}).get(source_name, None)
++    if matrix:
++        # With a matrix there's one integrity per combination, nested by axis
++        # value, so it isn't a property of the version context and there's no
++        # position of its own to expand into: it's appended here, after the
++        # version properties and before the source ones, which is where the
++        # non-matrix expansion lands too.
++        integrity = Matrix.integrity(version, source_name, matrix, combo)
++        integrity_property = None
++    else:
++        integrity_property = "sha256" if "sha256" in version else "integrity"
++        integrity = version.get(integrity_property, {}).get(source_name, None)
+ 
+     if integrity:
+         integrity = Integrity.new(integrity)
+ 
+-        replacement = dict(
++        expansion = dict(
+             integrity = integrity.sri,
+             integrity_algo = integrity.algo,
+             integrity_sri = integrity.sri,
+@@ -435,18 +581,30 @@ def _materialize_context_v1(repo_name, version_name, version, source_name, sourc
+         )
+ 
+         if integrity.is_sha256:
+-            replacement["sha256"] = integrity.hex_digest
++            expansion["sha256"] = integrity.hex_digest
++
++        if integrity_property:
++            # NOTE:
++            # These are INSERTED all in the position of the integrity property
++            # because the order matters for materialization.
++            context = Utils.replace_in_place(
++                context,
++                integrity_property,
++                expansion,
++            )
++        else:
++            context |= expansion
+ 
+-        # NOTE:
+-        # These are INSERTED all in the position of the integrity property
+-        # because the order matters for materialization.
+-        context = Utils.replace_in_place(context, integrity_property, replacement)
++    context |= {
++        property: v
++        for property, v in source.items()
++    }
+ 
+     # Finally, we materialize the context. After materializing each property,
+     # it's added to the context so subsequent materializations have it
+     # available for string substitution.
+ 
+-    for key, value in source.items():
++    for key, value in list(combo.items()) + list(source.items()):
+         if type(value) == "string":
+             materialized = value.format(**context)
+         elif type(value) in ("list", "tuple"):
+@@ -526,20 +684,54 @@ def _from_json_v1(repo_name, index, versions, sources, _print = print, _fail = f
+         for key, selected in [("versions", versions), ("sources", sources)]
+     ]
+ 
++    # A `matrix` turns one archive per (version, source) into a combination of
++    # archives: every combination is downloaded, and `output` decides which
++    # axes partition the extracted tree and which merge into it. Without a
++    # `matrix` there is exactly one combination with no properties, which is
++    # the pre-matrix behaviour.
++    matrix = index.get("matrix", [])
++    combos = Matrix.combos(matrix, _fail = _fail)
++    output = index.get("output", "")
++
++    def _contexts(version_name, source_name):
++        contexts = []
++
++        for combo in combos:
++            context = _materialize_context_v1(
++                repo_name,
++                version_name,
++                index["versions"][version_name],
++                source_name,
++                index["sources"][source_name],
++                matrix = matrix,
++                combo = combo,
++            )
++            contexts.append(struct(
++                # Subpath under `<version>/<source>/`. Combinations that
++                # render the same path merge into one tree.
++                output = output.format(**context) if output else "",
++                context = context,
++            ))
++
++        return contexts
++
++    def _repo(version_name, source_name):
++        contexts = _contexts(version_name, source_name)
++
++        return struct(
++            name = repo_name,
++            version = version_name,
++            source = source_name,
++            # The first combination's context, so that consumers that only
++            # need one representative context (URL reporting, strict integrity
++            # checks) keep working unchanged.
++            context = contexts[0].context,
++            contexts = contexts,
++        )
++
+     repos = {
+         version_name: [
+-            struct(
+-                name = repo_name,
+-                version = version_name,
+-                source = source_name,
+-                context = _materialize_context_v1(
+-                    repo_name,
+-                    version_name,
+-                    index["versions"][version_name],
+-                    source_name,
+-                    index["sources"][source_name],
+-                ),
+-            )
++            _repo(version_name, source_name)
+             for source_name in selected_sources
+         ]
+         for version_name in selected_versions
+diff --git a/lib/matrix.bzl b/lib/matrix.bzl
+new file mode 100644
+index 0000000..7b74b34
+--- /dev/null
++++ b/lib/matrix.bzl
+@@ -0,0 +1,110 @@
++"""index `matrix`: expansion into the combinations of archives of a version"""
++
++def _axis_values(matrix):
++    """Values of the first axis, i.e. the top-level keys of a `matrix` version.
++
++    Args:
++        matrix: The index `matrix`, a list of `{"key": ..., "values": ...}`.
++
++    Returns:
++        The list of values of the first axis, empty when there's no `matrix`.
++    """
++    if not matrix:
++        return []
++
++    values = matrix[0].get("values", [])
++
++    return values.keys() if type(values) == "dict" else list(values)
++
++def _combos(matrix, _fail = fail):
++    """Expand a `matrix` into its ordered list of combinations.
++
++    Each combination is a `dict` of context properties: one entry per axis
++    mapping the axis `key` to the selected value, plus any extra properties
++    that a `dict`-shaped axis attaches to that value. The extra properties are
++    NOT materialized here: they are templates, materialized per source
++    alongside the source properties so that they can reference the whole
++    context.
++
++    Args:
++        matrix: The index `matrix`, a list of `{"key": ..., "values": ...}`.
++        _fail: Fail function for errors.
++
++    Returns:
++        A list of `dict`s, one per combination, in matrix order (the last axis
++        varies fastest). Without a `matrix`, a single empty combination.
++    """
++    combos = [{}]
++
++    for axis in matrix:
++        for key in ("key", "values"):
++            if key not in axis:
++                return _fail("matrix: axis missing mandatory key: '%s'" % key)
++
++        key, values = axis["key"], axis["values"]
++
++        if type(values) == "dict":
++            # `{value: {property: template}}`: the value carries extra
++            # properties of its own (e.g. a per-component `strip_prefix` tail)
++            axis_entries = [
++                dict(properties, **{key: value})
++                for value, properties in values.items()
++            ]
++        elif type(values) in ("list", "tuple"):
++            axis_entries = [{key: value} for value in values]
++        else:
++            msg = "matrix: axis '{}': 'values' must be a list or a dict, got: {}"
++            return _fail(msg.format(key, type(values)))
++
++        combos = [
++            dict(combo, **entry)
++            for combo in combos
++            for entry in axis_entries
++        ]
++
++    return combos
++
++def _integrity(version, source_name, matrix, combo):
++    """Look up a combination's integrity by walking the `version` context.
++
++    With a `matrix` there is one archive, and thus one integrity, per
++    combination, so the integrities are nested by axis value, in matrix order,
++    e.g. `versions[<version>][<triple>][<component>]`. The leaf is either the
++    integrity itself ("global") or a `{source: integrity}` `dict`
++    ("per-source").
++
++    Args:
++        version: The `version` context.
++        source_name: The `source` name, to pick from a per-source leaf.
++        matrix: The index `matrix`, a list of `{"key": ..., "values": ...}`.
++        combo: One of the combinations of the `matrix`.
++
++    Returns:
++        The integrity of the combination's archive, `None` if it's missing.
++    """
++    node = version
++
++    for axis in matrix:
++        if type(node) != "dict":
++            return None
++
++        node = node.get(combo[axis["key"]], None)
++
++        if node == None:
++            return None
++
++    if type(node) == "dict":
++        node = node.get(source_name, None)
++
++    return node
++
++def _path(matrix, combo):
++    """The combination's axis values, joined, to name it in error messages."""
++    return "/".join([combo[axis["key"]] for axis in matrix])
++
++matrix = struct(
++    axis_values = _axis_values,
++    combos = _combos,
++    integrity = _integrity,
++    path = _path,
++)
+diff --git a/lib/schema.bzl b/lib/schema.bzl
+index 85a314c..e7967e6 100644
+--- a/lib/schema.bzl
++++ b/lib/schema.bzl
+@@ -1,12 +1,13 @@
+ "repo JSON index schema"
+ 
+ load(":integrity.bzl", Integrity = "integrity")
++load(":matrix.bzl", Matrix = "matrix")
+ 
+ _INDEX_SCHEMA_KEYS = dict(
+     v1 = dict(
+         index = dict(
+             mandatory = ["version", "sources", "versions"],
+-            optional = ["metadata"],
++            optional = ["matrix", "metadata", "output"],
+         ),
+         sources = dict(
+             mandatory = ["url"],
+@@ -141,6 +142,47 @@ def _validate_integrities(repo_name, versions, sources, _print = print, _fail =
+ 
+             _print(msg.format(repo_name, version_name, missing))
+ 
++# buildifier: disable=return-value
++def _validate_matrix_integrities(
++        repo_name,
++        versions,
++        sources,
++        matrix,
++        _print = print,
++        _fail = fail):
++    """Validate the integrities nested by the `matrix` in every version."""
++    combos = Matrix.combos(matrix, _fail = _fail)
++
++    # testing
++    if _fail != fail and type(combos) != "list":
++        return combos
++
++    for version_name, version in versions.items():
++        missing = []
++
++        for combo in combos:
++            for source_name in sources:
++                integrity = Matrix.integrity(
++                    version,
++                    source_name,
++                    matrix,
++                    combo,
++                )
++
++                path = "/".join([Matrix.path(matrix, combo), source_name])
++
++                if not integrity:
++                    missing.append(path)
++                    continue
++
++                if not Integrity.is_valid(integrity):
++                    msg = "{}/{}/{}: invalid integrity: %r" % integrity
++                    return _fail(msg.format(repo_name, version_name, path))
++
++        if missing:
++            msg = "{}/{}: WARNING: missing integrity/sha256 for: {}"
++            _print(msg.format(repo_name, version_name, missing))
++
+ # buildifier: disable=return-value
+ def _validate_v1(repo_name, index, _print = print, _fail = fail):
+     error = _validate_keys(repo_name, index, "v1", _fail = _fail)
+@@ -172,6 +214,12 @@ def _validate_v1(repo_name, index, _print = print, _fail = fail):
+             msg = "{}: invalid source name: '{}'"
+             return _fail(msg.format(repo_name, source_name))
+ 
++    # With a `matrix`, the top-level keys of the version context that are
++    # values of its first axis are not version properties: they are the roots
++    # of the integrities nested by the matrix, validated separately below.
++    matrix = index.get("matrix", [])
++    axis_values = Matrix.axis_values(matrix)
++
+     for version_name, version in index["versions"].items():
+         # TODO: consider only allowing semantic versions
+         if "/" in version_name:
+@@ -180,7 +228,7 @@ def _validate_v1(repo_name, index, _print = print, _fail = fail):
+ 
+         for property in version:
+             # integrity validation is slightly different
+-            if property in _INTEGRITY_PROPERTIES:
++            if property in _INTEGRITY_PROPERTIES or property in axis_values:
+                 continue
+ 
+             if property in _RESERVED_PROPERTIES:
+@@ -199,13 +247,23 @@ def _validate_v1(repo_name, index, _print = print, _fail = fail):
+                     return _fail(msg.format(repo_name, version_name, source_name))
+ 
+     # Finally, validate the integrities
+-    error = _validate_integrities(
+-        repo_name,
+-        index["versions"],
+-        index["sources"],
+-        _print = _print,
+-        _fail = _fail,
+-    )
++    if matrix:
++        error = _validate_matrix_integrities(
++            repo_name,
++            index["versions"],
++            index["sources"],
++            matrix,
++            _print = _print,
++            _fail = _fail,
++        )
++    else:
++        error = _validate_integrities(
++            repo_name,
++            index["versions"],
++            index["sources"],
++            _print = _print,
++            _fail = _fail,
++        )
+ 
+     # testing
+     if _fail != fail and error != None:
+diff --git a/lib/utils.bzl b/lib/utils.bzl
+index 422e2b9..9d80483 100644
+--- a/lib/utils.bzl
++++ b/lib/utils.bzl
+@@ -13,6 +13,10 @@ def _get_dupes(list_):
+         set_[value] = True
+     return dupes
+ 
++def _dedupe(list_):
++    """Return the list without duplicates, keeping the first occurrences."""
++    return {value: None for value in list_}.keys()
++
+ def _replace_in_place(d, k_replace, replacement, _fail = fail):
+     """
+     Replace a dict key with one or more k-v.
+@@ -60,6 +64,7 @@ def _matching_patches(
+     ]
+ 
+ utils = struct(
++    dedupe = _dedupe,
+     get_dupes = _get_dupes,
+     replace_in_place = _replace_in_place,
+     matching_patches = _matching_patches,
+diff --git a/tests/lib/BUILD.bazel b/tests/lib/BUILD.bazel
+index d5603be..b67419d 100644
+--- a/tests/lib/BUILD.bazel
++++ b/tests/lib/BUILD.bazel
+@@ -1,6 +1,7 @@
+ load(":download.bzl", download_test_suite = "test_suite")
+ load(":index.bzl", index_test_suite = "test_suite")
+ load(":integrity.bzl", integrity_test_suite = "test_suite")
++load(":matrix.bzl", matrix_test_suite = "test_suite")
+ load(":schema.bzl", schema_test_suite = "test_suite")
+ load(":utils.bzl", utils_test_suite = "test_suite")
+ 
+@@ -10,6 +11,8 @@ index_test_suite()
+ 
+ integrity_test_suite()
+ 
++matrix_test_suite()
++
+ schema_test_suite()
+ 
+ utils_test_suite()
+diff --git a/tests/lib/download.bzl b/tests/lib/download.bzl
+index 18d6526..4702962 100644
+--- a/tests/lib/download.bzl
++++ b/tests/lib/download.bzl
+@@ -24,11 +24,13 @@ def _mock_rctx(download_results):
+     files = {}
+     patches = []
+     logs = []
++    calls = []
+     call_idx = [0]
+ 
+-    def _download_and_extract(**_kwargs):
++    def _download_and_extract(**kwargs):
+         i = call_idx[0]
+         call_idx[0] = i + 1
++        calls.append(kwargs)
+         return download_results[i]
+ 
+     def _file(path, content = "", **_kwargs):
+@@ -38,6 +40,7 @@ def _mock_rctx(download_results):
+         patches.append(label)
+ 
+     return struct(
++        calls = calls,
+         download_and_extract = _download_and_extract,
+         file = _file,
+         patch = _patch,
+@@ -416,11 +419,165 @@ try_sources__strict_integrity_checked_test = unittest.make(
+     _try_sources__strict_integrity_checked_impl,
+ )
+ 
++def _make_matrix_repos(sources, outputs, version = "1.0"):
++    """Create repo structs with one `contexts` entry per matrix combination."""
++    return [
++        struct(
++            version = version,
++            source = source,
++            context = {
++                "integrity": "sha256-AAAA",
++                "url": "https://%s/%s.tar.gz" % (source, version),
++            },
++            contexts = [
++                struct(
++                    output = output,
++                    context = {
++                        "integrity": "sha256-AAAA",
++                        "url": "https://%s/%s/%s.tar.gz" % (
++                            source,
++                            output,
++                            version,
++                        ),
++                    },
++                )
++                for output in outputs
++            ],
++        )
++        for source in sources
++    ]
++
++_OK = struct(success = True, integrity = "sha256-AAAA", sha256 = "deadbeef")
++_KO = struct(success = False, integrity = "", sha256 = "")
++
++def _check_strict_integrity__matrix_per_combo_impl(ctx):
++    env = unittest.begin(ctx)
++
++    def _repo(integrities):
++        return struct(contexts = [
++            struct(output = output, context = {"integrity": integrity})
++            for output, integrity in integrities.items()
++        ])
++
++    # the sources agree on the first combination but not on the second: with
++    # a matrix, every combination is its own archive and its own comparison
++    repos = [
++        _repo({"amd64": "sha256-AAA", "arm64": "sha256-BBB"}),
++        _repo({"amd64": "sha256-AAA", "arm64": "sha256-CCC"}),
++    ]
++
++    errors = []
++    Download.check_strict_integrity(repos, "1.0", _fail = _mock_fail(errors))
++    asserts.equals(env, 1, len(errors))
++    asserts.true(env, "different integrities" in errors[0])
++
++    return unittest.end(env)
++
++check_strict_integrity__matrix_per_combo_test = unittest.make(
++    _check_strict_integrity__matrix_per_combo_impl,
++)
++
++def _try_sources__matrix_downloads_every_combo_impl(ctx):
++    env = unittest.begin(ctx)
++
++    repos = _make_matrix_repos(["github.com"], ["amd64", "arm64"])
++    rctx, files, _, _ = _mock_rctx([_OK, _OK])
++
++    dl = Download.try_sources(rctx, "test", "1.0", repos)
++
++    # one download per combination, each extracted under its own `output`
++    asserts.equals(env, 2, len(rctx.calls))
++    asserts.equals(env, [
++        "1.0/github.com/amd64",
++        "1.0/github.com/arm64",
++    ], [call["output"] for call in rctx.calls])
++
++    # ... and one target per `output`, so consumers can pick a partition
++    asserts.equals(env, ["amd64", "arm64"], dl.outputs)
++
++    asserts.equals(env, "github.com", dl.source)
++    asserts.true(env, "1.0/source.bzl" in files)
++
++    return unittest.end(env)
++
++try_sources__matrix_downloads_every_combo_test = unittest.make(
++    _try_sources__matrix_downloads_every_combo_impl,
++)
++
++def _try_sources__matrix_merged_outputs_impl(ctx):
++    env = unittest.begin(ctx)
++
++    # combinations that render the same `output` merge into one tree, so they
++    # are one target, not one per combination
++    repos = _make_matrix_repos(["github.com"], ["amd64", "amd64"])
++    rctx, _, _, _ = _mock_rctx([_OK, _OK])
++
++    dl = Download.try_sources(rctx, "test", "1.0", repos)
++
++    asserts.equals(env, 2, len(rctx.calls))
++    asserts.equals(env, ["amd64"], dl.outputs)
++
++    return unittest.end(env)
++
++try_sources__matrix_merged_outputs_test = unittest.make(
++    _try_sources__matrix_merged_outputs_impl,
++)
++
++def _try_sources__matrix_partial_source_fails_over_impl(ctx):
++    env = unittest.begin(ctx)
++
++    outputs = ["amd64", "arm64", "riscv64"]
++    repos = _make_matrix_repos(["github.com", "gitlab.com"], outputs)
++
++    # the first source is missing one of the three combinations, so it's
++    # skipped entirely rather than leaving a half-materialized tree
++    rctx, _, _, _ = _mock_rctx([_OK, _KO, _OK, _OK, _OK])
++
++    dl = Download.try_sources(rctx, "test", "1.0", repos)
++
++    asserts.equals(env, "gitlab.com", dl.source)
++    asserts.equals(env, outputs, dl.outputs)
++
++    # and the first source stops at the combination that failed
++    asserts.equals(env, [
++        "1.0/github.com/amd64",
++        "1.0/github.com/arm64",
++        "1.0/gitlab.com/amd64",
++        "1.0/gitlab.com/arm64",
++        "1.0/gitlab.com/riscv64",
++    ], [call["output"] for call in rctx.calls])
++
++    return unittest.end(env)
++
++try_sources__matrix_partial_source_fails_over_test = unittest.make(
++    _try_sources__matrix_partial_source_fails_over_impl,
++)
++
++def _try_sources__no_matrix_has_no_outputs_impl(ctx):
++    env = unittest.begin(ctx)
++
++    repos = _make_repos(["github.com"])
++    rctx, _, _, _ = _mock_rctx([_OK])
++
++    dl = Download.try_sources(rctx, "test", "1.0", repos)
++
++    # without a matrix there's one archive extracted at the root of the
++    # version/source directory and, thus, no per-`output` targets
++    asserts.equals(env, [], dl.outputs)
++    asserts.equals(env, ["1.0/github.com"], [c["output"] for c in rctx.calls])
++
++    return unittest.end(env)
++
++try_sources__no_matrix_has_no_outputs_test = unittest.make(
++    _try_sources__no_matrix_has_no_outputs_impl,
++)
++
+ TEST_SUITE_NAME = "lib/download"
+ 
+ TEST_SUITE_TESTS = {
+     "apply_patch/rewrites_paths": apply_patch__rewrites_paths_test,
+     "check_strict_integrity/all_same": check_strict_integrity__all_same_test,
++    "check_strict_integrity/matrix_per_combo": check_strict_integrity__matrix_per_combo_test,
+     "check_strict_integrity/mismatch": check_strict_integrity__mismatch_test,
+     "check_strict_integrity/mix": check_strict_integrity__mix_test,
+     "check_strict_integrity/none": check_strict_integrity__none_test,
+@@ -432,6 +589,10 @@ TEST_SUITE_TESTS = {
+     "try_sources/all_fail_returns_none": try_sources__all_fail_returns_none_test,
+     "try_sources/failover_to_second": try_sources__failover_to_second_test,
+     "try_sources/first_success_wins": try_sources__first_success_wins_test,
++    "try_sources/matrix/downloads_every_combo": try_sources__matrix_downloads_every_combo_test,
++    "try_sources/matrix/merged_outputs": try_sources__matrix_merged_outputs_test,
++    "try_sources/matrix/no_matrix_has_no_outputs": try_sources__no_matrix_has_no_outputs_test,
++    "try_sources/matrix/partial_source_fails_over": try_sources__matrix_partial_source_fails_over_test,
+     "try_sources/missing_integrity_warns": try_sources__missing_integrity_warns_test,
+     "try_sources/output_path": try_sources__output_path_test,
+     "try_sources/strict_integrity_checked": try_sources__strict_integrity_checked_test,
+diff --git a/tests/lib/index.bzl b/tests/lib/index.bzl
+index ceadc23..e117610 100644
+--- a/tests/lib/index.bzl
++++ b/tests/lib/index.bzl
+@@ -354,13 +354,151 @@ def _new__v1_valid_multiple_sources_impl(ctx):
+ 
+ new__v1_valid_multiple_sources_test = unittest.make(_new__v1_valid_multiple_sources_impl)
+ 
++_MATRIX_INDEX_JSON = """
++{
++  "version": 1,
++  "sources": {
++    "static.example.org": {
++      "url": "https://{source}/dist/{component}-{version}-{triple}.tar.xz",
++      "strip_prefix": "{component}-{version}-{triple}/{piece}"
++    }
++  },
++  "matrix": [
++    {
++      "key": "triple",
++      "values": ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
++    },
++    {
++      "key": "component",
++      "values": {
++        "cargo": {"piece": "cargo"},
++        "rust-std": {"piece": "rust-std-{triple}"}
++      }
++    }
++  ],
++  "output": "{triple}",
++  "versions": {
++    "1.0.0": {
++      "x86_64-unknown-linux-gnu": {
++        "cargo": "sha256-3q2zP96tsz/erbM/3q2zP96tsz/erbM/3q2zP96tsz8=",
++        "rust-std": "sha256-3q2zP96tsz/erbM/3q2zP96tsz/erbM/3q2zP96tsz8="
++      },
++      "aarch64-unknown-linux-gnu": {
++        "cargo": "sha256-3q2zP96tsz/erbM/3q2zP96tsz/erbM/3q2zP96tsz8=",
++        "rust-std": "sha256-3q2zP96tsz/erbM/3q2zP96tsz/erbM/3q2zP96tsz8="
++      }
++    }
++  }
++}
++"""
++
++def _new__v1_valid_matrix_impl(ctx):
++    env = unittest.begin(ctx)
++
++    prints = []
++
++    index = Index.new("repo_name", _MATRIX_INDEX_JSON, _print = Mock.print(prints))
++
++    # every integrity is in the index, so there are no warnings
++    asserts.equals(env, [], prints)
++
++    repo = index.repos["1.0.0"][0]
++
++    # one context per combination, in matrix order
++    asserts.equals(env, 4, len(repo.contexts))
++
++    # `context` is the first combination's, for the consumers that only need
++    # one representative context
++    asserts.equals(env, repo.contexts[0].context, repo.context)
++
++    urls = [c.context["url"] for c in repo.contexts]
++    asserts.equals(env, [
++        "https://static.example.org/dist/cargo-1.0.0-x86_64-unknown-linux-gnu.tar.xz",
++        "https://static.example.org/dist/rust-std-1.0.0-x86_64-unknown-linux-gnu.tar.xz",
++        "https://static.example.org/dist/cargo-1.0.0-aarch64-unknown-linux-gnu.tar.xz",
++        "https://static.example.org/dist/rust-std-1.0.0-aarch64-unknown-linux-gnu.tar.xz",
++    ], urls)
++
++    # `output` partitions the extracted tree by triple: the two components of
++    # a triple merge into the same subpath
++    asserts.equals(env, [
++        "x86_64-unknown-linux-gnu",
++        "x86_64-unknown-linux-gnu",
++        "aarch64-unknown-linux-gnu",
++        "aarch64-unknown-linux-gnu",
++    ], [c.output for c in repo.contexts])
++
++    # an axis property is materialized with the axes before it: `rust-std`'s
++    # `piece` references `triple`, the first axis
++    asserts.equals(env, [
++        "cargo-1.0.0-x86_64-unknown-linux-gnu/cargo",
++        "rust-std-1.0.0-x86_64-unknown-linux-gnu/rust-std-x86_64-unknown-linux-gnu",
++        "cargo-1.0.0-aarch64-unknown-linux-gnu/cargo",
++        "rust-std-1.0.0-aarch64-unknown-linux-gnu/rust-std-aarch64-unknown-linux-gnu",
++    ], [c.context["strip_prefix"] for c in repo.contexts])
++
++    # the nested integrity is looked up per combination
++    sha256 = "deadb33fdeadb33fdeadb33fdeadb33fdeadb33fdeadb33fdeadb33fdeadb33f"
++    for context in [c.context for c in repo.contexts]:
++        asserts.equals(env, sha256, context["sha256"])
++
++    return unittest.end(env)
++
++new__v1_valid_matrix_test = unittest.make(_new__v1_valid_matrix_impl)
++
++_MATRIX_INDEX_MISSING_INTEGRITY_JSON = """
++{
++  "version": 1,
++  "sources": {
++    "static.example.org": {
++      "url": "https://{source}/dist/{component}-{version}-{triple}.tar.xz"
++    }
++  },
++  "matrix": [
++    {"key": "triple", "values": ["x86_64-unknown-linux-gnu"]},
++    {"key": "component", "values": ["cargo", "rust-std"]}
++  ],
++  "output": "{triple}",
++  "versions": {
++    "1.0.0": {
++      "x86_64-unknown-linux-gnu": {
++        "rust-std": "sha256-3q2zP96tsz/erbM/3q2zP96tsz/erbM/3q2zP96tsz8="
++      }
++    }
++  }
++}
++"""
++
++def _new__v1_matrix_missing_integrity_warns_impl(ctx):
++    env = unittest.begin(ctx)
++
++    index_json = _MATRIX_INDEX_MISSING_INTEGRITY_JSON
++
++    prints = []
++
++    Index.new("repo_name", index_json, _print = Mock.print(prints))
++
++    asserts.equals(env, 1, len(prints))
++    asserts.true(env, "missing integrity/sha256 for:" in prints[0])
++
++    # the warning names the combination and the source that are missing
++    asserts.true(env, "x86_64-unknown-linux-gnu/cargo/static.example.org" in prints[0])
++
++    return unittest.end(env)
++
++new__v1_matrix_missing_integrity_warns_test = unittest.make(
++    _new__v1_matrix_missing_integrity_warns_impl,
++)
++
+ TEST_SUITE_NAME = "lib/index"
+ 
+ TEST_SUITE_TESTS = {
+     "new/invalid_version": new__invalid_version_test,
+     "new/v1/empty_versions": new__v1_empty_versions_test,
++    "new/v1/matrix/missing_integrity_warns": new__v1_matrix_missing_integrity_warns_test,
+     "new/v1/valid/complex": new__v1_valid_complex_test,
+     "new/v1/valid/integrity": new__v1_valid_integrity_test,
++    "new/v1/valid/matrix": new__v1_valid_matrix_test,
+     "new/v1/valid/multiple_sources": new__v1_valid_multiple_sources_test,
+     "new/v1/valid/simple": new__v1_valid_simple_test,
+     "new/v1/valid/simplest": new__v1_valid_simplest_test,
+diff --git a/tests/lib/matrix.bzl b/tests/lib/matrix.bzl
+new file mode 100644
+index 0000000..fb0f3a7
+--- /dev/null
++++ b/tests/lib/matrix.bzl
+@@ -0,0 +1,233 @@
++"matrix.bzl unit tests"
++
++load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
++load("//lib:matrix.bzl", Matrix = "matrix")
++load("//tests:mock.bzl", Mock = "mock")
++load("//tests:suite.bzl", _test_suite = "test_suite")
++
++_TRIPLE_AXIS = {
++    "key": "triple",
++    "values": ["x86_64", "aarch64"],
++}
++
++_COMPONENT_AXIS = {
++    "key": "component",
++    "values": {
++        "cargo": {"piece": "cargo"},
++        "rust-std": {"piece": "rust-std-{triple}"},
++    },
++}
++
++_MATRIX = [_TRIPLE_AXIS, _COMPONENT_AXIS]
++
++def _axis_values__no_matrix_impl(ctx):
++    env = unittest.begin(ctx)
++
++    asserts.equals(env, [], Matrix.axis_values([]))
++
++    return unittest.end(env)
++
++axis_values__no_matrix_test = unittest.make(_axis_values__no_matrix_impl)
++
++def _axis_values__first_axis_only_impl(ctx):
++    env = unittest.begin(ctx)
++
++    # only the FIRST axis: those are the top-level keys of a matrix version
++    # context, the ones that are integrities and not version properties
++    asserts.equals(env, ["x86_64", "aarch64"], Matrix.axis_values(_MATRIX))
++
++    return unittest.end(env)
++
++axis_values__first_axis_only_test = unittest.make(
++    _axis_values__first_axis_only_impl,
++)
++
++def _axis_values__dict_values_impl(ctx):
++    env = unittest.begin(ctx)
++
++    values = Matrix.axis_values([_COMPONENT_AXIS])
++    asserts.equals(env, ["cargo", "rust-std"], values)
++
++    return unittest.end(env)
++
++axis_values__dict_values_test = unittest.make(_axis_values__dict_values_impl)
++
++def _combos__no_matrix_impl(ctx):
++    env = unittest.begin(ctx)
++
++    # no matrix is one combination with no properties, i.e. exactly one
++    # archive per (version, source), the pre-matrix behavior
++    asserts.equals(env, [{}], Matrix.combos([]))
++
++    return unittest.end(env)
++
++combos__no_matrix_test = unittest.make(_combos__no_matrix_impl)
++
++def _combos__list_values_impl(ctx):
++    env = unittest.begin(ctx)
++
++    expected = [
++        {"triple": "x86_64"},
++        {"triple": "aarch64"},
++    ]
++    asserts.equals(env, expected, Matrix.combos([_TRIPLE_AXIS]))
++
++    return unittest.end(env)
++
++combos__list_values_test = unittest.make(_combos__list_values_impl)
++
++def _combos__dict_values_impl(ctx):
++    env = unittest.begin(ctx)
++
++    # the dict form attaches extra properties to the selected value and, as
++    # they are templates, they are NOT materialized here
++    expected = [
++        {"component": "cargo", "piece": "cargo"},
++        {"component": "rust-std", "piece": "rust-std-{triple}"},
++    ]
++    asserts.equals(env, expected, Matrix.combos([_COMPONENT_AXIS]))
++
++    return unittest.end(env)
++
++combos__dict_values_test = unittest.make(_combos__dict_values_impl)
++
++def _combos__cross_product_order_impl(ctx):
++    env = unittest.begin(ctx)
++
++    # the cross product is in matrix order, with the LAST axis varying fastest
++    expected = [
++        {"component": "cargo", "piece": "cargo", "triple": "x86_64"},
++        {"component": "rust-std", "piece": "rust-std-{triple}", "triple": "x86_64"},
++        {"component": "cargo", "piece": "cargo", "triple": "aarch64"},
++        {"component": "rust-std", "piece": "rust-std-{triple}", "triple": "aarch64"},
++    ]
++    asserts.equals(env, expected, Matrix.combos(_MATRIX))
++
++    return unittest.end(env)
++
++combos__cross_product_order_test = unittest.make(
++    _combos__cross_product_order_impl,
++)
++
++def _combos__missing_axis_key_impl(ctx):
++    env = unittest.begin(ctx)
++
++    params = (
++        ([{"values": ["x86_64"]}], "'key'"),
++        ([{"key": "triple"}], "'values'"),
++    )
++
++    for matrix, expected in params:
++        res = Matrix.combos(matrix, _fail = Mock.fail)
++        asserts.true(env, res.startswith("matrix: axis missing mandatory key:"))
++        asserts.true(env, res.endswith(expected))
++
++    return unittest.end(env)
++
++combos__missing_axis_key_test = unittest.make(_combos__missing_axis_key_impl)
++
++def _combos__invalid_axis_values_impl(ctx):
++    env = unittest.begin(ctx)
++
++    matrix = [{"key": "triple", "values": "x86_64"}]
++
++    res = Matrix.combos(matrix, _fail = Mock.fail)
++    asserts.true(env, "'values' must be a list or a dict" in res)
++
++    return unittest.end(env)
++
++combos__invalid_axis_values_test = unittest.make(
++    _combos__invalid_axis_values_impl,
++)
++
++_VERSION = {
++    "x86_64": {
++        "cargo": "sha256-AAA",
++        "rust-std": {
++            "mirror1": "sha256-BBB",
++            "mirror2": "sha256-CCC",
++        },
++    },
++}
++
++def _integrity__global_leaf_impl(ctx):
++    env = unittest.begin(ctx)
++
++    combo = {"component": "cargo", "triple": "x86_64"}
++
++    res = Matrix.integrity(_VERSION, "mirror1", _MATRIX, combo)
++    asserts.equals(env, "sha256-AAA", res)
++
++    return unittest.end(env)
++
++integrity__global_leaf_test = unittest.make(_integrity__global_leaf_impl)
++
++def _integrity__per_source_leaf_impl(ctx):
++    env = unittest.begin(ctx)
++
++    combo = {"component": "rust-std", "triple": "x86_64"}
++
++    params = {"mirror1": "sha256-BBB", "mirror2": "sha256-CCC"}
++
++    for source_name, expected in params.items():
++        res = Matrix.integrity(_VERSION, source_name, _MATRIX, combo)
++        asserts.equals(env, expected, res)
++
++    return unittest.end(env)
++
++integrity__per_source_leaf_test = unittest.make(_integrity__per_source_leaf_impl)
++
++def _integrity__missing_impl(ctx):
++    env = unittest.begin(ctx)
++
++    params = (
++        # a whole axis value is missing
++        {"component": "cargo", "triple": "aarch64"},
++        # the leaf of the last axis is missing
++        {"component": "rustfmt", "triple": "x86_64"},
++    )
++
++    for combo in params:
++        res = Matrix.integrity(_VERSION, "mirror1", _MATRIX, combo)
++        asserts.equals(env, None, res)
++
++    # the source of a per-source leaf is missing
++    combo = {"component": "rust-std", "triple": "x86_64"}
++    res = Matrix.integrity(_VERSION, "mirror3", _MATRIX, combo)
++    asserts.equals(env, None, res)
++
++    return unittest.end(env)
++
++integrity__missing_test = unittest.make(_integrity__missing_impl)
++
++def _path__axis_values_impl(ctx):
++    env = unittest.begin(ctx)
++
++    combo = {"component": "cargo", "piece": "cargo", "triple": "x86_64"}
++
++    # only the axis values, in matrix order
++    asserts.equals(env, "x86_64/cargo", Matrix.path(_MATRIX, combo))
++
++    return unittest.end(env)
++
++path__axis_values_test = unittest.make(_path__axis_values_impl)
++
++TEST_SUITE_NAME = "lib/matrix"
++
++TEST_SUITE_TESTS = {
++    "axis_values/dict_values": axis_values__dict_values_test,
++    "axis_values/first_axis_only": axis_values__first_axis_only_test,
++    "axis_values/no_matrix": axis_values__no_matrix_test,
++    "combos/cross_product_order": combos__cross_product_order_test,
++    "combos/dict_values": combos__dict_values_test,
++    "combos/invalid_axis_values": combos__invalid_axis_values_test,
++    "combos/list_values": combos__list_values_test,
++    "combos/missing_axis_key": combos__missing_axis_key_test,
++    "combos/no_matrix": combos__no_matrix_test,
++    "integrity/global_leaf": integrity__global_leaf_test,
++    "integrity/missing": integrity__missing_test,
++    "integrity/per_source_leaf": integrity__per_source_leaf_test,
++    "path/axis_values": path__axis_values_test,
++}
++
++test_suite = lambda: _test_suite(TEST_SUITE_NAME, TEST_SUITE_TESTS)
+diff --git a/tests/lib/utils.bzl b/tests/lib/utils.bzl
+index 069e7d0..79b3bd0 100644
+--- a/tests/lib/utils.bzl
++++ b/tests/lib/utils.bzl
+@@ -30,6 +30,30 @@ def _get_dupes__dupes_impl(ctx):
+ 
+ get_dupes__dupes_test = unittest.make(_get_dupes__dupes_impl)
+ 
++def _dedupe__no_dupes_impl(ctx):
++    env = unittest.begin(ctx)
++
++    values = ["c", "a", "b"]
++    res = Utils.dedupe(values)
++    asserts.equals(env, ["c", "a", "b"], res)
++
++    return unittest.end(env)
++
++dedupe__no_dupes_test = unittest.make(_dedupe__no_dupes_impl)
++
++def _dedupe__keeps_first_occurrences_impl(ctx):
++    env = unittest.begin(ctx)
++
++    values = ["c", "a", "c", "b", "a"]
++    res = Utils.dedupe(values)
++    asserts.equals(env, ["c", "a", "b"], res)
++
++    return unittest.end(env)
++
++dedupe__keeps_first_occurrences_test = unittest.make(
++    _dedupe__keeps_first_occurrences_impl,
++)
++
+ def _replace_in_place__missing_key_impl(ctx):
+     env = unittest.begin(ctx)
+ 
+@@ -171,6 +195,8 @@ matching_patches__range_with_source_test = unittest.make(_matching_patches__rang
+ TEST_SUITE_NAME = "lib/utils"
+ 
+ TEST_SUITE_TESTS = {
++    "dedupe/keeps_first_occurrences": dedupe__keeps_first_occurrences_test,
++    "dedupe/no_dupes": dedupe__no_dupes_test,
+     "get_dupes/dupes": get_dupes__dupes_test,
+     "get_dupes/no_dupes": get_dupes__no_dupes_test,
+     "matching_patches/exact_version": matching_patches__exact_version_test,
