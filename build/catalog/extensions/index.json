@@ -99,6 +99,7 @@
     "pg_track_settings",
     "pgagent",
     "pgaudit",
+    "pgcontext",
     "pgjwt",
     "pgmq",
     "pgrouting",
