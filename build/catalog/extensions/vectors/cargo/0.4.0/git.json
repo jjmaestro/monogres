@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "sources": {
+    "git+https://github.com/tensorchord/pgrx.git?branch=v0.12.5-patch#1fd3d1544c2f9ac68ec0c6e293fd2de398b6d3d7": {
+      "url": "https://github.com/tensorchord/pgrx/archive/1fd3d1544c2f9ac68ec0c6e293fd2de398b6d3d7.tar.gz",
+      "strip_prefix": "pgrx-1fd3d1544c2f9ac68ec0c6e293fd2de398b6d3d7",
+      "sha256": "d29af5d8b9d1d78425ae67e701fb5743424671396a826737e785f8ab0a42674c",
+      "crates": {
+        "pgrx": "pgrx",
+        "pgrx-bindgen": "pgrx-bindgen",
+        "pgrx-macros": "pgrx-macros",
+        "pgrx-pg-config": "pgrx-pg-config",
+        "pgrx-pg-sys": "pgrx-pg-sys",
+        "pgrx-sql-entity-graph": "pgrx-sql-entity-graph"
+      }
+    }
+  }
+}

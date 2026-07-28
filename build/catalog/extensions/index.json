@@ -118,6 +118,7 @@
     "timescaledb_toolkit",
     "vacuum_utils",
     "vchord",
+    "vectors",
     "vectorscale",
     "wal2json"
   ],

@@ -1,0 +1,95 @@
+From 52dc444eefc01febb8c1dce86ef3f2b251a658c7 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Mon, 27 Jul 2026 19:42:03 +0000
+Subject: [PATCH] patch: spell out the reborrows behind range indexing
+
+Six places index through a raw pointer and leave rustc to insert the reference
+on the way. Indexing with a range goes through `Index` / `IndexMut`, which take
+`&self` / `&mut self`, so `(*ptr)[a..b]` quietly materializes a reference to the
+whole pointee, with all of its validity and aliasing requirements, where the code
+reads as if it borrows only the range. That implicit autoref is what the lint is
+about, and `dangerous_implicit_autorefs` became deny-by-default after 0.4.0 was
+written, so what compiled then is an error now.
+
+Two shapes, in two files. `MmapArray` slices a `*const [T]` that maps an index on
+disk. The mmap IPC transport slices a `*mut [u8; 1048568]` out of an
+`UnsafeCell`, shared with another process, twice for reading and twice for
+writing, so two of the four need `&mut` rather than `&`.
+
+These are rustc's own suggested rewrites, and each is the same reference either
+way: the reborrow is spelled rather than inferred, so the lint has nothing left
+to warn about and later code in both files stays checked. An `allow` would have
+cost nothing today and hidden the next one, which matters more than usual here:
+the transport hands these buffers to a separate process, and it is exactly the
+code where an unintended whole-object reference would be worth hearing about.
+
+`MmapArray`'s `Index<usize>` impl, a few lines above the two that change, looks
+identical but is not: indexing a slice by `usize` is built in and yields a place,
+so no reference is created and there is no autoref to make explicit.
+---
+ crates/common/src/mmap_array.rs | 4 ++--
+ src/ipc/transport/mmap.rs       | 8 ++++----
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/crates/common/src/mmap_array.rs b/crates/common/src/mmap_array.rs
+index 157ab42..2db147d 100644
+--- a/crates/common/src/mmap_array.rs
++++ b/crates/common/src/mmap_array.rs
+@@ -85,7 +85,7 @@ impl<T> Index<Range<usize>> for MmapArray<T> {
+     type Output = [T];
+ 
+     fn index(&self, index: Range<usize>) -> &Self::Output {
+-        unsafe { &(*self.outp)[index] }
++        unsafe { &(&(*self.outp))[index] }
+     }
+ }
+ 
+@@ -93,7 +93,7 @@ impl<T> Index<RangeInclusive<usize>> for MmapArray<T> {
+     type Output = [T];
+ 
+     fn index(&self, index: RangeInclusive<usize>) -> &Self::Output {
+-        unsafe { &(*self.outp)[index] }
++        unsafe { &(&(*self.outp))[index] }
+     }
+ }
+ 
+diff --git a/src/ipc/transport/mmap.rs b/src/ipc/transport/mmap.rs
+index b47d79c..10ace07 100644
+--- a/src/ipc/transport/mmap.rs
++++ b/src/ipc/transport/mmap.rs
+@@ -155,7 +155,7 @@ impl Channel {
+         }
+         unsafe {
+             let len = *self.len.get();
+-            let res = (*self.bytes.get())[0..len as usize].to_vec();
++            let res = (&(*self.bytes.get()))[0..len as usize].to_vec();
+             Ok(res)
+         }
+     }
+@@ -166,7 +166,7 @@ impl Channel {
+         debug_assert!(matches!(self.futex.load(Ordering::Relaxed), S | X));
+         unsafe {
+             *self.len.get() = data.len() as u32;
+-            (*self.bytes.get())[0..data.len()].copy_from_slice(data);
++            (&mut (*self.bytes.get()))[0..data.len()].copy_from_slice(data);
+         }
+         if X == self.futex.swap(T, Ordering::Release) {
+             interprocess_atomic_wait::wake(&self.futex);
+@@ -208,7 +208,7 @@ impl Channel {
+         }
+         unsafe {
+             let len = *self.len.get();
+-            let res = (*self.bytes.get())[0..len as usize].to_vec();
++            let res = (&(*self.bytes.get()))[0..len as usize].to_vec();
+             Ok(res)
+         }
+     }
+@@ -219,7 +219,7 @@ impl Channel {
+         debug_assert!(matches!(self.futex.load(Ordering::Relaxed), S | X));
+         unsafe {
+             *self.len.get() = data.len() as u32;
+-            (*self.bytes.get())[0..data.len()].copy_from_slice(data);
++            (&mut (*self.bytes.get()))[0..data.len()].copy_from_slice(data);
+         }
+         if X == self.futex.swap(T, Ordering::Release) {
+             interprocess_atomic_wait::wake(&self.futex);

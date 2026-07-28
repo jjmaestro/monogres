@@ -1,0 +1,215 @@
+From 99e9eba235a62cfb2490c0695e2afee5c0adc932 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sat, 25 Jul 2026 19:42:03 +0000
+Subject: [PATCH] patch: build on stable Rust
+
+0.4.0 asks for `nightly-2024-09-14` in `rust-toolchain.toml` and gates three
+compiler features. Two of them no longer exist: `avx512_target_feature` and
+`stdarch_x86_avx512` were both stabilized in Rust 1.89, and on a stable compiler
+naming a stabilized feature is a hard error rather than a no-op (E0554, "the
+feature has been stable since 1.89.0 and no longer requires an attribute to
+enable"). Dropping those two attributes is all it takes: every AVX-512
+intrinsic behind them, and `#[target_feature(enable = "avx512...")]` itself,
+compiles as it is.
+
+The third, `stdarch_x86_avx512_f16`, is still unstable (rust #127213), so the
+code that needs it goes: `reduce_sum_of_xy_v4_avx512fp16` and
+`reduce_sum_of_d2_v4_avx512fp16`, their two tests, and their entries in the
+`detect::multiversion` dispatch lists. They are the only two functions in the
+extension that reach for an unstable API.
+
+What that costs is one specialization on one class of hardware. `multiversion`
+picks the best variant the CPU reports at runtime, and the two functions dropped
+here are the `f16` distance kernels for CPUs with AVX-512 FP16 (Sapphire Rapids
+and later), which compute in half precision natively. Those CPUs now take the
+`v4` variant instead, which widens `f16` to `f32` and reduces in AVX-512 single
+precision, so the answers stay within the same tolerance the deleted tests
+asserted against the scalar fallback. Every other CPU is unaffected: `v4`, `v3`,
+`v2`, `neon` and the fallback are untouched, and so is `f32` throughout.
+
+References: https://github.com/rust-lang/rust/issues/127213
+---
+ crates/base/src/lib.rs         |   3 -
+ crates/base/src/scalar/f16.rs  | 126 +--------------------------------
+ crates/quantization/src/lib.rs |   2 -
+ 3 files changed, 2 insertions(+), 129 deletions(-)
+
+diff --git a/crates/base/src/lib.rs b/crates/base/src/lib.rs
+index a303bbb..d91ecc2 100644
+--- a/crates/base/src/lib.rs
++++ b/crates/base/src/lib.rs
+@@ -1,6 +1,3 @@
+-#![feature(avx512_target_feature)]
+-#![cfg_attr(target_arch = "x86_64", feature(stdarch_x86_avx512))]
+-#![cfg_attr(target_arch = "x86_64", feature(stdarch_x86_avx512_f16))]
+ #![allow(clippy::derivable_impls)]
+ #![allow(clippy::len_without_is_empty)]
+ #![allow(clippy::len_zero)]
+diff --git a/crates/base/src/scalar/f16.rs b/crates/base/src/scalar/f16.rs
+index 8d21d45..f5e98df 100644
+--- a/crates/base/src/scalar/f16.rs
++++ b/crates/base/src/scalar/f16.rs
+@@ -268,66 +268,6 @@ impl ScalarLike for f16 {
+ mod reduce_sum_of_xy {
+     use half::f16;
+ 
+-    #[cfg(target_arch = "x86_64")]
+-    #[detect::target_cpu(enable = "v4_avx512fp16")]
+-    pub unsafe fn reduce_sum_of_xy_v4_avx512fp16(lhs: &[f16], rhs: &[f16]) -> f32 {
+-        assert!(lhs.len() == rhs.len());
+-        unsafe {
+-            use std::arch::x86_64::*;
+-            let mut n = lhs.len();
+-            let mut a = lhs.as_ptr();
+-            let mut b = rhs.as_ptr();
+-            let mut xy = _mm512_setzero_ph();
+-            while n >= 32 {
+-                let x = _mm512_loadu_ph(a.cast());
+-                let y = _mm512_loadu_ph(b.cast());
+-                a = a.add(32);
+-                b = b.add(32);
+-                n -= 32;
+-                xy = _mm512_fmadd_ph(x, y, xy);
+-            }
+-            if n > 0 {
+-                let mask = _bzhi_u32(0xffffffff, n as u32);
+-                let x = _mm512_castsi512_ph(_mm512_maskz_loadu_epi16(mask, a.cast()));
+-                let y = _mm512_castsi512_ph(_mm512_maskz_loadu_epi16(mask, b.cast()));
+-                xy = _mm512_fmadd_ph(x, y, xy);
+-            }
+-            _mm512_reduce_add_ph(xy) as f32
+-        }
+-    }
+-
+-    #[cfg(all(target_arch = "x86_64", test))]
+-    #[test]
+-    fn reduce_sum_of_xy_v4_avx512fp16_test() {
+-        use rand::Rng;
+-        const EPSILON: f32 = 2.0;
+-        detect::init();
+-        if !detect::v4_avx512fp16::detect() {
+-            println!("test {} ... skipped (v4_avx512fp16)", module_path!());
+-            return;
+-        }
+-        let mut rng = rand::thread_rng();
+-        for _ in 0..256 {
+-            let n = 4016;
+-            let lhs = (0..n)
+-                .map(|_| f16::from_f32(rng.gen_range(-1.0..=1.0)))
+-                .collect::<Vec<_>>();
+-            let rhs = (0..n)
+-                .map(|_| f16::from_f32(rng.gen_range(-1.0..=1.0)))
+-                .collect::<Vec<_>>();
+-            for z in 3984..4016 {
+-                let lhs = &lhs[..z];
+-                let rhs = &rhs[..z];
+-                let specialized = unsafe { reduce_sum_of_xy_v4_avx512fp16(lhs, rhs) };
+-                let fallback = unsafe { reduce_sum_of_xy_fallback(lhs, rhs) };
+-                assert!(
+-                    (specialized - fallback).abs() < EPSILON,
+-                    "specialized = {specialized}, fallback = {fallback}."
+-                );
+-            }
+-        }
+-    }
+-
+     #[cfg(target_arch = "x86_64")]
+     #[detect::target_cpu(enable = "v4")]
+     pub unsafe fn reduce_sum_of_xy_v4(lhs: &[f16], rhs: &[f16]) -> f32 {
+@@ -448,7 +388,7 @@ mod reduce_sum_of_xy {
+         }
+     }
+ 
+-    #[detect::multiversion(v4_avx512fp16 = import, v4 = import, v3 = import, v2, neon, fallback = export)]
++    #[detect::multiversion(v4 = import, v3 = import, v2, neon, fallback = export)]
+     pub fn reduce_sum_of_xy(lhs: &[f16], rhs: &[f16]) -> f32 {
+         assert!(lhs.len() == rhs.len());
+         let n = lhs.len();
+@@ -463,68 +403,6 @@ mod reduce_sum_of_xy {
+ mod reduce_sum_of_d2 {
+     use half::f16;
+ 
+-    #[cfg(target_arch = "x86_64")]
+-    #[detect::target_cpu(enable = "v4_avx512fp16")]
+-    pub unsafe fn reduce_sum_of_d2_v4_avx512fp16(lhs: &[f16], rhs: &[f16]) -> f32 {
+-        assert!(lhs.len() == rhs.len());
+-        unsafe {
+-            use std::arch::x86_64::*;
+-            let mut n = lhs.len() as u32;
+-            let mut a = lhs.as_ptr();
+-            let mut b = rhs.as_ptr();
+-            let mut d2 = _mm512_setzero_ph();
+-            while n >= 32 {
+-                let x = _mm512_loadu_ph(a.cast());
+-                let y = _mm512_loadu_ph(b.cast());
+-                a = a.add(32);
+-                b = b.add(32);
+-                n -= 32;
+-                let d = _mm512_sub_ph(x, y);
+-                d2 = _mm512_fmadd_ph(d, d, d2);
+-            }
+-            if n > 0 {
+-                let mask = _bzhi_u32(0xffffffff, n);
+-                let x = _mm512_castsi512_ph(_mm512_maskz_loadu_epi16(mask, a.cast()));
+-                let y = _mm512_castsi512_ph(_mm512_maskz_loadu_epi16(mask, b.cast()));
+-                let d = _mm512_sub_ph(x, y);
+-                d2 = _mm512_fmadd_ph(d, d, d2);
+-            }
+-            _mm512_reduce_add_ph(d2) as f32
+-        }
+-    }
+-
+-    #[cfg(all(target_arch = "x86_64", test))]
+-    #[test]
+-    fn reduce_sum_of_d2_v4_avx512fp16_test() {
+-        use rand::Rng;
+-        const EPSILON: f32 = 6.0;
+-        detect::init();
+-        if !detect::v4_avx512fp16::detect() {
+-            println!("test {} ... skipped (v4_avx512fp16)", module_path!());
+-            return;
+-        }
+-        let mut rng = rand::thread_rng();
+-        for _ in 0..256 {
+-            let n = 4016;
+-            let lhs = (0..n)
+-                .map(|_| f16::from_f32(rng.gen_range(-1.0..=1.0)))
+-                .collect::<Vec<_>>();
+-            let rhs = (0..n)
+-                .map(|_| f16::from_f32(rng.gen_range(-1.0..=1.0)))
+-                .collect::<Vec<_>>();
+-            for z in 3984..4016 {
+-                let lhs = &lhs[..z];
+-                let rhs = &rhs[..z];
+-                let specialized = unsafe { reduce_sum_of_d2_v4_avx512fp16(lhs, rhs) };
+-                let fallback = unsafe { reduce_sum_of_d2_fallback(lhs, rhs) };
+-                assert!(
+-                    (specialized - fallback).abs() < EPSILON,
+-                    "specialized = {specialized}, fallback = {fallback}."
+-                );
+-            }
+-        }
+-    }
+-
+     #[cfg(target_arch = "x86_64")]
+     #[detect::target_cpu(enable = "v4")]
+     pub unsafe fn reduce_sum_of_d2_v4(lhs: &[f16], rhs: &[f16]) -> f32 {
+@@ -653,7 +531,7 @@ mod reduce_sum_of_d2 {
+         }
+     }
+ 
+-    #[detect::multiversion(v4_avx512fp16 = import, v4 = import, v3 = import, v2, neon, fallback = export)]
++    #[detect::multiversion(v4 = import, v3 = import, v2, neon, fallback = export)]
+     pub fn reduce_sum_of_d2(lhs: &[f16], rhs: &[f16]) -> f32 {
+         assert!(lhs.len() == rhs.len());
+         let n = lhs.len();
+diff --git a/crates/quantization/src/lib.rs b/crates/quantization/src/lib.rs
+index a7f756d..7db1138 100644
+--- a/crates/quantization/src/lib.rs
++++ b/crates/quantization/src/lib.rs
+@@ -1,5 +1,3 @@
+-#![feature(avx512_target_feature)]
+-#![cfg_attr(target_arch = "x86_64", feature(stdarch_x86_avx512))]
+ #![allow(clippy::identity_op)]
+ #![allow(clippy::needless_range_loop)]
+ #![allow(clippy::type_complexity)]
