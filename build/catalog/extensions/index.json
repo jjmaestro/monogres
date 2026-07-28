@@ -92,6 +92,7 @@
     "pg_partman",
     "pg_qualstats",
     "pg_repack",
+    "pg_search",
     "pg_stat_kcache",
     "pg_stat_monitor",
     "pg_store_plans",

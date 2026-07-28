@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "sources": {
+    "git+https://github.com/paradedb/datafusion-distributed?rev=e5a498e#e5a498e7212a69efa395953a0ed36d7839258d6d": {
+      "url": "https://github.com/paradedb/datafusion-distributed/archive/e5a498e7212a69efa395953a0ed36d7839258d6d.tar.gz",
+      "strip_prefix": "datafusion-distributed-e5a498e7212a69efa395953a0ed36d7839258d6d",
+      "sha256": "26d44d08c7c0ab1daef17bf6e9bcb5b7213b5c747bb8f6cbaf6ef6fa8b0809c1",
+      "crates": {
+        "datafusion-distributed": "."
+      }
+    },
+    "git+https://github.com/paradedb/fst.git#11e89334c578f26f9fbafbd1122ffb220ebbdbbf": {
+      "url": "https://github.com/paradedb/fst/archive/11e89334c578f26f9fbafbd1122ffb220ebbdbbf.tar.gz",
+      "strip_prefix": "fst-11e89334c578f26f9fbafbd1122ffb220ebbdbbf",
+      "sha256": "749c8c4873b418a9d568717f66887ab16006f617a80cf0403631cda4c5da014a",
+      "crates": {
+        "tantivy-fst": "."
+      }
+    },
+    "git+https://github.com/paradedb/tantivy.git?branch=paradedb-0.24.x#2c73e8ca7d3da34f894e890d9b69baff9d03ca71": {
+      "url": "https://github.com/paradedb/tantivy/archive/2c73e8ca7d3da34f894e890d9b69baff9d03ca71.tar.gz",
+      "strip_prefix": "tantivy-2c73e8ca7d3da34f894e890d9b69baff9d03ca71",
+      "sha256": "c06c288358f5db4e0a0398669514bb8265057e01aedf69515967487e55f3d3a3",
+      "crates": {
+        "ownedbytes": "ownedbytes",
+        "tantivy": ".",
+        "tantivy-bitpacker": "bitpacker",
+        "tantivy-columnar": "columnar",
+        "tantivy-common": "common",
+        "tantivy-query-grammar": "query-grammar",
+        "tantivy-sstable": "sstable",
+        "tantivy-stacker": "stacker",
+        "tantivy-tokenizer-api": "tokenizer-api"
+      }
+    }
+  }
+}
