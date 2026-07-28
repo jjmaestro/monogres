@@ -385,14 +385,9 @@ _COMPILE_EXTENSION = """
             sed "s/@CARGO_VERSION@/{ext_version}/g" "$$control" \
                 > "$$pgxs_installdir/share/extension/$$extname.control"
 
-            # Static SQL generation off the cdylib's `.pgrxsc` section. Reads
-            # the file; never loads or runs it.
-            "$$PGRXSC_SQL" \
-                "$$so" \
-                "$$control" \
-                "$$extname" \
-                "{ext_version}" \
-                > "$$pgxs_installdir/share/extension/$$extname--{ext_version}.sql"
+            # The extension SQL: generated off the cdylib, or taken from the
+            # source when upstream ships it already generated.
+            {install_sql}
 
             echo
             echo "Extension compiled OK"
@@ -442,6 +437,49 @@ def _git_sources_config(git_sources):
         pad = pad,
     )
 
+# Static SQL generation off the cdylib's `.pgrxsc` section: reads the file,
+# never loads or runs it. What every pgrx >= 0.18 extension gets.
+_GENERATE_SQL = """\
+"$$PGRXSC_SQL" \\
+                "$$so" \\
+                "$$control" \\
+                "$$extname" \\
+                "{ext_version}" \\
+                > "{dest}"\
+"""
+
+# The alternative: the SQL upstream generated at release time and committed,
+# which is what its own `make install` installs. An extension that ships it
+# needs no generator, and so no pgrx recent enough to have a `.pgrxsc` section
+# at all.
+#
+# `chmod` because Bazel marks every file in an output tree executable, and the
+# generated path writes a plain 0644 file.
+_SHIPPED_SQL = """\
+cp "$$src/{sql_source}" "{dest}"
+            chmod 0644 "{dest}"\
+"""
+
+_SQL_DEST = "$$pgxs_installdir/share/extension/$$extname--{ext_version}.sql"
+
+def _install_sql(sql_source, ext_version):
+    """Render the shell that puts the extension SQL in the install tree.
+
+    Args:
+        sql_source: `metadata.sql_source`, a path below the source root, with
+            `{version}` already resolved. Empty to generate the SQL instead.
+        ext_version: The extension version, which names the installed file.
+
+    Returns:
+        Either the generator call or the copy.
+    """
+    dest = _SQL_DEST.format(ext_version = ext_version)
+
+    if sql_source:
+        return _SHIPPED_SQL.format(dest = dest, sql_source = sql_source)
+
+    return _GENERATE_SQL.format(dest = dest, ext_version = ext_version)
+
 # Where `compile_extension` stages `metadata.build_data`, and what the declared
 # variables are resolved against.
 _BUILD_DATA_DIR = "$$EXT_BUILD_ROOT/build_data"
@@ -486,8 +524,14 @@ def _build_data_config(build_data):
 # generator. Both run in the action itself and ride `tools`.
 _PROLOGUE_EXTRA = """
         CARGO="$$EXT_BUILD_ROOT/$(execpath {cargo})"
+        export CARGO
+"""
+
+# The generator half, left out for an extension that ships its own SQL: there is
+# then no generator target to name, and none is built.
+_PROLOGUE_SQL_GENERATOR = """
         PGRXSC_SQL="$$EXT_BUILD_ROOT/$(execpath {sql_generator})"
-        export CARGO PGRXSC_SQL
+        export PGRXSC_SQL
 """
 
 def pgrx_build(
@@ -501,8 +545,9 @@ def pgrx_build(
         *,
         vendor_tar,
         cargo_lock,
-        sql_generator,
         ext_version,
+        sql_generator = None,
+        sql_source = "",
         crate_dir = "",
         git_sources = {},
         build_data = {},
@@ -528,10 +573,17 @@ def pgrx_build(
         cargo_lock (str): Label of the catalog `Cargo.lock` the crate pool was
             built from, copied into the source tree and enforced with
             `--locked`.
-        sql_generator (str): Label of the binary that reads the cdylib's
-            `.pgrxsc` section and writes the extension SQL.
         ext_version (str): The extension version, i.e. the crate version pgrx
             spells `@CARGO_VERSION@`.
+        sql_generator (str): Label of the binary that reads the cdylib's
+            `.pgrxsc` section and writes the extension SQL. `None` when
+            `sql_source` names the SQL instead, which is also when no generator
+            is built for this extension's pgrx at all.
+        sql_source (str): Path below the source root of the extension SQL as
+            upstream ships it, from `metadata.sql_source`, with `{version}`
+            already resolved. Set for an extension that generates its SQL at
+            release time and commits it, which is then what its own `install`
+            target installs; empty to generate it here instead.
         crate_dir (str): The extension crate's directory below the source root,
             from `metadata.crate_dir`. Empty (the default) means the source root
             IS the crate. Set it when the tree is a cargo workspace: the root
@@ -562,7 +614,9 @@ def pgrx_build(
         base_sysroot_tar = base_sysroot_tar,
         prefix_distro = prefix_distro,
         compile_extension = _COMPILE_EXTENSION,
-        prologue_extra = _PROLOGUE_EXTRA,
+        prologue_extra = _PROLOGUE_EXTRA + (
+            _PROLOGUE_SQL_GENERATOR if sql_generator else ""
+        ),
         extra_srcs = [
             vendor_tar,
             cargo_lock,
@@ -572,7 +626,9 @@ def pgrx_build(
             build_data["files"][path]
             for path in sorted(build_data.get("files", {}))
         ],
-        extra_tools = [_CARGO, _RUST_FILES, sql_generator],
+        extra_tools = [_CARGO, _RUST_FILES] + (
+            [sql_generator] if sql_generator else []
+        ),
         extra_format_kwargs = {
             "build_data": _build_data_config(build_data),
             "cargo": _CARGO,
@@ -582,8 +638,9 @@ def pgrx_build(
             "crate_dir": "/" + crate_dir if crate_dir else "",
             "ext_version": ext_version,
             "git_sources": _git_sources_config(git_sources),
+            "install_sql": _install_sql(sql_source, ext_version),
             "pg_major": base_version["version"].split(".")[0],
-            "sql_generator": sql_generator,
+            "sql_generator": sql_generator or "",
             "target_cargo": _RUST_TARGET_CARGO,
             "vendor_tar": vendor_tar,
         },

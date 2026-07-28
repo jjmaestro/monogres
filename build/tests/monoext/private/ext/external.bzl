@@ -398,6 +398,50 @@ pg_build_pgrx_git_and_data_test = unittest.make(
     _pg_build_pgrx_git_and_data_test_impl,
 )
 
+def _pg_build_pgrx_shipped_sql_test_impl(ctx):
+    """An extension shipping its SQL names it, and gets no SQL generator.
+
+    Generating the SQL is what needs a pgrx recent enough to have a `.pgrxsc`
+    section. An extension that generated its SQL at release time and committed
+    it needs neither, so no generator is named for it here (and none is built
+    for the pgrx it pins).
+    """
+    env = unittest.begin(ctx)
+
+    out = _External._pg_build(
+        build_repo = "monogres",
+        source_repo = "pg_ext_src--vchord",
+        version = "1.1.1",
+        base_v = "18.1",
+        base_hub_name = "pg",
+        bt_sysroot = None,
+        base_sysroot = "//_base/18.1:sysroot_tar",
+        base_flavor = "postgres",
+        build_system = "pgrx",
+        ext_name = "vchord",
+        cargo = {
+            "crates": {},
+            "git_sources": {},
+            "lock": "//catalog/extensions:vchord/cargo/1.1.1/Cargo.lock",
+            "pgrx": "0.17.0",
+        },
+        sql_source = "sql/install/vchord--{version}.sql",
+    )
+
+    # `{version}` resolves here, so the build rule takes a concrete path.
+    asserts.true(
+        env,
+        'sql_source = "sql/install/vchord--1.1.1.sql"' in out,
+        out,
+    )
+    asserts.false(env, "sql_generator" in out, out)
+
+    return unittest.end(env)
+
+pg_build_pgrx_shipped_sql_test = unittest.make(
+    _pg_build_pgrx_shipped_sql_test_impl,
+)
+
 def _pg_build_pgrx_workspace_test_impl(ctx):
     """A pgrx crate below the source root names its directory to the build.
 
@@ -469,6 +513,7 @@ TEST_SUITE_TESTS = dict(
     pg_build_no_sysroot = pg_build_no_sysroot_test,
     pg_build_pgrx = pg_build_pgrx_test,
     pg_build_pgrx_git_and_data = pg_build_pgrx_git_and_data_test,
+    pg_build_pgrx_shipped_sql = pg_build_pgrx_shipped_sql_test,
     pg_build_pgrx_workspace = pg_build_pgrx_workspace_test,
     repo_bzl = repo_bzl_test,
     src_build = src_build_test,

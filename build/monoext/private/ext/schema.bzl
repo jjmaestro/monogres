@@ -244,6 +244,7 @@ def _ext_external_entry_init(
         remap_paths = {},
         crate_dir = "",
         build_data = {},
+        sql_source = "",
         cargo = {}):
     """Raw initializer for external entries; sets `is_contrib = False`.
 
@@ -282,6 +283,7 @@ def _ext_external_entry_init(
         remap_paths = remap_paths,
         crate_dir = crate_dir,
         build_data = build_data,
+        sql_source = sql_source,
         cargo = cargo,
     )
 
@@ -299,6 +301,7 @@ def _ext_external_entry_new(
         remap_paths = {},
         crate_dir = "",
         build_data = {},
+        sql_source = "",
         cargo = {}):
     """Constructs an `ExtExternalEntry`.
 
@@ -325,6 +328,8 @@ def _ext_external_entry_new(
             sysroot's `usr/bin/<file>` scripts.
         crate_dir: The pgrx extension crate's directory below the source root,
             for a cargo workspace; empty when the crate is the source root.
+        sql_source: Path below the source root of the SQL upstream ships already
+            generated, from `metadata.sql_source`; empty to generate it.
         build_data: `{"files": {path: label}, "env": {var: directory}}` the
             build stages instead of letting a build step download it; empty
             unless declared.
@@ -385,6 +390,7 @@ def _ext_external_entry_new(
         remap_paths = remap_paths,
         crate_dir = crate_dir,
         build_data = build_data,
+        sql_source = sql_source,
         cargo = cargo,
     )
 
@@ -417,6 +423,7 @@ def _ext_external_entry_from_dict(d):
         remap_paths = d.get("remap_paths", {}),
         crate_dir = d.get("crate_dir", ""),
         build_data = d.get("build_data", {}),
+        sql_source = d.get("sql_source", ""),
         cargo = d.get("cargo", {}),
     )
 

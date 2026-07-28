@@ -158,7 +158,8 @@ def _pg_build(
         crate_dir = "",
         ext_name = None,
         cargo = None,
-        build_data = {}):
+        build_data = {},
+        sql_source = ""):
     """Render {name}/{version}/{base_version}/BUILD.bazel for the extension build.
 
     Dispatches on `build_system`: `"cmake"` renders a `cmake_build` (via
@@ -184,11 +185,13 @@ def _pg_build(
     follows that convention, so callers only need to pass it explicitly if a
     flavor's install prefix diverges from its name.
 
-    `ext_name`, `cargo`, `crate_dir` and `build_data` are the pgrx path's: the
-    extension name (to reach its vendor tree), this version's `{"lock",
-    "crates", "git_sources", "pgrx"}` entry, the crate's directory below the
-    source root when the source tree is a cargo workspace whose root the crate
-    is not, and the pinned files a build script would otherwise download.
+    `ext_name`, `cargo`, `crate_dir`, `build_data` and `sql_source` are the pgrx
+    path's: the extension name (to reach its vendor tree), this version's
+    `{"lock", "crates", "git_sources", "pgrx"}` entry, the crate's directory
+    below the source root when the source tree is a cargo workspace whose root
+    the crate is not, the pinned files a build script would otherwise download,
+    and the path of the SQL upstream ships already generated (`{version}`
+    resolved here), which replaces generating it and the generator with it.
     """
     prefix_distro = base_prefix_distro or "/" + base_flavor
     f = bind(
@@ -223,12 +226,19 @@ def _pg_build(
         pgrx_args = dict(
             vendor_tar = f("//{ext}/{v}:vendor.tar"),
             cargo_lock = cargo["lock"],
-            sql_generator = "%s:%s" % (
-                _PGRX_PACKAGE,
-                pgrx_generator_name(cargo["pgrx"]),
-            ),
             ext_version = version,
         )
+
+        # An extension that ships its SQL already generated needs no generator,
+        # and none is built for the pgrx it pins: that is what lets it stay on a
+        # pgrx older than the `.pgrxsc` section this build would otherwise read.
+        if sql_source:
+            pgrx_args["sql_source"] = sql_source.format(version = version)
+        else:
+            pgrx_args["sql_generator"] = "%s:%s" % (
+                _PGRX_PACKAGE,
+                pgrx_generator_name(cargo["pgrx"]),
+            )
 
         # Only a cargo workspace names one, so the single-crate case renders the
         # same call it did before workspaces were supported at all.
@@ -408,6 +418,7 @@ def write_extension_package(rctx, entry, name, archs):
                     ext_name = name,
                     cargo = cargo,
                     build_data = entry.build_data,
+                    sql_source = entry.sql_source,
                 ),
             )
 

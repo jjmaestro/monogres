@@ -244,9 +244,14 @@ def _read_pgrx_tools(ctx, pgrx_versions, declared):
     versions actually pinned: a catalog with no pgrx extension builds no
     generator at all, and adding one pgrx version does not build the others'.
 
+    An extension declaring `metadata.sql_source` is not counted, since its SQL
+    comes out of its own source tree. That is what lets it pin a pgrx with no
+    `.pgrxsc` section, and therefore no generator to build, at all.
+
     Args:
         ctx: Module extension context.
-        pgrx_versions: The pgrx versions the catalog's extensions pin.
+        pgrx_versions: The pgrx versions the catalog's extensions pin, minus
+            those whose extension ships its own SQL.
         declared: The pool's `{repo_name: struct(sha256, crates)}`, mutated in
             place.
 
@@ -478,6 +483,7 @@ def create_ext_src(
         {
             version["pgrx"]: None
             for ext in extensions.values()
+            if not ext.metadata.get("sql_source")
             for version in ext.cargo.values()
         },
         crates_declared,
@@ -532,6 +538,7 @@ def _build_external(extensions, versions_deps, base_versions, base_flavor, hub_n
             build_args = metadata.get("build_args", []),
             remap_paths = metadata.get("remap_paths", {}),
             crate_dir = metadata.get("crate_dir", ""),
+            sql_source = metadata.get("sql_source", ""),
             build_data = ext.build_data,
             cargo = ext.cargo,
         )
