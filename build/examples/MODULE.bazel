@@ -40,6 +40,7 @@ archive_override(
         "//patches/download_archives:0011-chore-privatize-internal-template-names.patch",
         "//patches/download_archives:0012-docs-rewrite-README.patch",
         "//patches/download_archives:0013-feat-support-a-matrix-of-archives-per-version.patch",
+        "//patches/download_archives:0014-feat-key-the-extracted-directory-on-the-archive-and-.patch",
     ],
     sha256 = "185e9e328ba59ccdc6f97968b2bbe31d7d2f64590aa321df7ca754cf5777f9e4",
     strip_prefix = "bazel_download_archives-{}".format(BDA_VERSION),

@@ -86,7 +86,9 @@ def pgxs_build(name, pgxs_src, deps_buildtime, pg_version, prefix_distro = DEFAU
             local pgxs_src_copy="$$EXT_BUILD_ROOT/pgxs_src_copy"
 
             # NOTE: -L because we need to copy the actual dir and not the symlink
+            # NOTE: chmod because pgxs_src is a tree artifact (read-only in Bazel)
             cp -raL "$$pgxs_src" "$$pgxs_src_copy"
+            chmod -R u+w "$$pgxs_src_copy"
 
             local arch
             arch="$$(uname -m)"

@@ -1,0 +1,376 @@
+From 79655942e8cfbf52fe2c3d7c560b15f7dc34c6fb Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sun, 26 Jul 2026 22:28:53 +0000
+Subject: [PATCH 14/14] feat: key the extracted directory on the archive and
+ its patches
+
+`:dir` was the extracted directory itself, and Bazel does not hash the
+contents of a directory input, as it says of every one:
+
+    WARNING: input '' of <TARGET> is a directory;
+    dependency checking of directories is unsound
+
+An action reading one is not re-run when the tree changes, and this
+rule re-downloading and re-patching does not help, because nothing
+downstream can observe that it did. The failure mode is a patch that is
+silently ignored: adding one to a version already built changes the
+extracted tree and nothing else, so the build goes on compiling the
+tree it staged first.
+
+So `:dir` is now that directory copied into a tree artifact, with the
+files that decide what it holds declared beside it: the repo
+`lock.json`, whose `url` and `integrity` are the archive it came from
+and which therefore covers a version re-pinned in place, and the
+patches then applied to it, taken by content rather than by label since
+editing a patch is the ordinary way to work on one. A change to either
+re-keys the copy.
+
+It is declared in the `//<VERSION>` package, not beside the extracted
+directory in `//<VERSION>/<SOURCE>`. A tree artifact declared there sits
+under the extracted directory's own path, and a consumer that takes both,
+the tree for its contents and the directory as a `lib_source`, cannot
+stage them: the parent wins and Bazel drops the tree as "obscured by"
+it. One level up they are siblings and neither hides the other, and the
+version package is where consumers ask for `:dir` anyway.
+
+The directory as Bazel extracted it stays reachable as `:dir_path`, for
+the uses that want the path and not the contents, such as computing a
+prefix to strip from a compiler's `__FILE__`. Its comment now says
+what the unsoundness costs rather than shrugging at it.
+
+None of which makes a directory dependency sound, and `//lib:dir.bzl`
+says as much: an edit reaching the extracted tree by some other route
+still goes unnoticed. It closes the routes this rule itself takes.
+
+The rule declares the tree as its runfiles as well as its files, so a
+consumer staging it, a test, gets the tree rather than the extracted
+directory Bazel would otherwise collect from the rule's own attributes.
+
+The copy is the `copy_directory` toolchain binary with `--hardlink`,
+the tree being copied again only when the repo has re-extracted it
+wholesale.
+---
+ docs/download/archives/repository.md | 12 ++--
+ download/archives/repository.bzl     | 75 +++++++++++++++++----
+ lib/BUILD.bazel                      |  6 ++
+ lib/dir.bzl                          | 99 ++++++++++++++++++++++++++++
+ 4 files changed, 177 insertions(+), 15 deletions(-)
+ create mode 100644 lib/dir.bzl
+
+diff --git a/docs/download/archives/repository.md b/docs/download/archives/repository.md
+index b0e16b7..cae1377 100644
+--- a/docs/download/archives/repository.md
++++ b/docs/download/archives/repository.md
+@@ -65,9 +65,12 @@ TL;DR, the repo can be used as follows:
+ The `archives` repository rule creates a `@<NAME>` Bazel repo with a
+ public `//<VERSION>` package for every version in the index.
+ 
+-Each `//<VERSION>` package has three targets:
++Each `//<VERSION>` package has the following targets:
+ - `:files`: to access all the files in the downloaded archive.
+-- `:dir`: the path to the directory where the archive was extracted.
++- `:dir`: the directory the archive was extracted into, as a tree artifact
++  keyed on the archive and its patches (see `//lib:dir.bzl`).
++- `:dir_path`: that same directory as Bazel extracted it, for its path alone
++  (see `//lib:dir.bzl` for why it is no good for its contents).
+ - `:<VERSION>`: `alias` of `:files`.
+ - `:<OUTPUT>`: one per subpath rendered by the index [`matrix`] `output`, to
+   access only the files of that partition of the extracted tree. There are
+@@ -82,9 +85,10 @@ the actual files from the downloaded archive for that specific `version` and
+ `source`. The targets in the `//<VERSION>` package are aliases for targets in
+ the `//<VERSION>/<SOURCE>` sub-packages.
+ 
+-The root package `//` has three targets:
++The root package `//` has the following targets:
+ - `:files`: to access all the files in the `DEFAULT_VERSION` package.
+-- `:dir`: the path to the directory of the `DEFAULT_VERSION` package.
++- `:dir`: the directory of the `DEFAULT_VERSION` package, as above.
++- `:dir_path`: the path of that directory, as above.
+ - `:<NAME>`: `alias` of `:files`.
+ - `:<OUTPUT>`: one per [`matrix`] `output` of the `DEFAULT_VERSION` package,
+   as above.
+diff --git a/download/archives/repository.bzl b/download/archives/repository.bzl
+index 1a0bce2..3a3eb77 100644
+--- a/download/archives/repository.bzl
++++ b/download/archives/repository.bzl
+@@ -61,9 +61,12 @@ TL;DR, the repo can be used as follows:
+ The `archives` repository rule creates a `@<NAME>` Bazel repo with a
+ public `//<VERSION>` package for every version in the index.
+ 
+-Each `//<VERSION>` package has three targets:
++Each `//<VERSION>` package has the following targets:
+ - `:files`: to access all the files in the downloaded archive.
+-- `:dir`: the path to the directory where the archive was extracted.
++- `:dir`: the directory the archive was extracted into, as a tree artifact
++  keyed on the archive and its patches (see `//lib:dir.bzl`).
++- `:dir_path`: that same directory as Bazel extracted it, for its path alone
++  (see `//lib:dir.bzl` for why it is no good for its contents).
+ - `:<VERSION>`: `alias` of `:files`.
+ - `:<OUTPUT>`: one per subpath rendered by the index [`matrix`] `output`, to
+   access only the files of that partition of the extracted tree. There are
+@@ -78,9 +81,10 @@ the actual files from the downloaded archive for that specific `version` and
+ `source`. The targets in the `//<VERSION>` package are aliases for targets in
+ the `//<VERSION>/<SOURCE>` sub-packages.
+ 
+-The root package `//` has three targets:
++The root package `//` has the following targets:
+ - `:files`: to access all the files in the `DEFAULT_VERSION` package.
+-- `:dir`: the path to the directory of the `DEFAULT_VERSION` package.
++- `:dir`: the directory of the `DEFAULT_VERSION` package, as above.
++- `:dir_path`: the path of that directory, as above.
+ - `:<NAME>`: `alias` of `:files`.
+ - `:<OUTPUT>`: one per [`matrix`] `output` of the `DEFAULT_VERSION` package,
+   as above.
+@@ -546,8 +550,8 @@ alias(
+ )
+ 
+ alias(
+-    name = "dir",
+-    actual = "{actual_prefix}:dir",
++    name = "dir_path",
++    actual = "{actual_prefix}:dir_path",
+ )
+ 
+ alias(
+@@ -588,6 +592,32 @@ bzl_library(
+ )
+ """
+ 
++# `:dir` is the tree, and it is declared in the VERSION package rather than
++# beside the extracted directory in the source package. A tree artifact declared
++# in the source package would sit at `<version>/<source>/dir`, i.e. underneath
++# the extracted directory's own path `<version>/<source>`, and the two cannot
++# both be staged: a consumer that takes the tree and anything that takes the
++# directory (a `lib_source`, say) collide in the runfiles tree, where the parent
++# wins and Bazel drops the tree with an "obscured by" warning. One level up they
++# are siblings, `<version>/dir` beside `<version>/<source>`, and neither hides
++# the other. It is also where consumers ask for it.
++_BUILD_DIR_TREE = """
++dir_tree(
++    name = "dir",
++    src = "{actual_prefix}:dir_path",
++    key = {key},
++)
++"""
++
++# The root package has no archive of its own: its `:dir` is the DEFAULT_VERSION
++# package's tree, so it aliases rather than copying the tree a second time.
++_BUILD_DIR_ALIAS = """
++alias(
++    name = "dir",
++    actual = "{actual_prefix}:dir",
++)
++"""
++
+ _BUILD_ROOT = '''\
+ """Generated by download_archives. DO NOT EDIT."""
+ 
+@@ -597,17 +627,18 @@ load("//{version}:source.bzl", "SOURCE")
+ package(default_visibility = ["//visibility:public"])
+ ''' + _BUILD_ROOT_EXPORTS + '''\
+ VERSION = "{version}"
+-''' + _BUILD_TARGETS
++''' + _BUILD_DIR_ALIAS + _BUILD_TARGETS
+ 
+ _BUILD_VERSION = '''\
+ """Generated by download_archives. DO NOT EDIT."""
+ 
++load("{dir_bzl}", "dir_tree")
+ load("//{version}:source.bzl", "SOURCE")
+ 
+ package(default_visibility = ["//visibility:public"])
+ 
+ VERSION = "{version}"
+-''' + _BUILD_TARGETS
++''' + _BUILD_DIR_TREE + _BUILD_TARGETS
+ 
+ _SOURCE_BZL_LAZY = '''\
+ """Generated by download_archives. DO NOT EDIT."""
+@@ -618,6 +649,10 @@ SOURCE = _SOURCE
+ URL = _URL
+ '''
+ 
++# Canonical, so that the load resolves from the generated repo whatever the
++# repo mapping there maps this module's own name to.
++_DIR_BZL = str(Label("//lib:dir.bzl"))
++
+ _BUILD_SOURCE = '''\
+ """Generated by download_archives. DO NOT EDIT."""
+ 
+@@ -630,12 +665,15 @@ filegroup(
+ )
+ 
+ # NOTE:
+-# When using ':dir' we get a warning:
++# When using ':dir_path' we get a warning:
+ #   WARNING: input '' of <TARGET> is a directory;
+ #   dependency checking of directories is unsound
+-# but... yeah, sometimes, we really just want the directory!
++# and unsound it is: Bazel does not hash what a directory holds, so an action
++# reading this one is not re-run when the archive is re-pinned or a patch is
++# edited. Take it for the path alone, e.g. to compute a prefix to strip, and
++# take the version package's ':dir' for the contents.
+ filegroup(
+-    name = "dir",
++    name = "dir_path",
+     srcs = ["."],
+ )
+ 
+@@ -652,6 +690,19 @@ def _build_outputs(template, outputs, **kwargs):
+         for output in outputs
+     ])
+ 
++def _dir_key(version, source, patches):
++    """The files whose contents decide what the extracted directory holds.
++
++    The repo `lock.json` carries the `url` and the `integrity` of the archive,
++    so it covers a version re-pinned in place. It carries the patches only by
++    label, so those are named one by one, to be taken by content: editing a
++    patch is the ordinary way to work on one.
++    """
++    return ["//:lock.json"] + [
++        "//patches/%s/%s:%s" % (version, source, patch.name)
++        for patch in patches
++    ]
++
+ def _apparent_repo_name(rctx):
+     # HACK to get the apparent repo name ("short name"). This should be
+     # equivalent to native.package_relative_label but that's only available
+@@ -759,6 +810,8 @@ def _impl(rctx, _print = print, _fail = fail):
+                 version = version,
+                 actual_prefix = actual_prefix,
+                 alias = version,
++                dir_bzl = _DIR_BZL,
++                key = _dir_key(version, dl.source, dl.patches),
+                 outputs = _build_outputs(
+                     _BUILD_OUTPUT_ALIAS,
+                     dl.outputs,
+diff --git a/lib/BUILD.bazel b/lib/BUILD.bazel
+index 43c212c..d276775 100644
+--- a/lib/BUILD.bazel
++++ b/lib/BUILD.bazel
+@@ -3,6 +3,7 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+ package(default_visibility = ["//visibility:public"])
+ 
+ exports_files([
++    "dir.bzl",
+     "download.bzl",
+     "index.bzl",
+     "integrity.bzl",
+@@ -11,6 +12,11 @@ exports_files([
+     "utils.bzl",
+ ])
+ 
++bzl_library(
++    name = "dir",
++    srcs = ["dir.bzl"],
++)
++
+ bzl_library(
+     name = "download",
+     srcs = ["download.bzl"],
+diff --git a/lib/dir.bzl b/lib/dir.bzl
+new file mode 100644
+index 0000000..07f9d25
+--- /dev/null
++++ b/lib/dir.bzl
+@@ -0,0 +1,99 @@
++"""
++# `dir_tree`
++
++Copies an extracted archive into a tree artifact, keyed on what the archive is
++rather than only on the directory holding it.
++
++## Why
++
++An extracted archive is a directory, and a build that wants a source tree wants
++it as one: autotools, cmake and cargo all take a directory rather than a file
++list, and a directory is the only form that carries the symlinks, the empty
++directories, and any subtree a nested `BUILD` file would cut a glob short at.
++
++What taking a directory costs is that Bazel does not hash its contents, and says
++so of every such input:
++
++```text
++WARNING: input '' of <TARGET> is a directory;
++dependency checking of directories is unsound
++```
++
++An action reading one is not re-run when the tree changes, and this repository
++rule re-downloading and re-patching does not help, because nothing downstream
++can observe that it did. The failure mode is a patch that is silently ignored:
++adding one to a version already built changes the extracted tree and nothing
++else, so the build goes on compiling the tree it staged first.
++
++So `dir_tree` copies the directory and declares beside it, as `key`, the files
++that decide what the directory holds: the repo `lock.json`, whose `url` and
++`integrity` are the archive it was unpacked from, and the patches then applied
++to it, taken by content rather than by label since editing a patch is the
++ordinary way to work on one. A change to either re-keys the copy.
++
++None of which makes a directory dependency sound, and this does not pretend to:
++an edit reaching the extracted tree by some other route still goes unnoticed. It
++closes the routes this repository rule itself takes.
++
++The copy is the `copy_directory` toolchain binary with `--hardlink`, the tree
++being copied again only when the repo has re-extracted it wholesale, so there is
++nothing to gain by copying bytes.
++"""
++
++_TOOLCHAIN = "@aspect_bazel_lib//lib:copy_directory_toolchain_type"
++
++def _dir_tree_impl(ctx):
++    out = ctx.actions.declare_directory(ctx.label.name)
++
++    args = ctx.actions.args()
++    args.add_all([ctx.file.src, out], expand_directories = False)
++    args.add("--hardlink")
++
++    ctx.actions.run(
++        # `src` is what the action reads; `key` is what it is keyed on. Bazel
++        # does not require an input to be read, and `key` cannot be expressed
++        # any other way: an attribute the action never passes to a tool or
++        # reads as a file does not reach its key at all.
++        inputs = [ctx.file.src] + ctx.files.key,
++        outputs = [out],
++        executable = ctx.toolchains[_TOOLCHAIN].copy_directory_info.bin,
++        arguments = [args],
++        # As `copy_directory` sets it, for bazel-lib #1146.
++        env = {"GODEBUG": "winsymlink=0"},
++        mnemonic = "DirTree",
++        progress_message = "Copying archive directory %{label}",
++        toolchain = _TOOLCHAIN,
++    )
++
++    # `files` is what `$(rlocationpath[s] ...)` names and what an action reads.
++    # Runfiles are separate, and a consumer stages `default_runfiles`: left
++    # implicit, Bazel collects those from this rule's attributes and so stages
++    # `src`, the extracted directory, at the very path this tree sits under,
++    # where it shadows it. Declaring them replaces that collection rather than
++    # adding to it, which is what keeps the two apart.
++    return [DefaultInfo(
++        files = depset([out]),
++        runfiles = ctx.runfiles(files = [out]),
++    )]
++
++dir_tree = rule(
++    doc = """
++    Copy an extracted archive directory into a tree artifact, keyed on the
++    files that decide what the directory holds.
++    """,
++    implementation = _dir_tree_impl,
++    provides = [DefaultInfo],
++    attrs = {
++        "key": attr.label_list(
++            doc = "Files whose contents decide what `src` holds: the repo " +
++                  "`lock.json` and the patches applied to the archive.",
++            allow_files = True,
++        ),
++        "src": attr.label(
++            doc = "The extracted archive directory, i.e. `:dir_path`.",
++            mandatory = True,
++            allow_single_file = True,
++        ),
++    },
++    toolchains = [_TOOLCHAIN],
++)
