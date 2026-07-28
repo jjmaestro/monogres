@@ -1,0 +1,3 @@
+load(":pool.bzl", pool_suite = "test_suite")
+
+pool_suite()

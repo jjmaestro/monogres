@@ -30,6 +30,13 @@ Internal repo names (created by `create_*` helpers, not exposed):
 - `@{hub}_src--{ext}`            : per-extension source (off ext hub)
 - `@{hub}_deb`             : internal deb_translate_lock (off pkgs hub)
 
+Hub-independent internal repos (one per module extension evaluation, NOT one per
+hub, so every hub shares them):
+
+- `@crate--{crate}-{v}`    : one crates.io crate release (crate pool). A crate
+  release is the same artifact whatever hub pins it, and the closures overlap
+  heavily, so the pool hangs off no hub at all.
+
 Suffix conventions:
 
 - **Role suffix** (`_src`, `_ext`, `_pkgs`, `_deb`): one per parent, no
@@ -82,4 +89,13 @@ repo_names = struct(
         ext = ext,
     ),
     deb_repo = lambda hub: "{hub}_deb".format(hub = hub),
+    # A repo name may not contain `+`, which a semver version can (build
+    # metadata, e.g. `toml 0.9.12+spec-1.1.0`), so it is spelled `_` here. The
+    # crate's directory in a vendor tree keeps the real version, so the two are
+    # carried side by side rather than derived from each other.
+    crate = lambda crate, v: "crate{sep}{crate}-{v}".format(
+        sep = INSTANCE_SEP,
+        crate = crate,
+        v = v,
+    ).replace("+", "_"),
 )

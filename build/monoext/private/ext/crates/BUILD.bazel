@@ -1,0 +1,24 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+# The pool is created from the module extension, not from generated
+# `@{name}_ext//...` BUILD files, so nothing here needs public visibility.
+package(default_visibility = [
+    "//monoext/private:__subpackages__",
+    "//tests/monoext:__subpackages__",
+])
+
+exports_files([
+    "crate_repo.bzl",
+    "pool.bzl",
+])
+
+bzl_library(
+    name = "crate_repo",
+    srcs = ["crate_repo.bzl"],
+)
+
+bzl_library(
+    name = "pool",
+    srcs = ["pool.bzl"],
+    deps = [":crate_repo"],
+)
