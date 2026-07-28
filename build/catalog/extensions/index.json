@@ -84,6 +84,7 @@
     "pg_cron",
     "pg_dbms_job",
     "pg_financial",
+    "pg_graphql",
     "pg_ivm",
     "pg_json_utils",
     "pg_jsonschema",

@@ -1,0 +1,72 @@
+From c34e483b3e2cd3511cfb4aa02ac67b5088754d15 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Mon, 27 Jul 2026 09:00:09 +0000
+Subject: [PATCH] patch: run the suite fixtures as a pg_regress test
+
+Upstream's `bin/installcheck` does the setup out of band: it boots its own
+server, pipes `test/fixtures.sql` through `psql`, and only then calls pg_regress
+with `--use-existing`. All 121 tests depend on that step. It creates the
+extension, sets `inflect_names` on the public schema (which decides every
+generated GraphQL name), and defines the `graphql.encode` helper the cursor
+tests call.
+
+`--temp-instance` pg_regress has no pre-test hook, and seeding a template does
+not reach it either, because it creates its database from `template0`. What
+pg_regress does have is ordering: a test that runs first. So the fixtures become
+one, and listing `fixtures` ahead of the rest replaces upstream's "psql before
+pg_regress".
+
+The SQL is a copy rather than an include of `test/fixtures.sql`, because
+pg_regress feeds each test to psql on STDIN, so `\ir` has no including-file
+directory to resolve against. Both copies are exercised, one by this transcript
+and one by upstream's own script, and a version bump regenerates this patch.
+---
+ test/expected/fixtures.out | 15 +++++++++++++++
+ test/sql/fixtures.sql      | 16 ++++++++++++++++
+ 2 files changed, 31 insertions(+)
+ create mode 100644 test/expected/fixtures.out
+ create mode 100644 test/sql/fixtures.sql
+
+diff --git a/test/expected/fixtures.out b/test/expected/fixtures.out
+new file mode 100644
+index 0000000..effa3a1
+--- /dev/null
++++ b/test/expected/fixtures.out
+@@ -0,0 +1,15 @@
++drop extension if exists pg_graphql;
++NOTICE:  extension "pg_graphql" does not exist, skipping
++create extension pg_graphql cascade;
++comment on schema public is '@graphql({"inflect_names": true})';
++-- To remove after test suite port
++create or replace function graphql.encode(jsonb)
++    returns text
++    language sql
++    immutable
++as $$
++/*
++    select graphql.encode('("{""(email,asc,t)"",""(id,asc,f)""}","[""aardvark@x.com"", 1]")'::graphql.cursor)
++*/
++    select encode(convert_to($1::text, 'utf-8'), 'base64')
++$$;
+diff --git a/test/sql/fixtures.sql b/test/sql/fixtures.sql
+new file mode 100644
+index 0000000..9219315
+--- /dev/null
++++ b/test/sql/fixtures.sql
+@@ -0,0 +1,16 @@
++drop extension if exists pg_graphql;
++create extension pg_graphql cascade;
++comment on schema public is '@graphql({"inflect_names": true})';
++
++
++-- To remove after test suite port
++create or replace function graphql.encode(jsonb)
++    returns text
++    language sql
++    immutable
++as $$
++/*
++    select graphql.encode('("{""(email,asc,t)"",""(id,asc,f)""}","[""aardvark@x.com"", 1]")'::graphql.cursor)
++*/
++    select encode(convert_to($1::text, 'utf-8'), 'base64')
++$$;

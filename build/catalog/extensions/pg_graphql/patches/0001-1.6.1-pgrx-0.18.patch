@@ -1,0 +1,73 @@
+From 56273c48532b685a86f28756fb376f5fa0f7851a Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sat, 25 Jul 2026 09:00:09 +0000
+Subject: [PATCH] patch: move to pgrx 0.18 for an offline, sandboxed build
+
+1.6.1 ships against pgrx 0.16, whose only route to the extension SQL is a
+generated `pgrx_embed` binary: it is compiled in a second pass and RUN, and its
+stdout is the SQL. A network-less sandbox cannot allow that, and a cross-compile
+cannot do it at all. 0.18 instead records the SQL entity graph in a `.pgrxsc`
+link section, so the same SQL can be read out of the built library as data
+by a small external tool. `pgrx_embed` is gone in 0.18, so its `[[bin]]` and the
+one-line source behind it go with it.
+
+0.18.1 rather than 0.18.0: 0.18.0 emits the section but lets the linker garbage
+collect it on aarch64 Linux, where nothing references it, leaving an extension
+with no SQL at all (pgrx #2280).
+
+The requirement is exact (`=`) because the SQL is emitted by a generator built
+against one pgrx release, and both halves of that release matter. The `.pgrxsc`
+wire format happens to be unchanged in 0.19, so a mismatch would not fail
+loudly; but 0.19 changed the emitter behind it (schema qualification and type
+resolution), and this extension declares `schema = 'graphql'` in its control
+file, so it sits squarely on the changed behaviour. A resolver free to pick 0.19
+here would pair a 0.19 library with the 0.18 emitter and quietly write different
+SQL.
+
+References: https://github.com/pgcentralfoundation/pgrx/issues/2280
+---
+ Cargo.toml            | 8 ++------
+ src/bin/pgrx_embed.rs | 1 -
+ 2 files changed, 2 insertions(+), 7 deletions(-)
+ delete mode 100644 src/bin/pgrx_embed.rs
+
+diff --git a/Cargo.toml b/Cargo.toml
+index 1cb06b4..c282798 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -6,10 +6,6 @@ edition = "2024"
+ [lib]
+ crate-type = ["cdylib", "lib"]
+ 
+-[[bin]]
+-name = "pgrx_embed_pg_graphql"
+-path = "./src/bin/pgrx_embed.rs"
+-
+ [features]
+ default = ["pg18"]
+ pg14 = ["pgrx/pg14", "pgrx-tests/pg14"]
+@@ -20,7 +16,7 @@ pg18 = ["pgrx/pg18", "pgrx-tests/pg18"]
+ pg_test = []
+ 
+ [dependencies]
+-pgrx = "=0.16.1"
++pgrx = "=0.18.1"
+ graphql-parser = "0.4"
+ serde = { version = "1.0", features = ["rc"] }
+ serde_json = "1.0"
+@@ -37,7 +33,7 @@ indexmap = "2.2"
+ thiserror = "2.0"
+ 
+ [dev-dependencies]
+-pgrx-tests = "=0.16.1"
++pgrx-tests = "=0.18.1"
+ 
+ [profile.dev]
+ panic = "unwind"
+diff --git a/src/bin/pgrx_embed.rs b/src/bin/pgrx_embed.rs
+deleted file mode 100644
+index 5f5c4d8..0000000
+--- a/src/bin/pgrx_embed.rs
++++ /dev/null
+@@ -1 +0,0 @@
+-::pgrx::pgrx_embed!();
