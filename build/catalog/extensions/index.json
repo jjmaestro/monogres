@@ -76,6 +76,7 @@
     "citus",
     "db_info",
     "decoderbufs",
+    "graph",
     "hll",
     "hypopg",
     "noset",

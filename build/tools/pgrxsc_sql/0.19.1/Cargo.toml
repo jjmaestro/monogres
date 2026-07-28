@@ -1,0 +1,13 @@
+[package]
+name = "pgrxsc-sql"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eyre = "0.6"
+pgrx-sql-entity-graph = "=0.19.1"
+
+[dependencies.object]
+version = "0.39.1"
+default-features = false
+features = ["read_core", "std", "elf"]

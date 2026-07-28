@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "Evokoa",
+      "name": "pgGraph",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}/graph",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "1.0.0": {
+      "sha256": "3d1a3e51f88678e4378cd85fe3bbcdee24f4ea29a06c612201d0c5fb6acf1f3e"
+    }
+  },
+  "metadata": {
+    "build_system": "pgrx",
+    "compatible_with": {
+      "postgres": {
+        "1.0.0": ">=16"
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "extensions": ["graph"]
+      },
+      "test": {
+        "*": {
+          "regress": {
+            "kind": "regress",
+            "inputdir": "tests/pg_regress",
+            "tests": ["setup"]
+          }
+        }
+      }
+    }
+  }
+}
