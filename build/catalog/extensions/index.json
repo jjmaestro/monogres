@@ -112,6 +112,7 @@
     "set_user",
     "sslutils",
     "timescaledb",
+    "timescaledb_toolkit",
     "vacuum_utils",
     "wal2json"
   ],
