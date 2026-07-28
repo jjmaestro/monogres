@@ -389,11 +389,56 @@ suites_from_test_suites_tap_test = unittest.make(
     _suites_from_test_suites_tap_test_impl,
 )
 
+def _metadata_test_exclusive_impl(ctx):
+    env = unittest.begin(ctx)
+
+    # An external decl's `exclusive` carries two shapes over one key: a list of
+    # `.pl` basenames picks individual TAP tests, `true` takes the whole suite,
+    # which is the only lever a regress suite has (its tests share one target).
+    test_meta = {
+        "*": {
+            "regress": {
+                "exclusive": True,
+                "kind": "regress",
+                "tests": ["fifo_tests", "topic_tests"],
+            },
+            "tap": {
+                "exclusive": ["030_histogram"],
+                "kind": "tap",
+                "tests": ["007_settings", "030_histogram"],
+            },
+        },
+    }
+    groups = _TestSchema.suites_from_metadata_test(test_meta, "16.11")
+
+    # the whole-suite shape names no individual `.pl`, so the TAP renderer's
+    # per-.pl lookup stays a list membership test either way.
+    reg = groups["regress"][0]
+    asserts.true(env, reg.exclusive_suite)
+    asserts.equals(env, [], reg.tap_exclusive)
+
+    tap = groups["tap"][0]
+    asserts.equals(env, ["030_histogram"], tap.tap_exclusive)
+    asserts.false(env, tap.exclusive_suite)
+
+    # a decl naming neither shape: both default off.
+    plain = _TestSchema.suites_from_metadata_test(
+        {"*": {"regress": {"kind": "regress", "tests": ["t"]}}},
+        "16.11",
+    )["regress"][0]
+    asserts.false(env, plain.exclusive_suite)
+    asserts.equals(env, [], plain.tap_exclusive)
+
+    return unittest.end(env)
+
+metadata_test_exclusive_test = unittest.make(_metadata_test_exclusive_impl)
+
 TEST_SUITE_NAME = "schema"
 
 TEST_SUITE_TESTS = dict(
     metadata_test_empty = metadata_test_empty_test,
     metadata_test_exclude_tests = metadata_test_exclude_tests_test,
+    metadata_test_exclusive = metadata_test_exclusive_test,
     metadata_test_running_and_pure_isolation = metadata_test_running_and_pure_isolation_test,
     metadata_test_shapes = metadata_test_shapes_test,
     metadata_test_spec_filter = metadata_test_spec_filter_test,

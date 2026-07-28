@@ -193,6 +193,15 @@ def _default_dbname(kind):
         return "isolation_regression"
     return "regression"
 
+def _exclusive_pls(exclusive):
+    """The TAP `.pl` basenames an `exclusive` declaration names, if any.
+
+    A decl's `exclusive` is either a list of `.pl` basenames (run those TAP
+    tests alone) or `true` (run the whole suite alone); only the list shape
+    picks individual tests, so the `true` shape yields no names.
+    """
+    return exclusive if type(exclusive) == "list" else []
+
 def _has(cmd, needle):
     """True if any `cmd` token contains `needle` (substring match)."""
     return any([needle in arg for arg in cmd])
@@ -385,6 +394,7 @@ def _suite_info_classify(entries):
         locale_mode = locale_mode,
         tap_locale = "",
         tap_exclusive = [],
+        exclusive_suite = False,
         load_extensions = load_extensions,
         create_roles = create_roles,
         tap_env = tap_env,
@@ -532,10 +542,15 @@ def _suite_decl_to_info(slug, decl):
         # A TAP suite's node locale (e.g. `C.UTF-8` for a suite that needs a
         # UTF-8 database); the hermetic default is C, i.e. SQL_ASCII.
         tap_locale = decl.get("locale", ""),
-        # `.pl` basenames a TAP suite runs exclusively (no concurrent tests),
-        # for a timing-sensitive test that is deterministic only without
-        # parallel CPU contention (pg_stat_monitor's response-time histogram).
-        tap_exclusive = decl.get("exclusive", []),
+        # What a suite runs exclusively (no concurrent tests), for a
+        # timing-sensitive test that is deterministic only without parallel CPU
+        # contention. Two shapes over one catalog key: a list of `.pl` basenames
+        # picks individual TAP tests (pg_stat_monitor's response-time
+        # histogram); `true` takes the whole suite, which is the only lever a
+        # regress suite has, since its tests share one target (pgmq asserts a
+        # read completes within 100ms).
+        tap_exclusive = _exclusive_pls(decl.get("exclusive", [])),
+        exclusive_suite = decl.get("exclusive") == True,
         load_extensions = decl.get("load_extensions", []),
         create_roles = decl.get("create_roles", []),
         tap_env = decl.get("tap_env", {}),

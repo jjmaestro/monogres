@@ -1531,13 +1531,20 @@ def _ext_regress_test(
     if info.temp_instance:
         args += ["--ext-temp-instance", info.temp_instance]
 
+    tags = [_TAG_REGRESS, "external"]
+    if info.exclusive_suite:
+        # A suite carrying a wall-clock assertion is deterministic only without
+        # concurrent CPU/IO contention (pgmq asserts a read completes within
+        # 100ms), and a regress suite's tests share one target, so the whole
+        # suite goes into bazel's exclusive phase.
+        tags.append("exclusive")
     return Star.igen(Star.fn("sh_test", **dict(
         name = target_name,
         srcs = [rlocs.runner],
         args = args,
         data = rlocs.data,
         size = "medium",
-        tags = [_TAG_REGRESS, "external"],
+        tags = tags,
         env_inherit = _ENV_INHERIT,
     )))
 
