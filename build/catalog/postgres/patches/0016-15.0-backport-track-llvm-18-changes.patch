@@ -1,0 +1,32 @@
+From 67f7aaa38172155ab2d8a2248e87b5d0b7dc6444 Mon Sep 17 00:00:00 2001
+From: Thomas Munro <tmunro@postgresql.org>
+Date: Thu, 25 Jan 2024 10:37:35 +1300
+Subject: [PATCH] Track LLVM 18 changes.
+
+A function was given a newly standard name from C++20 in LLVM 16.  Then
+LLVM 18 added a deprecation warning for the old name, and it is about to
+ship, so it's time to adjust that.
+
+Back-patch to all supported releases.
+
+Discussion: https://www.postgresql.org/message-id/CA+hUKGLbuVhH6mqS8z+FwAn4=5dHs0bAWmEMZ3B+iYHWKC4-ZA@mail.gmail.com
+---
+ src/backend/jit/llvm/llvmjit_inline.cpp | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/backend/jit/llvm/llvmjit_inline.cpp b/src/backend/jit/llvm/llvmjit_inline.cpp
+index 6b46e141fc..b3382a780f 100644
+--- a/src/backend/jit/llvm/llvmjit_inline.cpp
++++ b/src/backend/jit/llvm/llvmjit_inline.cpp
+@@ -821,7 +821,10 @@ static void
+ add_module_to_inline_search_path(InlineSearchPath& searchpath, llvm::StringRef modpath)
+ {
+ 	/* only extension in libdir are candidates for inlining for now */
+-	if (!modpath.startswith("$libdir/"))
++#if LLVM_VERSION_MAJOR < 16
++#define starts_with startswith
++#endif
++	if (!modpath.starts_with("$libdir/"))
+ 		return;
+ 
+ 	/* if there's no match, attempt to load */

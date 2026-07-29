@@ -1,0 +1,29 @@
+From c772dfe07a9d4e499117f58d47a7c50d56666459 Mon Sep 17 00:00:00 2001
+From: Michael Paquier <michael@paquier.xyz>
+Date: Tue, 3 Jan 2023 16:26:27 +0900
+Subject: [PATCH] Fix typos in comments, code and documentation
+
+While on it, newlines are removed from the end of two elog() strings.
+The others are simple grammar mistakes.  One comment in pg_upgrade
+referred incorrectly to sequences since a7e5457.
+
+Author: Justin Pryzby
+Discussion: https://postgr.es/m/20221230231257.GI1153@telsasoft.com
+Backpatch-through: 11
+---
+ src/backend/jit/llvm/llvmjit.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/backend/jit/llvm/llvmjit.c b/src/backend/jit/llvm/llvmjit.c
+index 19e5b153a4..55236e2006 100644
+--- a/src/backend/jit/llvm/llvmjit.c
++++ b/src/backend/jit/llvm/llvmjit.c
+@@ -816,7 +816,7 @@ llvm_session_initialize(void)
+ 
+ 	if (LLVMGetTargetFromTriple(llvm_triple, &llvm_targetref, &error) != 0)
+ 	{
+-		elog(FATAL, "failed to query triple %s\n", error);
++		elog(FATAL, "failed to query triple %s", error);
+ 	}
+ 
+ 	/*

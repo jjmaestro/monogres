@@ -1,0 +1,1170 @@
+From 19bf81c06a372a138215d25e9844e68ddde35313 Mon Sep 17 00:00:00 2001
+From: Thomas Munro <tmunro@postgresql.org>
+Date: Wed, 6 Nov 2024 22:04:44 +1300
+Subject: [PATCH] Monkey-patch LLVM code to fix ARM relocation bug.
+
+Supply a new memory manager for RuntimeDyld, to avoid crashes in
+generated code caused by memory placement that can overflow a 32 bit
+data type.  This is a drop-in replacement for the
+llvm::SectionMemoryManager class in the LLVM library, with Michael
+Smith's proposed fix from
+https://www.github.com/llvm/llvm-project/pull/71968.
+
+We hereby slurp it into our own source tree, after moving into a new
+namespace llvm::backport and making some minor adjustments so that it
+can be compiled with older LLVM versions as far back as 12.  It's harder
+to make it work on even older LLVM versions, but it doesn't seem likely
+that people are really using them so that is not investigated for now.
+
+The problem could also be addressed by switching to JITLink instead of
+RuntimeDyld, and that is the LLVM project's recommended solution as
+the latter is about to be deprecated.  We'll have to do that soon enough
+anyway, and then when the LLVM version support window advances far
+enough in a few years we'll be able to delete this code.  Unfortunately
+that wouldn't be enough for PostgreSQL today: in most relevant versions
+of LLVM, JITLink is missing or incomplete.
+
+Several other projects have already back-ported this fix into their fork
+of LLVM, which is a vote of confidence despite the lack of commit into
+LLVM as of today.  We don't have our own copy of LLVM so we can't do
+exactly what they've done; instead we have a copy of the whole patched
+class so we can pass an instance of it to RuntimeDyld.
+
+The LLVM project hasn't chosen to commit the fix yet, and even if it
+did, it wouldn't be back-ported into the releases of LLVM that most of
+our users care about, so there is not much point in waiting any longer
+for that.  If they make further changes and commit it to LLVM 19 or 20,
+we'll still need this for older versions, but we may want to
+resynchronize our copy and update some comments.
+
+The changes that we've had to make to our copy can be seen by diffing
+our SectionMemoryManager.{h,cpp} files against the ones in the tree of
+the pull request.  Per the LLVM project's license requirements, a copy
+is in SectionMemoryManager.LICENSE.
+
+This should fix the spate of crash reports we've been receiving lately
+from users on large memory ARM systems.
+
+Back-patch to all supported releases.
+
+Co-authored-by: Thomas Munro <thomas.munro@gmail.com>
+Co-authored-by: Anthonin Bonnefoy <anthonin.bonnefoy@datadoghq.com>
+Reviewed-by: Anthonin Bonnefoy <anthonin.bonnefoy@datadoghq.com>
+Reviewed-by: Daniel Gustafsson <daniel@yesql.se> (license aspects)
+Reported-by: Anthonin Bonnefoy <anthonin.bonnefoy@datadoghq.com>
+Discussion: https://postgr.es/m/CAO6_Xqr63qj%3DSx7HY6ZiiQ6R_JbX%2B-p6sTPwDYwTWZjUmjsYBg%40mail.gmail.com
+---
+ src/backend/jit/llvm/Makefile                 |   3 +-
+ .../jit/llvm/SectionMemoryManager.LICENSE     | 279 ++++++++++++
+ src/backend/jit/llvm/SectionMemoryManager.cpp | 412 ++++++++++++++++++
+ src/backend/jit/llvm/llvmjit.c                |   8 +-
+ src/backend/jit/llvm/llvmjit_wrap.cpp         |  20 +
+ src/include/jit/SectionMemoryManager.h        | 226 ++++++++++
+ src/include/jit/llvmjit.h                     |   8 +
+ src/include/jit/llvmjit_backport.h            |  25 ++
+ src/tools/pginclude/headerscheck              |   3 +
+ src/tools/pgindent/exclude_file_patterns      |   3 +-
+ 10 files changed, 984 insertions(+), 3 deletions(-)
+ create mode 100644 src/backend/jit/llvm/SectionMemoryManager.LICENSE
+ create mode 100644 src/backend/jit/llvm/SectionMemoryManager.cpp
+ create mode 100644 src/include/jit/SectionMemoryManager.h
+ create mode 100644 src/include/jit/llvmjit_backport.h
+
+diff --git a/src/backend/jit/llvm/Makefile b/src/backend/jit/llvm/Makefile
+index 2da122a391..607d16754f 100644
+--- a/src/backend/jit/llvm/Makefile
++++ b/src/backend/jit/llvm/Makefile
+@@ -47,7 +47,8 @@ OBJS += \
+ 	llvmjit.o \
+ 	llvmjit_error.o \
+ 	llvmjit_inline.o \
+-	llvmjit_wrap.o
++	llvmjit_wrap.o \
++	SectionMemoryManager.o
+ 
+ # Code generation
+ OBJS += \
+diff --git a/src/backend/jit/llvm/SectionMemoryManager.LICENSE b/src/backend/jit/llvm/SectionMemoryManager.LICENSE
+new file mode 100644
+index 0000000000..fa6ac54000
+--- /dev/null
++++ b/src/backend/jit/llvm/SectionMemoryManager.LICENSE
+@@ -0,0 +1,279 @@
++==============================================================================
++The LLVM Project is under the Apache License v2.0 with LLVM Exceptions:
++==============================================================================
++
++                                 Apache License
++                           Version 2.0, January 2004
++                        http://www.apache.org/licenses/
++
++    TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
++
++    1. Definitions.
++
++      "License" shall mean the terms and conditions for use, reproduction,
++      and distribution as defined by Sections 1 through 9 of this document.
++
++      "Licensor" shall mean the copyright owner or entity authorized by
++      the copyright owner that is granting the License.
++
++      "Legal Entity" shall mean the union of the acting entity and all
++      other entities that control, are controlled by, or are under common
++      control with that entity. For the purposes of this definition,
++      "control" means (i) the power, direct or indirect, to cause the
++      direction or management of such entity, whether by contract or
++      otherwise, or (ii) ownership of fifty percent (50%) or more of the
++      outstanding shares, or (iii) beneficial ownership of such entity.
++
++      "You" (or "Your") shall mean an individual or Legal Entity
++      exercising permissions granted by this License.
++
++      "Source" form shall mean the preferred form for making modifications,
++      including but not limited to software source code, documentation
++      source, and configuration files.
++
++      "Object" form shall mean any form resulting from mechanical
++      transformation or translation of a Source form, including but
++      not limited to compiled object code, generated documentation,
++      and conversions to other media types.
++
++      "Work" shall mean the work of authorship, whether in Source or
++      Object form, made available under the License, as indicated by a
++      copyright notice that is included in or attached to the work
++      (an example is provided in the Appendix below).
++
++      "Derivative Works" shall mean any work, whether in Source or Object
++      form, that is based on (or derived from) the Work and for which the
++      editorial revisions, annotations, elaborations, or other modifications
++      represent, as a whole, an original work of authorship. For the purposes
++      of this License, Derivative Works shall not include works that remain
++      separable from, or merely link (or bind by name) to the interfaces of,
++      the Work and Derivative Works thereof.
++
++      "Contribution" shall mean any work of authorship, including
++      the original version of the Work and any modifications or additions
++      to that Work or Derivative Works thereof, that is intentionally
++      submitted to Licensor for inclusion in the Work by the copyright owner
++      or by an individual or Legal Entity authorized to submit on behalf of
++      the copyright owner. For the purposes of this definition, "submitted"
++      means any form of electronic, verbal, or written communication sent
++      to the Licensor or its representatives, including but not limited to
++      communication on electronic mailing lists, source code control systems,
++      and issue tracking systems that are managed by, or on behalf of, the
++      Licensor for the purpose of discussing and improving the Work, but
++      excluding communication that is conspicuously marked or otherwise
++      designated in writing by the copyright owner as "Not a Contribution."
++
++      "Contributor" shall mean Licensor and any individual or Legal Entity
++      on behalf of whom a Contribution has been received by Licensor and
++      subsequently incorporated within the Work.
++
++    2. Grant of Copyright License. Subject to the terms and conditions of
++      this License, each Contributor hereby grants to You a perpetual,
++      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
++      copyright license to reproduce, prepare Derivative Works of,
++      publicly display, publicly perform, sublicense, and distribute the
++      Work and such Derivative Works in Source or Object form.
++
++    3. Grant of Patent License. Subject to the terms and conditions of
++      this License, each Contributor hereby grants to You a perpetual,
++      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
++      (except as stated in this section) patent license to make, have made,
++      use, offer to sell, sell, import, and otherwise transfer the Work,
++      where such license applies only to those patent claims licensable
++      by such Contributor that are necessarily infringed by their
++      Contribution(s) alone or by combination of their Contribution(s)
++      with the Work to which such Contribution(s) was submitted. If You
++      institute patent litigation against any entity (including a
++      cross-claim or counterclaim in a lawsuit) alleging that the Work
++      or a Contribution incorporated within the Work constitutes direct
++      or contributory patent infringement, then any patent licenses
++      granted to You under this License for that Work shall terminate
++      as of the date such litigation is filed.
++
++    4. Redistribution. You may reproduce and distribute copies of the
++      Work or Derivative Works thereof in any medium, with or without
++      modifications, and in Source or Object form, provided that You
++      meet the following conditions:
++
++      (a) You must give any other recipients of the Work or
++          Derivative Works a copy of this License; and
++
++      (b) You must cause any modified files to carry prominent notices
++          stating that You changed the files; and
++
++      (c) You must retain, in the Source form of any Derivative Works
++          that You distribute, all copyright, patent, trademark, and
++          attribution notices from the Source form of the Work,
++          excluding those notices that do not pertain to any part of
++          the Derivative Works; and
++
++      (d) If the Work includes a "NOTICE" text file as part of its
++          distribution, then any Derivative Works that You distribute must
++          include a readable copy of the attribution notices contained
++          within such NOTICE file, excluding those notices that do not
++          pertain to any part of the Derivative Works, in at least one
++          of the following places: within a NOTICE text file distributed
++          as part of the Derivative Works; within the Source form or
++          documentation, if provided along with the Derivative Works; or,
++          within a display generated by the Derivative Works, if and
++          wherever such third-party notices normally appear. The contents
++          of the NOTICE file are for informational purposes only and
++          do not modify the License. You may add Your own attribution
++          notices within Derivative Works that You distribute, alongside
++          or as an addendum to the NOTICE text from the Work, provided
++          that such additional attribution notices cannot be construed
++          as modifying the License.
++
++      You may add Your own copyright statement to Your modifications and
++      may provide additional or different license terms and conditions
++      for use, reproduction, or distribution of Your modifications, or
++      for any such Derivative Works as a whole, provided Your use,
++      reproduction, and distribution of the Work otherwise complies with
++      the conditions stated in this License.
++
++    5. Submission of Contributions. Unless You explicitly state otherwise,
++      any Contribution intentionally submitted for inclusion in the Work
++      by You to the Licensor shall be under the terms and conditions of
++      this License, without any additional terms or conditions.
++      Notwithstanding the above, nothing herein shall supersede or modify
++      the terms of any separate license agreement you may have executed
++      with Licensor regarding such Contributions.
++
++    6. Trademarks. This License does not grant permission to use the trade
++      names, trademarks, service marks, or product names of the Licensor,
++      except as required for reasonable and customary use in describing the
++      origin of the Work and reproducing the content of the NOTICE file.
++
++    7. Disclaimer of Warranty. Unless required by applicable law or
++      agreed to in writing, Licensor provides the Work (and each
++      Contributor provides its Contributions) on an "AS IS" BASIS,
++      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
++      implied, including, without limitation, any warranties or conditions
++      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
++      PARTICULAR PURPOSE. You are solely responsible for determining the
++      appropriateness of using or redistributing the Work and assume any
++      risks associated with Your exercise of permissions under this License.
++
++    8. Limitation of Liability. In no event and under no legal theory,
++      whether in tort (including negligence), contract, or otherwise,
++      unless required by applicable law (such as deliberate and grossly
++      negligent acts) or agreed to in writing, shall any Contributor be
++      liable to You for damages, including any direct, indirect, special,
++      incidental, or consequential damages of any character arising as a
++      result of this License or out of the use or inability to use the
++      Work (including but not limited to damages for loss of goodwill,
++      work stoppage, computer failure or malfunction, or any and all
++      other commercial damages or losses), even if such Contributor
++      has been advised of the possibility of such damages.
++
++    9. Accepting Warranty or Additional Liability. While redistributing
++      the Work or Derivative Works thereof, You may choose to offer,
++      and charge a fee for, acceptance of support, warranty, indemnity,
++      or other liability obligations and/or rights consistent with this
++      License. However, in accepting such obligations, You may act only
++      on Your own behalf and on Your sole responsibility, not on behalf
++      of any other Contributor, and only if You agree to indemnify,
++      defend, and hold each Contributor harmless for any liability
++      incurred by, or claims asserted against, such Contributor by reason
++      of your accepting any such warranty or additional liability.
++
++    END OF TERMS AND CONDITIONS
++
++    APPENDIX: How to apply the Apache License to your work.
++
++      To apply the Apache License to your work, attach the following
++      boilerplate notice, with the fields enclosed by brackets "[]"
++      replaced with your own identifying information. (Don't include
++      the brackets!)  The text should be enclosed in the appropriate
++      comment syntax for the file format. We also recommend that a
++      file or class name and description of purpose be included on the
++      same "printed page" as the copyright notice for easier
++      identification within third-party archives.
++
++    Copyright [yyyy] [name of copyright owner]
++
++    Licensed under the Apache License, Version 2.0 (the "License");
++    you may not use this file except in compliance with the License.
++    You may obtain a copy of the License at
++
++       http://www.apache.org/licenses/LICENSE-2.0
++
++    Unless required by applicable law or agreed to in writing, software
++    distributed under the License is distributed on an "AS IS" BASIS,
++    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++    See the License for the specific language governing permissions and
++    limitations under the License.
++
++
++---- LLVM Exceptions to the Apache 2.0 License ----
++
++As an exception, if, as a result of your compiling your source code, portions
++of this Software are embedded into an Object form of such source code, you
++may redistribute such embedded portions in such Object form without complying
++with the conditions of Sections 4(a), 4(b) and 4(d) of the License.
++
++In addition, if you combine or link compiled forms of this Software with
++software that is licensed under the GPLv2 ("Combined Software") and if a
++court of competent jurisdiction determines that the patent provision (Section
++3), the indemnity provision (Section 9) or other Section of the License
++conflicts with the conditions of the GPLv2, you may retroactively and
++prospectively choose to deem waived or otherwise exclude such Section(s) of
++the License, but only in their entirety and only with respect to the Combined
++Software.
++
++==============================================================================
++Software from third parties included in the LLVM Project:
++==============================================================================
++The LLVM Project contains third party software which is under different license
++terms. All such code will be identified clearly using at least one of two
++mechanisms:
++1) It will be in a separate directory tree with its own `LICENSE.txt` or
++   `LICENSE` file at the top containing the specific license and restrictions
++   which apply to that software, or
++2) It will contain specific license and restriction terms at the top of every
++   file.
++
++==============================================================================
++Legacy LLVM License (https://llvm.org/docs/DeveloperPolicy.html#legacy):
++==============================================================================
++University of Illinois/NCSA
++Open Source License
++
++Copyright (c) 2003-2019 University of Illinois at Urbana-Champaign.
++All rights reserved.
++
++Developed by:
++
++    LLVM Team
++
++    University of Illinois at Urbana-Champaign
++
++    http://llvm.org
++
++Permission is hereby granted, free of charge, to any person obtaining a copy of
++this software and associated documentation files (the "Software"), to deal with
++the Software without restriction, including without limitation the rights to
++use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
++of the Software, and to permit persons to whom the Software is furnished to do
++so, subject to the following conditions:
++
++    * Redistributions of source code must retain the above copyright notice,
++      this list of conditions and the following disclaimers.
++
++    * Redistributions in binary form must reproduce the above copyright notice,
++      this list of conditions and the following disclaimers in the
++      documentation and/or other materials provided with the distribution.
++
++    * Neither the names of the LLVM Team, University of Illinois at
++      Urbana-Champaign, nor the names of its contributors may be used to
++      endorse or promote products derived from this Software without specific
++      prior written permission.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
++FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
++CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE
++SOFTWARE.
++
+diff --git a/src/backend/jit/llvm/SectionMemoryManager.cpp b/src/backend/jit/llvm/SectionMemoryManager.cpp
+new file mode 100644
+index 0000000000..c4fbf15a96
+--- /dev/null
++++ b/src/backend/jit/llvm/SectionMemoryManager.cpp
+@@ -0,0 +1,412 @@
++/*
++ * This file is from https://github.com/llvm/llvm-project/pull/71968
++ * with minor modifications to avoid name clash and work with older
++ * LLVM versions.  The llvm::backport::SectionMemoryManager class is a
++ * drop-in replacement for llvm::SectionMemoryManager, for use with
++ * llvm::RuntimeDyld.  It fixes a memory layout bug on large memory
++ * ARM systems (see pull request for details).  If the LLVM project
++ * eventually commits the change, we may need to resynchronize our
++ * copy with any further modifications, but they would be unlikely to
++ * backport it into the LLVM versions that we target so we would still
++ * need this copy.
++ *
++ * In the future we will switch to using JITLink instead of
++ * RuntimeDyld where possible, and later remove this code (.cpp, .h,
++ * .LICENSE) after all LLVM versions that we target allow it.
++ *
++ * This file is a modified copy of a part of the LLVM source code that
++ * we would normally access from the LLVM library.  It is therefore
++ * covered by the license at https://llvm.org/LICENSE.txt, reproduced
++ * verbatim in SectionMemoryManager.LICENSE in fulfillment of clause
++ * 4a.  The bugfix changes from the pull request are also covered, per
++ * clause 5.
++ */
++
++//===- SectionMemoryManager.cpp - Memory manager for MCJIT/RtDyld *- C++ -*-==//
++//
++// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
++// See https://llvm.org/LICENSE.txt for license information.
++// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
++//
++//===----------------------------------------------------------------------===//
++//
++// This file implements the section-based memory manager used by the MCJIT
++// execution engine and RuntimeDyld
++//
++//===----------------------------------------------------------------------===//
++
++#include "jit/llvmjit_backport.h"
++
++#ifdef USE_LLVM_BACKPORT_SECTION_MEMORY_MANAGER
++
++#include "jit/SectionMemoryManager.h"
++#include "llvm/Support/MathExtras.h"
++#include "llvm/Support/Process.h"
++
++namespace llvm {
++namespace backport {
++
++bool SectionMemoryManager::hasSpace(const MemoryGroup &MemGroup,
++                                    uintptr_t Size) const {
++  for (const FreeMemBlock &FreeMB : MemGroup.FreeMem) {
++    if (FreeMB.Free.allocatedSize() >= Size)
++      return true;
++  }
++  return false;
++}
++
++#if LLVM_VERSION_MAJOR < 16
++void SectionMemoryManager::reserveAllocationSpace(uintptr_t CodeSize,
++                                                  uint32_t CodeAlign_i,
++                                                  uintptr_t RODataSize,
++                                                  uint32_t RODataAlign_i,
++                                                  uintptr_t RWDataSize,
++                                                  uint32_t RWDataAlign_i) {
++  Align CodeAlign(CodeAlign_i);
++  Align RODataAlign(RODataAlign_i);
++  Align RWDataAlign(RWDataAlign_i);
++#else
++void SectionMemoryManager::reserveAllocationSpace(
++    uintptr_t CodeSize, Align CodeAlign, uintptr_t RODataSize,
++    Align RODataAlign, uintptr_t RWDataSize, Align RWDataAlign) {
++#endif
++  if (CodeSize == 0 && RODataSize == 0 && RWDataSize == 0)
++    return;
++
++  static const size_t PageSize = sys::Process::getPageSizeEstimate();
++
++  // Code alignment needs to be at least the stub alignment - however, we
++  // don't have an easy way to get that here so as a workaround, we assume
++  // it's 8, which is the largest value I observed across all platforms.
++  constexpr uint64_t StubAlign = 8;
++  CodeAlign = Align(std::max(CodeAlign.value(), StubAlign));
++  RODataAlign = Align(std::max(RODataAlign.value(), StubAlign));
++  RWDataAlign = Align(std::max(RWDataAlign.value(), StubAlign));
++
++  // Get space required for each section. Use the same calculation as
++  // allocateSection because we need to be able to satisfy it.
++  uint64_t RequiredCodeSize = alignTo(CodeSize, CodeAlign) + CodeAlign.value();
++  uint64_t RequiredRODataSize =
++      alignTo(RODataSize, RODataAlign) + RODataAlign.value();
++  uint64_t RequiredRWDataSize =
++      alignTo(RWDataSize, RWDataAlign) + RWDataAlign.value();
++
++  if (hasSpace(CodeMem, RequiredCodeSize) &&
++      hasSpace(RODataMem, RequiredRODataSize) &&
++      hasSpace(RWDataMem, RequiredRWDataSize)) {
++    // Sufficient space in contiguous block already available.
++    return;
++  }
++
++  // MemoryManager does not have functions for releasing memory after it's
++  // allocated. Normally it tries to use any excess blocks that were allocated
++  // due to page alignment, but if we have insufficient free memory for the
++  // request this can lead to allocating disparate memory that can violate the
++  // ARM ABI. Clear free memory so only the new allocations are used, but do
++  // not release allocated memory as it may still be in-use.
++  CodeMem.FreeMem.clear();
++  RODataMem.FreeMem.clear();
++  RWDataMem.FreeMem.clear();
++
++  // Round up to the nearest page size. Blocks must be page-aligned.
++  RequiredCodeSize = alignTo(RequiredCodeSize, PageSize);
++  RequiredRODataSize = alignTo(RequiredRODataSize, PageSize);
++  RequiredRWDataSize = alignTo(RequiredRWDataSize, PageSize);
++  uint64_t RequiredSize =
++      RequiredCodeSize + RequiredRODataSize + RequiredRWDataSize;
++
++  std::error_code ec;
++  sys::MemoryBlock MB = MMapper->allocateMappedMemory(
++      AllocationPurpose::RWData, RequiredSize, nullptr,
++      sys::Memory::MF_READ | sys::Memory::MF_WRITE, ec);
++  if (ec) {
++    return;
++  }
++  // CodeMem will arbitrarily own this MemoryBlock to handle cleanup.
++  CodeMem.AllocatedMem.push_back(MB);
++  uintptr_t Addr = (uintptr_t)MB.base();
++  FreeMemBlock FreeMB;
++  FreeMB.PendingPrefixIndex = (unsigned)-1;
++
++  if (CodeSize > 0) {
++    assert(isAddrAligned(CodeAlign, (void *)Addr));
++    FreeMB.Free = sys::MemoryBlock((void *)Addr, RequiredCodeSize);
++    CodeMem.FreeMem.push_back(FreeMB);
++    Addr += RequiredCodeSize;
++  }
++
++  if (RODataSize > 0) {
++    assert(isAddrAligned(RODataAlign, (void *)Addr));
++    FreeMB.Free = sys::MemoryBlock((void *)Addr, RequiredRODataSize);
++    RODataMem.FreeMem.push_back(FreeMB);
++    Addr += RequiredRODataSize;
++  }
++
++  if (RWDataSize > 0) {
++    assert(isAddrAligned(RWDataAlign, (void *)Addr));
++    FreeMB.Free = sys::MemoryBlock((void *)Addr, RequiredRWDataSize);
++    RWDataMem.FreeMem.push_back(FreeMB);
++  }
++}
++
++uint8_t *SectionMemoryManager::allocateDataSection(uintptr_t Size,
++                                                   unsigned Alignment,
++                                                   unsigned SectionID,
++                                                   StringRef SectionName,
++                                                   bool IsReadOnly) {
++  if (IsReadOnly)
++    return allocateSection(SectionMemoryManager::AllocationPurpose::ROData,
++                           Size, Alignment);
++  return allocateSection(SectionMemoryManager::AllocationPurpose::RWData, Size,
++                         Alignment);
++}
++
++uint8_t *SectionMemoryManager::allocateCodeSection(uintptr_t Size,
++                                                   unsigned Alignment,
++                                                   unsigned SectionID,
++                                                   StringRef SectionName) {
++  return allocateSection(SectionMemoryManager::AllocationPurpose::Code, Size,
++                         Alignment);
++}
++
++uint8_t *SectionMemoryManager::allocateSection(
++    SectionMemoryManager::AllocationPurpose Purpose, uintptr_t Size,
++    unsigned Alignment) {
++  if (!Alignment)
++    Alignment = 16;
++
++  assert(!(Alignment & (Alignment - 1)) && "Alignment must be a power of two.");
++
++  uintptr_t RequiredSize = Alignment * ((Size + Alignment - 1) / Alignment + 1);
++  uintptr_t Addr = 0;
++
++  MemoryGroup &MemGroup = [&]() -> MemoryGroup & {
++    switch (Purpose) {
++    case AllocationPurpose::Code:
++      return CodeMem;
++    case AllocationPurpose::ROData:
++      return RODataMem;
++    case AllocationPurpose::RWData:
++      return RWDataMem;
++    }
++    llvm_unreachable("Unknown SectionMemoryManager::AllocationPurpose");
++  }();
++
++  // Look in the list of free memory regions and use a block there if one
++  // is available.
++  for (FreeMemBlock &FreeMB : MemGroup.FreeMem) {
++    if (FreeMB.Free.allocatedSize() >= RequiredSize) {
++      Addr = (uintptr_t)FreeMB.Free.base();
++      uintptr_t EndOfBlock = Addr + FreeMB.Free.allocatedSize();
++      // Align the address.
++      Addr = (Addr + Alignment - 1) & ~(uintptr_t)(Alignment - 1);
++
++      if (FreeMB.PendingPrefixIndex == (unsigned)-1) {
++        // The part of the block we're giving out to the user is now pending
++        MemGroup.PendingMem.push_back(sys::MemoryBlock((void *)Addr, Size));
++
++        // Remember this pending block, such that future allocations can just
++        // modify it rather than creating a new one
++        FreeMB.PendingPrefixIndex = MemGroup.PendingMem.size() - 1;
++      } else {
++        sys::MemoryBlock &PendingMB =
++            MemGroup.PendingMem[FreeMB.PendingPrefixIndex];
++        PendingMB = sys::MemoryBlock(PendingMB.base(),
++                                     Addr + Size - (uintptr_t)PendingMB.base());
++      }
++
++      // Remember how much free space is now left in this block
++      FreeMB.Free =
++          sys::MemoryBlock((void *)(Addr + Size), EndOfBlock - Addr - Size);
++      return (uint8_t *)Addr;
++    }
++  }
++
++  // No pre-allocated free block was large enough. Allocate a new memory region.
++  // Note that all sections get allocated as read-write.  The permissions will
++  // be updated later based on memory group.
++  //
++  // FIXME: It would be useful to define a default allocation size (or add
++  // it as a constructor parameter) to minimize the number of allocations.
++  //
++  // FIXME: Initialize the Near member for each memory group to avoid
++  // interleaving.
++  std::error_code ec;
++  sys::MemoryBlock MB = MMapper->allocateMappedMemory(
++      Purpose, RequiredSize, &MemGroup.Near,
++      sys::Memory::MF_READ | sys::Memory::MF_WRITE, ec);
++  if (ec) {
++    // FIXME: Add error propagation to the interface.
++    return nullptr;
++  }
++
++  // Save this address as the basis for our next request
++  MemGroup.Near = MB;
++
++  // Copy the address to all the other groups, if they have not
++  // been initialized.
++  if (CodeMem.Near.base() == nullptr)
++    CodeMem.Near = MB;
++  if (RODataMem.Near.base() == nullptr)
++    RODataMem.Near = MB;
++  if (RWDataMem.Near.base() == nullptr)
++    RWDataMem.Near = MB;
++
++  // Remember that we allocated this memory
++  MemGroup.AllocatedMem.push_back(MB);
++  Addr = (uintptr_t)MB.base();
++  uintptr_t EndOfBlock = Addr + MB.allocatedSize();
++
++  // Align the address.
++  Addr = (Addr + Alignment - 1) & ~(uintptr_t)(Alignment - 1);
++
++  // The part of the block we're giving out to the user is now pending
++  MemGroup.PendingMem.push_back(sys::MemoryBlock((void *)Addr, Size));
++
++  // The allocateMappedMemory may allocate much more memory than we need. In
++  // this case, we store the unused memory as a free memory block.
++  unsigned FreeSize = EndOfBlock - Addr - Size;
++  if (FreeSize > 16) {
++    FreeMemBlock FreeMB;
++    FreeMB.Free = sys::MemoryBlock((void *)(Addr + Size), FreeSize);
++    FreeMB.PendingPrefixIndex = (unsigned)-1;
++    MemGroup.FreeMem.push_back(FreeMB);
++  }
++
++  // Return aligned address
++  return (uint8_t *)Addr;
++}
++
++bool SectionMemoryManager::finalizeMemory(std::string *ErrMsg) {
++  // FIXME: Should in-progress permissions be reverted if an error occurs?
++  std::error_code ec;
++
++  // Make code memory executable.
++  ec = applyMemoryGroupPermissions(CodeMem,
++                                   sys::Memory::MF_READ | sys::Memory::MF_EXEC);
++  if (ec) {
++    if (ErrMsg) {
++      *ErrMsg = ec.message();
++    }
++    return true;
++  }
++
++  // Make read-only data memory read-only.
++  ec = applyMemoryGroupPermissions(RODataMem, sys::Memory::MF_READ);
++  if (ec) {
++    if (ErrMsg) {
++      *ErrMsg = ec.message();
++    }
++    return true;
++  }
++
++  // Read-write data memory already has the correct permissions
++
++  // Some platforms with separate data cache and instruction cache require
++  // explicit cache flush, otherwise JIT code manipulations (like resolved
++  // relocations) will get to the data cache but not to the instruction cache.
++  invalidateInstructionCache();
++
++  return false;
++}
++
++static sys::MemoryBlock trimBlockToPageSize(sys::MemoryBlock M) {
++  static const size_t PageSize = sys::Process::getPageSizeEstimate();
++
++  size_t StartOverlap =
++      (PageSize - ((uintptr_t)M.base() % PageSize)) % PageSize;
++
++  size_t TrimmedSize = M.allocatedSize();
++  TrimmedSize -= StartOverlap;
++  TrimmedSize -= TrimmedSize % PageSize;
++
++  sys::MemoryBlock Trimmed((void *)((uintptr_t)M.base() + StartOverlap),
++                           TrimmedSize);
++
++  assert(((uintptr_t)Trimmed.base() % PageSize) == 0);
++  assert((Trimmed.allocatedSize() % PageSize) == 0);
++  assert(M.base() <= Trimmed.base() &&
++         Trimmed.allocatedSize() <= M.allocatedSize());
++
++  return Trimmed;
++}
++
++std::error_code
++SectionMemoryManager::applyMemoryGroupPermissions(MemoryGroup &MemGroup,
++                                                  unsigned Permissions) {
++  for (sys::MemoryBlock &MB : MemGroup.PendingMem)
++    if (std::error_code EC = MMapper->protectMappedMemory(MB, Permissions))
++      return EC;
++
++  MemGroup.PendingMem.clear();
++
++  // Now go through free blocks and trim any of them that don't span the entire
++  // page because one of the pending blocks may have overlapped it.
++  for (FreeMemBlock &FreeMB : MemGroup.FreeMem) {
++    FreeMB.Free = trimBlockToPageSize(FreeMB.Free);
++    // We cleared the PendingMem list, so all these pointers are now invalid
++    FreeMB.PendingPrefixIndex = (unsigned)-1;
++  }
++
++  // Remove all blocks which are now empty
++  erase_if(MemGroup.FreeMem, [](FreeMemBlock &FreeMB) {
++    return FreeMB.Free.allocatedSize() == 0;
++  });
++
++  return std::error_code();
++}
++
++void SectionMemoryManager::invalidateInstructionCache() {
++  for (sys::MemoryBlock &Block : CodeMem.PendingMem)
++    sys::Memory::InvalidateInstructionCache(Block.base(),
++                                            Block.allocatedSize());
++}
++
++SectionMemoryManager::~SectionMemoryManager() {
++  for (MemoryGroup *Group : {&CodeMem, &RWDataMem, &RODataMem}) {
++    for (sys::MemoryBlock &Block : Group->AllocatedMem)
++      MMapper->releaseMappedMemory(Block);
++  }
++}
++
++SectionMemoryManager::MemoryMapper::~MemoryMapper() = default;
++
++void SectionMemoryManager::anchor() {}
++
++namespace {
++// Trivial implementation of SectionMemoryManager::MemoryMapper that just calls
++// into sys::Memory.
++class DefaultMMapper final : public SectionMemoryManager::MemoryMapper {
++public:
++  sys::MemoryBlock
++  allocateMappedMemory(SectionMemoryManager::AllocationPurpose Purpose,
++                       size_t NumBytes, const sys::MemoryBlock *const NearBlock,
++                       unsigned Flags, std::error_code &EC) override {
++    return sys::Memory::allocateMappedMemory(NumBytes, NearBlock, Flags, EC);
++  }
++
++  std::error_code protectMappedMemory(const sys::MemoryBlock &Block,
++                                      unsigned Flags) override {
++    return sys::Memory::protectMappedMemory(Block, Flags);
++  }
++
++  std::error_code releaseMappedMemory(sys::MemoryBlock &M) override {
++    return sys::Memory::releaseMappedMemory(M);
++  }
++};
++} // namespace
++
++SectionMemoryManager::SectionMemoryManager(MemoryMapper *UnownedMM,
++                                           bool ReserveAlloc)
++    : MMapper(UnownedMM), OwnedMMapper(nullptr),
++      ReserveAllocation(ReserveAlloc) {
++  if (!MMapper) {
++    OwnedMMapper = std::make_unique<DefaultMMapper>();
++    MMapper = OwnedMMapper.get();
++  }
++}
++
++} // namespace backport
++} // namespace llvm
++
++#endif
+diff --git a/src/backend/jit/llvm/llvmjit.c b/src/backend/jit/llvm/llvmjit.c
+index 8b00d98112..356b5590a6 100644
+--- a/src/backend/jit/llvm/llvmjit.c
++++ b/src/backend/jit/llvm/llvmjit.c
+@@ -40,6 +40,7 @@
+ #endif
+ 
+ #include "jit/llvmjit.h"
++#include "jit/llvmjit_backport.h"
+ #include "jit/llvmjit_emit.h"
+ #include "miscadmin.h"
+ #include "portability/instr_time.h"
+@@ -1316,8 +1317,13 @@ llvm_log_jit_error(void *ctx, LLVMErrorRef error)
+ static LLVMOrcObjectLayerRef
+ llvm_create_object_layer(void *Ctx, LLVMOrcExecutionSessionRef ES, const char *Triple)
+ {
++#ifdef USE_LLVM_BACKPORT_SECTION_MEMORY_MANAGER
+ 	LLVMOrcObjectLayerRef objlayer =
+-	LLVMOrcCreateRTDyldObjectLinkingLayerWithSectionMemoryManager(ES);
++		LLVMOrcCreateRTDyldObjectLinkingLayerWithSafeSectionMemoryManager(ES);
++#else
++	LLVMOrcObjectLayerRef objlayer =
++		LLVMOrcCreateRTDyldObjectLinkingLayerWithSectionMemoryManager(ES);
++#endif
+ 
+ #if defined(HAVE_DECL_LLVMCREATEGDBREGISTRATIONLISTENER) && HAVE_DECL_LLVMCREATEGDBREGISTRATIONLISTENER
+ 	if (jit_debugging_support)
+diff --git a/src/backend/jit/llvm/llvmjit_wrap.cpp b/src/backend/jit/llvm/llvmjit_wrap.cpp
+index bab5b66249..26074b1e89 100644
+--- a/src/backend/jit/llvm/llvmjit_wrap.cpp
++++ b/src/backend/jit/llvm/llvmjit_wrap.cpp
+@@ -33,6 +33,14 @@ extern "C"
+ #endif
+ 
+ #include "jit/llvmjit.h"
++#include "jit/llvmjit_backport.h"
++
++#ifdef USE_LLVM_BACKPORT_SECTION_MEMORY_MANAGER
++#include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
++#include <llvm/ExecutionEngine/SectionMemoryManager.h>
++#include "jit/SectionMemoryManager.h"
++#include <llvm/Support/CBindingWrapping.h>
++#endif
+ 
+ 
+ /*
+@@ -102,3 +110,15 @@ LLVMGlobalGetValueType(LLVMValueRef g)
+ 	return llvm::wrap(llvm::unwrap<llvm::GlobalValue>(g)->getValueType());
+ }
+ #endif
++
++#ifdef USE_LLVM_BACKPORT_SECTION_MEMORY_MANAGER
++DEFINE_SIMPLE_CONVERSION_FUNCTIONS(llvm::orc::ExecutionSession, LLVMOrcExecutionSessionRef)
++DEFINE_SIMPLE_CONVERSION_FUNCTIONS(llvm::orc::ObjectLayer, LLVMOrcObjectLayerRef);
++
++LLVMOrcObjectLayerRef
++LLVMOrcCreateRTDyldObjectLinkingLayerWithSafeSectionMemoryManager(LLVMOrcExecutionSessionRef ES)
++{
++	return wrap(new llvm::orc::RTDyldObjectLinkingLayer(
++		*unwrap(ES), [] { return std::make_unique<llvm::backport::SectionMemoryManager>(nullptr, true); }));
++}
++#endif
+diff --git a/src/include/jit/SectionMemoryManager.h b/src/include/jit/SectionMemoryManager.h
+new file mode 100644
+index 0000000000..93cf977157
+--- /dev/null
++++ b/src/include/jit/SectionMemoryManager.h
+@@ -0,0 +1,226 @@
++/*
++ * This is a copy LLVM source code modified by the PostgreSQL project.
++ * See SectionMemoryManager.cpp for notes on provenance and license.
++ */
++
++//===- SectionMemoryManager.h - Memory manager for MCJIT/RtDyld -*- C++ -*-===//
++//
++// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
++// See https://llvm.org/LICENSE.txt for license information.
++// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
++//
++//===----------------------------------------------------------------------===//
++//
++// This file contains the declaration of a section-based memory manager used by
++// the MCJIT execution engine and RuntimeDyld.
++//
++//===----------------------------------------------------------------------===//
++
++#ifndef LLVM_EXECUTIONENGINE_BACKPORT_SECTIONMEMORYMANAGER_H
++#define LLVM_EXECUTIONENGINE_BACKPORT_SECTIONMEMORYMANAGER_H
++
++#include "llvm/ADT/SmallVector.h"
++#include "llvm/ExecutionEngine/RTDyldMemoryManager.h"
++#include "llvm/Support/Alignment.h"
++#include "llvm/Support/Memory.h"
++#include <cstdint>
++#include <string>
++#include <system_error>
++
++namespace llvm {
++namespace backport {
++
++/// This is a simple memory manager which implements the methods called by
++/// the RuntimeDyld class to allocate memory for section-based loading of
++/// objects, usually those generated by the MCJIT execution engine.
++///
++/// This memory manager allocates all section memory as read-write.  The
++/// RuntimeDyld will copy JITed section memory into these allocated blocks
++/// and perform any necessary linking and relocations.
++///
++/// Any client using this memory manager MUST ensure that section-specific
++/// page permissions have been applied before attempting to execute functions
++/// in the JITed object.  Permissions can be applied either by calling
++/// MCJIT::finalizeObject or by calling SectionMemoryManager::finalizeMemory
++/// directly.  Clients of MCJIT should call MCJIT::finalizeObject.
++class SectionMemoryManager : public RTDyldMemoryManager {
++public:
++  /// This enum describes the various reasons to allocate pages from
++  /// allocateMappedMemory.
++  enum class AllocationPurpose {
++    Code,
++    ROData,
++    RWData,
++  };
++
++  /// Implementations of this interface are used by SectionMemoryManager to
++  /// request pages from the operating system.
++  class MemoryMapper {
++  public:
++    /// This method attempts to allocate \p NumBytes bytes of virtual memory for
++    /// \p Purpose.  \p NearBlock may point to an existing allocation, in which
++    /// case an attempt is made to allocate more memory near the existing block.
++    /// The actual allocated address is not guaranteed to be near the requested
++    /// address.  \p Flags is used to set the initial protection flags for the
++    /// block of the memory.  \p EC [out] returns an object describing any error
++    /// that occurs.
++    ///
++    /// This method may allocate more than the number of bytes requested.  The
++    /// actual number of bytes allocated is indicated in the returned
++    /// MemoryBlock.
++    ///
++    /// The start of the allocated block must be aligned with the system
++    /// allocation granularity (64K on Windows, page size on Linux).  If the
++    /// address following \p NearBlock is not so aligned, it will be rounded up
++    /// to the next allocation granularity boundary.
++    ///
++    /// \r a non-null MemoryBlock if the function was successful, otherwise a
++    /// null MemoryBlock with \p EC describing the error.
++    virtual sys::MemoryBlock
++    allocateMappedMemory(AllocationPurpose Purpose, size_t NumBytes,
++                         const sys::MemoryBlock *const NearBlock,
++                         unsigned Flags, std::error_code &EC) = 0;
++
++    /// This method sets the protection flags for a block of memory to the state
++    /// specified by \p Flags.  The behavior is not specified if the memory was
++    /// not allocated using the allocateMappedMemory method.
++    /// \p Block describes the memory block to be protected.
++    /// \p Flags specifies the new protection state to be assigned to the block.
++    ///
++    /// If \p Flags is MF_WRITE, the actual behavior varies with the operating
++    /// system (i.e. MF_READ | MF_WRITE on Windows) and the target architecture
++    /// (i.e. MF_WRITE -> MF_READ | MF_WRITE on i386).
++    ///
++    /// \r error_success if the function was successful, or an error_code
++    /// describing the failure if an error occurred.
++    virtual std::error_code protectMappedMemory(const sys::MemoryBlock &Block,
++                                                unsigned Flags) = 0;
++
++    /// This method releases a block of memory that was allocated with the
++    /// allocateMappedMemory method. It should not be used to release any memory
++    /// block allocated any other way.
++    /// \p Block describes the memory to be released.
++    ///
++    /// \r error_success if the function was successful, or an error_code
++    /// describing the failure if an error occurred.
++    virtual std::error_code releaseMappedMemory(sys::MemoryBlock &M) = 0;
++
++    virtual ~MemoryMapper();
++  };
++
++  /// Creates a SectionMemoryManager instance with \p MM as the associated
++  /// memory mapper.  If \p MM is nullptr then a default memory mapper is used
++  /// that directly calls into the operating system.
++  ///
++  /// If \p ReserveAlloc is true all memory will be pre-allocated, and any
++  /// attempts to allocate beyond pre-allocated memory will fail.
++  SectionMemoryManager(MemoryMapper *MM = nullptr, bool ReserveAlloc = false);
++  SectionMemoryManager(const SectionMemoryManager &) = delete;
++  void operator=(const SectionMemoryManager &) = delete;
++  ~SectionMemoryManager() override;
++
++  /// Enable reserveAllocationSpace when requested.
++  bool needsToReserveAllocationSpace() override { return ReserveAllocation; }
++
++  /// Implements allocating all memory in a single block. This is required to
++  /// limit memory offsets to fit the ARM ABI; large memory systems may
++  /// otherwise allocate separate sections too far apart.
++#if LLVM_VERSION_MAJOR < 16
++  virtual void reserveAllocationSpace(uintptr_t CodeSize, uint32_t CodeAlign,
++                                      uintptr_t RODataSize,
++                                      uint32_t RODataAlign,
++                                      uintptr_t RWDataSize,
++                                      uint32_t RWDataAlign) override;
++#else
++  void reserveAllocationSpace(uintptr_t CodeSize, Align CodeAlign,
++                              uintptr_t RODataSize, Align RODataAlign,
++                              uintptr_t RWDataSize, Align RWDataAlign) override;
++#endif
++
++  /// Allocates a memory block of (at least) the given size suitable for
++  /// executable code.
++  ///
++  /// The value of \p Alignment must be a power of two.  If \p Alignment is zero
++  /// a default alignment of 16 will be used.
++  uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
++                               unsigned SectionID,
++                               StringRef SectionName) override;
++
++  /// Allocates a memory block of (at least) the given size suitable for
++  /// executable code.
++  ///
++  /// The value of \p Alignment must be a power of two.  If \p Alignment is zero
++  /// a default alignment of 16 will be used.
++  uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
++                               unsigned SectionID, StringRef SectionName,
++                               bool isReadOnly) override;
++
++  /// Update section-specific memory permissions and other attributes.
++  ///
++  /// This method is called when object loading is complete and section page
++  /// permissions can be applied.  It is up to the memory manager implementation
++  /// to decide whether or not to act on this method.  The memory manager will
++  /// typically allocate all sections as read-write and then apply specific
++  /// permissions when this method is called.  Code sections cannot be executed
++  /// until this function has been called.  In addition, any cache coherency
++  /// operations needed to reliably use the memory are also performed.
++  ///
++  /// \returns true if an error occurred, false otherwise.
++  bool finalizeMemory(std::string *ErrMsg = nullptr) override;
++
++  /// Invalidate instruction cache for code sections.
++  ///
++  /// Some platforms with separate data cache and instruction cache require
++  /// explicit cache flush, otherwise JIT code manipulations (like resolved
++  /// relocations) will get to the data cache but not to the instruction cache.
++  ///
++  /// This method is called from finalizeMemory.
++  virtual void invalidateInstructionCache();
++
++private:
++  struct FreeMemBlock {
++    // The actual block of free memory
++    sys::MemoryBlock Free;
++    // If there is a pending allocation from the same reservation right before
++    // this block, store it's index in PendingMem, to be able to update the
++    // pending region if part of this block is allocated, rather than having to
++    // create a new one
++    unsigned PendingPrefixIndex;
++  };
++
++  struct MemoryGroup {
++    // PendingMem contains all blocks of memory (subblocks of AllocatedMem)
++    // which have not yet had their permissions applied, but have been given
++    // out to the user. FreeMem contains all block of memory, which have
++    // neither had their permissions applied, nor been given out to the user.
++    SmallVector<sys::MemoryBlock, 16> PendingMem;
++    SmallVector<FreeMemBlock, 16> FreeMem;
++
++    // All memory blocks that have been requested from the system
++    SmallVector<sys::MemoryBlock, 16> AllocatedMem;
++
++    sys::MemoryBlock Near;
++  };
++
++  uint8_t *allocateSection(AllocationPurpose Purpose, uintptr_t Size,
++                           unsigned Alignment);
++
++  std::error_code applyMemoryGroupPermissions(MemoryGroup &MemGroup,
++                                              unsigned Permissions);
++
++  bool hasSpace(const MemoryGroup &MemGroup, uintptr_t Size) const;
++
++  void anchor() override;
++
++  MemoryGroup CodeMem;
++  MemoryGroup RWDataMem;
++  MemoryGroup RODataMem;
++  MemoryMapper *MMapper;
++  std::unique_ptr<MemoryMapper> OwnedMMapper;
++  bool ReserveAllocation;
++};
++
++} // end namespace backport
++} // end namespace llvm
++
++#endif // LLVM_EXECUTIONENGINE_BACKPORT_SECTIONMEMORYMANAGER_H
+diff --git a/src/include/jit/llvmjit.h b/src/include/jit/llvmjit.h
+index 08fac9ec12..03b8e2ceb7 100644
+--- a/src/include/jit/llvmjit.h
++++ b/src/include/jit/llvmjit.h
+@@ -17,7 +17,12 @@
+  */
+ #ifdef USE_LLVM
+ 
++#include "jit/llvmjit_backport.h"
++
+ #include <llvm-c/Types.h>
++#ifdef USE_LLVM_BACKPORT_SECTION_MEMORY_MANAGER
++#include <llvm-c/OrcEE.h>
++#endif
+ 
+ 
+ /*
+@@ -148,6 +153,9 @@ extern char *LLVMGetHostCPUFeatures(void);
+ extern unsigned LLVMGetAttributeCountAtIndexPG(LLVMValueRef F, uint32 Idx);
+ extern LLVMTypeRef LLVMGetFunctionReturnType(LLVMValueRef r);
+ extern LLVMTypeRef LLVMGetFunctionType(LLVMValueRef r);
++#ifdef USE_LLVM_BACKPORT_SECTION_MEMORY_MANAGER
++extern LLVMOrcObjectLayerRef LLVMOrcCreateRTDyldObjectLinkingLayerWithSafeSectionMemoryManager(LLVMOrcExecutionSessionRef ES);
++#endif
+ 
+ #if LLVM_MAJOR_VERSION < 8
+ extern LLVMTypeRef LLVMGlobalGetValueType(LLVMValueRef g);
+diff --git a/src/include/jit/llvmjit_backport.h b/src/include/jit/llvmjit_backport.h
+new file mode 100644
+index 0000000000..92874f7998
+--- /dev/null
++++ b/src/include/jit/llvmjit_backport.h
+@@ -0,0 +1,25 @@
++/*
++ * A small header than can be included by backported LLVM code or PostgreSQL
++ * code, to control conditional compilation.
++ */
++#ifndef LLVMJIT_BACKPORT_H
++#define LLVMJIT_BACKPORT_H
++
++#include <llvm/Config/llvm-config.h>
++
++/*
++ * LLVM's RuntimeDyld can produce code that crashes on larger memory ARM
++ * systems, because llvm::SectionMemoryManager allocates multiple pieces of
++ * memory that can be placed too far apart for the generated code.  See
++ * src/backend/jit/llvm/SectionMemoryManager.cpp for the patched replacement
++ * class llvm::backport::SectionMemoryManager that we use as a workaround.
++ * This header controls whether we use it.
++ *
++ * We have adjusted it to compile against a range of LLVM versions, but not
++ * further back than 12 for now.
++ */
++#if defined(__aarch64__) && LLVM_VERSION_MAJOR > 11
++#define USE_LLVM_BACKPORT_SECTION_MEMORY_MANAGER
++#endif
++
++#endif
+diff --git a/src/tools/pginclude/headerscheck b/src/tools/pginclude/headerscheck
+index f8b0674a66..0bea62a799 100755
+--- a/src/tools/pginclude/headerscheck
++++ b/src/tools/pginclude/headerscheck
+@@ -124,6 +124,9 @@ do
+ 	# This produces a "no previous prototype" warning.
+ 	test "$f" = src/include/storage/checksum_impl.h && continue
+ 
++	# SectionMemoryManager.h is C++
++	test "$f" = src/include/jit/SectionMemoryManager.h && continue
++
+ 	# ppport.h is not under our control, so we can't make it standalone.
+ 	test "$f" = src/pl/plperl/ppport.h && continue
+ 
+diff --git a/src/tools/pgindent/exclude_file_patterns b/src/tools/pgindent/exclude_file_patterns
+index f08180b0d0..c6a61be173 100644
+--- a/src/tools/pgindent/exclude_file_patterns
++++ b/src/tools/pgindent/exclude_file_patterns
+@@ -4,8 +4,9 @@
+ src/include/storage/s_lock\.h$
+ src/include/port/atomics/
+ #
+-# This contains C++ constructs that confuse pgindent.
++# These contains C++ constructs that confuse pgindent.
+ src/include/jit/llvmjit\.h$
++src/include/jit/SectionMemoryManager\.h$
+ #
+ # This confuses pgindent, and it's a derived file anyway.
+ src/backend/utils/fmgrtab\.c$

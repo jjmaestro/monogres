@@ -1,0 +1,35 @@
+From fa96a74a0f76c49ac5a43a16fca8bf705fa98d99 Mon Sep 17 00:00:00 2001
+From: Heikki Linnakangas <heikki.linnakangas@iki.fi>
+Date: Wed, 5 Jul 2023 13:13:13 +0300
+Subject: [PATCH] Fix leak of LLVM "fatal-on-oom" section counter.
+
+llvm_release_context() called llvm_enter_fatal_on_oom(), but was missing
+the corresponding llvm_leave_fatal_on_oom() call. As a result, if JIT was
+used at all, we were almost always in the "fatal-on-oom" state.
+
+It only makes a difference if you use an extension written in C++, and
+run out of memory in a C++ 'new' call. In that case, you would get a
+PostgreSQL FATAL error, instead of the default behavior of throwing a
+C++ exception.
+
+Back-patch to all supported versions.
+
+Reviewed-by: Daniel Gustafsson
+Discussion: https://www.postgresql.org/message-id/54b78cca-bc84-dad8-4a7e-5b56f764fab5@iki.fi
+---
+ src/backend/jit/llvm/llvmjit.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/backend/jit/llvm/llvmjit.c b/src/backend/jit/llvm/llvmjit.c
+index 55236e2006..c4f6eda0fd 100644
+--- a/src/backend/jit/llvm/llvmjit.c
++++ b/src/backend/jit/llvm/llvmjit.c
+@@ -221,6 +221,8 @@ llvm_release_context(JitContext *context)
+ 	}
+ 	list_free(llvm_context->handles);
+ 	llvm_context->handles = NIL;
++
++	llvm_leave_fatal_on_oom();
+ }
+ 
+ /*

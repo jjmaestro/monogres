@@ -1,0 +1,63 @@
+From af64846e1cca9628fd3d816d3de3ae414c4891b4 Mon Sep 17 00:00:00 2001
+From: Thomas Munro <tmunro@postgresql.org>
+Date: Wed, 19 Oct 2022 22:18:54 +1300
+Subject: [PATCH] Track LLVM 15 changes.
+
+Per https://llvm.org/docs/OpaquePointers.html, support for non-opaque
+pointers still exists and we can request that on our context.  We have
+until LLVM 16 to move to opaque pointers, a much larger change.
+
+Back-patch to 11, where LLVM support arrived.
+
+Author: Thomas Munro <thomas.munro@gmail.com>
+Author: Andres Freund <andres@anarazel.de>
+Discussion: https://postgr.es/m/CAMHz58Sf_xncdyqsekoVsNeKcruKootLtVH6cYXVhhUR1oKPCg%40mail.gmail.com
+---
+ src/backend/jit/llvm/llvmjit.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/src/backend/jit/llvm/llvmjit.c b/src/backend/jit/llvm/llvmjit.c
+index 6c72d43beb..19e5b153a4 100644
+--- a/src/backend/jit/llvm/llvmjit.c
++++ b/src/backend/jit/llvm/llvmjit.c
+@@ -798,6 +798,16 @@ llvm_session_initialize(void)
+ 	LLVMInitializeNativeAsmPrinter();
+ 	LLVMInitializeNativeAsmParser();
+ 
++	/*
++	 * When targeting an LLVM version with opaque pointers enabled by
++	 * default, turn them off for the context we build our code in.  We don't
++	 * need to do so for other contexts (e.g. llvm_ts_context).  Once the IR is
++	 * generated, it carries the necessary information.
++	 */
++#if LLVM_VERSION_MAJOR > 14
++	LLVMContextSetOpaquePointers(LLVMGetGlobalContext(), false);
++#endif
++
+ 	/*
+ 	 * Synchronize types early, as that also includes inferring the target
+ 	 * triple.
+@@ -1112,7 +1122,11 @@ llvm_resolve_symbols(LLVMOrcDefinitionGeneratorRef GeneratorObj, void *Ctx,
+ 					 LLVMOrcJITDylibRef JD, LLVMOrcJITDylibLookupFlags JDLookupFlags,
+ 					 LLVMOrcCLookupSet LookupSet, size_t LookupSetSize)
+ {
++#if LLVM_VERSION_MAJOR > 14
++	LLVMOrcCSymbolMapPairs symbols = palloc0(sizeof(LLVMOrcCSymbolMapPair) * LookupSetSize);
++#else
+ 	LLVMOrcCSymbolMapPairs symbols = palloc0(sizeof(LLVMJITCSymbolMapPair) * LookupSetSize);
++#endif
+ 	LLVMErrorRef error;
+ 	LLVMOrcMaterializationUnitRef mu;
+ 
+@@ -1230,7 +1244,11 @@ llvm_create_jit_instance(LLVMTargetMachineRef tm)
+ 	 * Symbol resolution support for "special" functions, e.g. a call into an
+ 	 * SQL callable function.
+ 	 */
++#if LLVM_VERSION_MAJOR > 14
++	ref_gen = LLVMOrcCreateCustomCAPIDefinitionGenerator(llvm_resolve_symbols, NULL, NULL);
++#else
+ 	ref_gen = LLVMOrcCreateCustomCAPIDefinitionGenerator(llvm_resolve_symbols, NULL);
++#endif
+ 	LLVMOrcJITDylibAddGenerator(LLVMOrcLLJITGetMainJITDylib(lljit), ref_gen);
+ 
+ 	return lljit;

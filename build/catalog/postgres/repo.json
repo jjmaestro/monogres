@@ -331,28 +331,68 @@
         "spec": ">=16.0,<16.2/*"
       },
       {
+        "label": "//catalog/postgres/patches:0009-15.0-backport-track-llvm-15-changes.patch",
+        "spec": "15.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0010-15.0-backport-fix-typos-in-comments-code-and-documentation.patch",
+        "spec": "15.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0011-15.0-backport-fix-leak-of-llvm-fatal-on-oom-section-counter.patch",
+        "spec": "15.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0012-15.0-backport-jit-support-opaque-pointers-in-llvm-16.patch",
+        "spec": "15.0/*"
+      },
+      {
         "label": "//catalog/postgres/patches:0012-16.0-backport-jit-support-opaque-pointers-in-llvm-16.patch",
         "spec": "16.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0013-15.0-backport-jit-supply-llvmglobalgetvaluetype-for-llvm-8.patch",
+        "spec": "15.0/*"
       },
       {
         "label": "//catalog/postgres/patches:0013-16.0-backport-jit-supply-llvmglobalgetvaluetype-for-llvm-8.patch",
         "spec": "16.0/*"
       },
       {
+        "label": "//catalog/postgres/patches:0014-15.0-backport-jit-changes-for-llvm-17.patch",
+        "spec": "15.0/*"
+      },
+      {
         "label": "//catalog/postgres/patches:0014-16.0-backport-jit-changes-for-llvm-17.patch",
         "spec": "16.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0015-15.0-backport-llvmjit-use-explicit-llvmcontextref-for-inlining.patch",
+        "spec": "15.0/*"
       },
       {
         "label": "//catalog/postgres/patches:0015-16.0-backport-llvmjit-use-explicit-llvmcontextref-for-inlining.patch",
         "spec": ">=16.0,<16.2/*"
       },
       {
+        "label": "//catalog/postgres/patches:0016-15.0-backport-track-llvm-18-changes.patch",
+        "spec": "15.0/*"
+      },
+      {
         "label": "//catalog/postgres/patches:0016-16.0-backport-track-llvm-18-changes.patch",
         "spec": ">=16.0,<16.2/*"
       },
       {
+        "label": "//catalog/postgres/patches:0017-15.0-backport-fix-illegal-attribute-propagation-in-llvm-jit.patch",
+        "spec": "15.0/*"
+      },
+      {
         "label": "//catalog/postgres/patches:0017-16.0-backport-fix-illegal-attribute-propagation-in-llvm-jit.patch",
         "spec": ">=16.0,<16.3/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0018-15.0-backport-monkey-patch-llvm-code-to-fix-arm-relocation-bug.patch",
+        "spec": "15.0/*"
       },
       {
         "label": "//catalog/postgres/patches:0018-16.0-backport-monkey-patch-llvm-code-to-fix-arm-relocation-bug.patch",
