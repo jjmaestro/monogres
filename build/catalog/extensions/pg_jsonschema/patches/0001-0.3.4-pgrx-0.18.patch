@@ -1,0 +1,50 @@
+From 9fa2a952d286eee89b773c6b3b192047c29fc64e Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Mon, 27 Jul 2026 01:29:53 +0000
+Subject: [PATCH] patch: move to pgrx 0.18 for an offline, sandboxed build
+
+0.3.4 ships against pgrx 0.16, whose only route to the extension SQL is `cargo
+pgrx schema`: it dlopens the freshly built cdylib and runs code out of it to
+print the schema. A network-less sandbox cannot allow that, and a cross-compile
+cannot do it at all. 0.18 additionally records the SQL entity graph in a
+`.pgrxsc` link section, so the same SQL can be read out of the library as data
+by a small external tool, and it is also the first release with pg18 support.
+
+0.18.1 rather than 0.18.0: 0.18.0 emits the section but lets the linker garbage
+collect it on aarch64 Linux, where nothing references it, leaving an extension
+with no SQL at all (pgrx #2280).
+
+The requirement is exact (`=`) because the tool that reads that section links
+`pgrx-sql-entity-graph`, which owns both halves of the job: decoding the section
+AND emitting the SQL from it. The emitter is the half that moves. 0.19 kept the
+wire format byte for byte, so a mismatch would decode cleanly and then write
+different SQL rather than fail, which is the worse outcome. Pinning the
+extension pins the generator with it.
+
+References: https://github.com/pgcentralfoundation/pgrx/issues/2280
+---
+ Cargo.toml | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Cargo.toml b/Cargo.toml
+index 3e65ac5..0d09412 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -21,7 +21,7 @@ pg18 = ["pgrx/pg18", "pgrx-tests/pg18"]
+ pg_test = []
+ 
+ [dependencies]
+-pgrx = "0.16.1"
++pgrx = "=0.18.1"
+ serde = "1.0"
+ serde_json = "1.0"
+ jsonschema = { version = "0.37.1", default-features = false, features = [
+@@ -29,7 +29,7 @@ jsonschema = { version = "0.37.1", default-features = false, features = [
+ ] }
+ 
+ [dev-dependencies]
+-pgrx-tests = "0.16.1"
++pgrx-tests = "=0.18.1"
+ 
+ [profile.dev]
+ panic = "unwind"
