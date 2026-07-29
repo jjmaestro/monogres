@@ -1,0 +1,63 @@
+From 60f6c6d6ac396686328c2edca011b9f8139571a7 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Sun, 26 Jul 2026 12:23:30 +0000
+Subject: [PATCH] patch: honor the PYTHON build option when probing plpython
+
+`pm.find_installation()` called with no positional argument does not
+search a `PATH`: meson's python module falls back to
+`mesonlib.python_command`, which is `[sys.executable]`, so the
+installation it returns is *the interpreter meson itself is running
+under*.
+
+Under a build that runs meson as a wrapped `py_binary`, that is the
+build tool's own interpreter and not the one PostgreSQL resolved for
+`PYTHON`. Both get probed, and only the second has the development
+files:
+
+  Program .../python_sysroot/debian/13/amd64/usr/bin/python3 found: YES
+  Program .../meson_tool.runfiles/..._meson_tool.venv/bin/python3 found: YES
+
+`dependency(embed: true)` then looks for the *build tool* interpreter's
+embed files, whose `INCLUDEPY` and `LIBDIR` point outside the build
+sandbox and which has no matching `python-3.x-embed.pc` on
+`PKG_CONFIG_PATH`, and fails. With `plpython` enabled rather than auto
+that is fatal:
+
+  meson.build:1075:29: ERROR: Python dependency not found
+
+Pass `python.path()`, the program
+`find_program(get_option('PYTHON'), native: true)` already resolved at
+the top of this file, so the installation probed is the one plpython is
+actually built against, and its `python-3.x-embed` is the one the
+sysroot provides.
+
+Upstream fixed this in `489ca33081c8` ("meson: Improve/fix Python
+version selection"), back-patched to REL_16_STABLE as `1f5e38847b26`
+and first released in 16.2. That back-patch does not apply verbatim
+here, because it carries context from `c79ca0485a62` ("meson: Make
+detection of python more robust", first released in 16.1) which this
+release predates, so only its one-line change is taken.
+
+Deliberately `path()` and not `full_path()`: master later switched to
+`full_path()` in `aa11a9c14902`, which was not back-patched, and
+`path()` is what the release branches use.
+
+References: https://postgr.es/c/489ca33081
+References: https://postgr.es/c/1f5e38847b
+---
+ meson.build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/meson.build b/meson.build
+index 38e4f03e60..35307144c6 100644
+--- a/meson.build
++++ b/meson.build
+@@ -1054,7 +1054,7 @@ endif
+ pyopt = get_option('plpython')
+ if not pyopt.disabled()
+   pm = import('python')
+-  python3_inst = pm.find_installation(required: pyopt)
++  python3_inst = pm.find_installation(python.path(), required: pyopt)
+   python3_dep = python3_inst.dependency(embed: true, required: pyopt)
+   if not cc.check_header('Python.h', dependencies: python3_dep, required: pyopt)
+     python3_dep = not_found_dep

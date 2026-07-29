@@ -247,6 +247,14 @@
     },
     "patches": [
       {
+        "label": "//catalog/postgres/patches:0001-16.0-backport-meson-plpython-honor-python-build-option.patch",
+        "spec": "16.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0001-16.1-backport-meson-plpython-honor-python-build-option.patch",
+        "spec": "16.1/*"
+      },
+      {
         "label": "//catalog/postgres/patches:0002-16.0-fix-pgflex-propagate-environment-to-flex-subprocess.patch",
         "spec": "*"
       },

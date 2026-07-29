@@ -1,0 +1,51 @@
+From 729a75b66d946b3939c7d98675a87690a0d357b8 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Tue, 28 Jul 2026 12:23:30 +0000
+Subject: [PATCH] patch: honor the PYTHON build option when probing plpython
+
+`pm.find_installation()` called with no positional argument does not
+search a `PATH`: meson's python module falls back to
+`mesonlib.python_command`, which is `[sys.executable]`, so the
+installation it returns is *the interpreter meson itself is running
+under*, not the one PostgreSQL resolved for `PYTHON`.
+
+Under a build that runs meson as a wrapped `py_binary`, only the
+resolved `PYTHON` has the development files, so
+`dependency(embed: true)` looks for the build tool interpreter's embed
+files, whose `INCLUDEPY` and `LIBDIR` point outside the build sandbox
+and which has no matching `python-3.x-embed.pc` on `PKG_CONFIG_PATH`,
+and fails. With `plpython` enabled rather than auto that is fatal.
+
+Pass `python.path()`, the program
+`find_program(get_option('PYTHON'), native: true)` already resolved at
+the top of this file, so the installation probed is the one plpython is
+actually built against, and its `python-3.x-embed` is the one the
+sysroot provides.
+
+This is upstream `1f5e38847b26`, the REL_16_STABLE back-patch of
+`489ca33081c8` ("meson: Improve/fix Python version selection"), first
+released in 16.2, taken verbatim.
+
+Deliberately `path()` and not `full_path()`: master later switched to
+`full_path()` in `aa11a9c14902`, which was not back-patched, and
+`path()` is what the release branches use.
+
+References: https://postgr.es/c/489ca33081
+References: https://postgr.es/c/1f5e38847b
+---
+ meson.build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/meson.build b/meson.build
+index 51b5285924..ecb81defe6 100644
+--- a/meson.build
++++ b/meson.build
+@@ -1055,7 +1055,7 @@ pyopt = get_option('plpython')
+ python3_dep = not_found_dep
+ if not pyopt.disabled()
+   pm = import('python')
+-  python3_inst = pm.find_installation(required: pyopt)
++  python3_inst = pm.find_installation(python.path(), required: pyopt)
+   if python3_inst.found()
+     python3_dep = python3_inst.dependency(embed: true, required: pyopt)
+     # Remove this check after we depend on Meson >= 1.1.0
