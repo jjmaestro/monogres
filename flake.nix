@@ -20,10 +20,11 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           build = import ./bazel.nix { inherit pkgs; };
+          monobot = import ./monobot/monobot.nix { inherit pkgs; };
         in
         {
           default = pkgs.mkShell {
-            packages = build.packages ++ (with pkgs; [
+            packages = build.packages ++ monobot.packages ++ (with pkgs; [
               prek
               python314
               hadolint
@@ -31,7 +32,7 @@
               uv
             ]);
 
-            env = build.env;
+            env = build.env // monobot.env;
 
             shellHook = ''
               export UV_PYTHON="$(command -v python3)"

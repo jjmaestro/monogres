@@ -7,3 +7,5 @@
 CPY = "CPY"
 # brin is a PostgreSQL access method (BRIN index) + regress test name
 brin = "brin"
+# vertx is the Vert.x toolkit, spelled that way in its package and class names
+vertx = "vertx"

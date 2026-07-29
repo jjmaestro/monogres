@@ -1,3 +1,9 @@
+# MD013/line-length
+# https://github.com/DavidAnson/markdownlint/blob/v0.38.0/doc/md013.md
+MD013:
+  # A table row cannot be wrapped, so a table whose cells carry prose or a
+  # long URL can never satisfy the line limit.
+  tables: false
 # MD028 / no-blanks-blockquote
 # https://github.com/DavidAnson/markdownlint/blob/v0.38.0/doc/md028.md
 MD028: false

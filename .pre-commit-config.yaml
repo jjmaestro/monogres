@@ -124,6 +124,39 @@ repos:
       - id: jsonnetfmt
   - repo: local
     hooks:
+      # Three goals in the order they have to run: OpenRewrite makes the
+      # tree-level fixes, spotless lays the result out, checkstyle then has
+      # nothing left to report. They read their configuration from
+      # monobot/pom.xml and take no file arguments, so each covers that module
+      # and no other java in the repo; `files` only decides whether the module
+      # is worth starting Maven for at all.
+      - id: monobot-rewrite
+        name: monobot-rewrite
+        entry: &mvnd >-
+          mvnd --batch-mode --quiet --file monobot/pom.xml
+        args:
+          - rewrite:run
+        language: system
+        files: &java ^monobot/.*\.java$
+        pass_filenames: false
+      - id: monobot-spotless
+        name: monobot-spotless
+        entry: *mvnd
+        args:
+          - spotless:apply
+        language: system
+        files: *java
+        pass_filenames: false
+      - id: monobot-checkstyle
+        name: monobot-checkstyle
+        entry: *mvnd
+        args:
+          - checkstyle:check
+        language: system
+        files: *java
+        pass_filenames: false
+  - repo: local
+    hooks:
       - id: bazel-query
         name: bazel-query
         entry: >-
