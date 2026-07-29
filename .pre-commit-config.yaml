@@ -133,6 +133,7 @@ repos:
         args:
           - EXEC_ARGS=query //...
         language: system
+        files: ^build/
         pass_filenames: false
         verbose: false
       - id: bazel-analyze
@@ -144,6 +145,7 @@ repos:
         args:
           - EXEC_ARGS=build --nobuild //...
         language: system
+        files: ^build/
         pass_filenames: false
         verbose: false
         stages: [manual]
@@ -156,6 +158,7 @@ repos:
         args:
           - EXEC_ARGS=test //...
         language: system
+        files: ^build/
         pass_filenames: false
         verbose: false
         stages: [manual]
