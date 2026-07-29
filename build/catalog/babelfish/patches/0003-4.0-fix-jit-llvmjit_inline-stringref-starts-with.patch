@@ -1,0 +1,41 @@
+From 1f3ff04f098c3361ad2d502c1d0060242ac44ee8 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Mon, 27 Jul 2026 00:44:27 +0000
+Subject: [PATCH] patch: reach StringRef::starts_with in llvmjit_inline
+
+`llvm::StringRef::startswith` was renamed to `starts_with` in LLVM 16 and
+removed outright in LLVM 18, so compiling the LLVM JIT against LLVM 18 or newer
+fails in `llvmjit_inline.cpp`:
+
+    error: no member named 'startswith' in 'llvm::StringRef';
+    did you mean 'starts_with'?
+
+Babelfish 4.0 forks PostgreSQL 16.1, one release short of the 16.2 that reaches
+the new name and defines it back to the old one for LLVM older than 16, so one
+source serves every LLVM the branch supports. This is that change, carried into
+the fork. Babelfish 5.1 forks 17.4 and has it already.
+
+The `#define` is function-local, matching upstream: this is the only call site,
+and nothing else in the translation unit spells either name.
+
+References: https://postgr.es/c/60ba7cae7c
+---
+ src/backend/jit/llvm/llvmjit_inline.cpp | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/backend/jit/llvm/llvmjit_inline.cpp b/src/backend/jit/llvm/llvmjit_inline.cpp
+index c765add856..6db25fa5cd 100644
+--- a/src/backend/jit/llvm/llvmjit_inline.cpp
++++ b/src/backend/jit/llvm/llvmjit_inline.cpp
+@@ -808,7 +808,10 @@ static void
+ add_module_to_inline_search_path(InlineSearchPath& searchpath, llvm::StringRef modpath)
+ {
+ 	/* only extension in libdir are candidates for inlining for now */
+-	if (!modpath.startswith("$libdir/"))
++#if LLVM_VERSION_MAJOR < 16
++#define starts_with startswith
++#endif
++	if (!modpath.starts_with("$libdir/"))
+ 		return;
+ 
+ 	/* if there's no match, attempt to load */

@@ -21,6 +21,12 @@
   },
   "metadata": {
     "flavor": "babelfish",
+    "patches": [
+      {
+        "label": "//catalog/babelfish/patches:0003-4.0-fix-jit-llvmjit_inline-stringref-starts-with.patch",
+        "spec": "<5.0/*"
+      }
+    ],
     "extra_sources": {
       "ext": {
         "index": "//catalog/babelfish:ext.json",
