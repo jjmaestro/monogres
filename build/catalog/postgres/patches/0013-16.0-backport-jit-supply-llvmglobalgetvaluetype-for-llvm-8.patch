@@ -1,0 +1,49 @@
+From 60596f148a661e0fd1d7c1f13a72b55124511e3a Mon Sep 17 00:00:00 2001
+From: Thomas Munro <tmunro@postgresql.org>
+Date: Thu, 19 Oct 2023 03:01:55 +1300
+Subject: [PATCH] jit: Supply LLVMGlobalGetValueType() for LLVM < 8.
+
+Commit 37d5babb used this C API function while adding support for LLVM
+16 and opaque pointers, but it's not available in LLVM 7 and older.
+Provide it in our own llvmjit_wrap.cpp.  It just calls a C++ function
+that pre-dates LLVM 3.9, our minimum target.
+
+Back-patch to 12, like 37d5babb.
+
+Discussion: https://postgr.es/m/CA%2BhUKGKnLnJnWrkr%3D4mSGhE5FuTK55FY15uULR7%3Dzzc%3DwX4Nqw%40mail.gmail.com
+---
+ src/backend/jit/llvm/llvmjit_wrap.cpp | 8 ++++++++
+ src/include/jit/llvmjit.h             | 4 ++++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/src/backend/jit/llvm/llvmjit_wrap.cpp b/src/backend/jit/llvm/llvmjit_wrap.cpp
+index 997a2c0278..cb896e2b6a 100644
+--- a/src/backend/jit/llvm/llvmjit_wrap.cpp
++++ b/src/backend/jit/llvm/llvmjit_wrap.cpp
+@@ -88,3 +88,11 @@ LLVMGetFunctionType(LLVMValueRef r)
+ {
+ 	return llvm::wrap(llvm::unwrap<llvm::Function>(r)->getFunctionType());
+ }
++
++#if LLVM_VERSION_MAJOR < 8
++LLVMTypeRef
++LLVMGlobalGetValueType(LLVMValueRef g)
++{
++	return llvm::wrap(llvm::unwrap<llvm::GlobalValue>(g)->getValueType());
++}
++#endif
+diff --git a/src/include/jit/llvmjit.h b/src/include/jit/llvmjit.h
+index e7f34fa92a..d7232167e8 100644
+--- a/src/include/jit/llvmjit.h
++++ b/src/include/jit/llvmjit.h
+@@ -141,6 +141,10 @@ extern unsigned LLVMGetAttributeCountAtIndexPG(LLVMValueRef F, uint32 Idx);
+ extern LLVMTypeRef LLVMGetFunctionReturnType(LLVMValueRef r);
+ extern LLVMTypeRef LLVMGetFunctionType(LLVMValueRef r);
+ 
++#if LLVM_MAJOR_VERSION < 8
++extern LLVMTypeRef LLVMGlobalGetValueType(LLVMValueRef g);
++#endif
++
+ #ifdef __cplusplus
+ } /* extern "C" */
+ #endif

@@ -1,0 +1,43 @@
+From bf1cfe77ed49a4929695ba6c0367f784f2f6a10c Mon Sep 17 00:00:00 2001
+From: Thomas Munro <tmunro@postgresql.org>
+Date: Wed, 10 Apr 2024 10:46:15 +1200
+Subject: [PATCH] Fix illegal attribute propagation in LLVM JIT.
+
+Commit 72559438 started copying more attributes from AttributeTemplate
+to the functions we generate on the fly.  In the case of deform
+functions, which return void, this meant that "noundef", from
+AttributeTemplate's return value (a Datum) was copied to a void type.
+Older LLVM releases were OK with that, but LLVM 18 crashes.
+
+Update our llvm_copy_attributes() function to skip copying the attribute
+for the return value, if the target function returns void.
+
+Thanks to Dmitry Dolgov for help chasing this down.
+
+Back-patch to all supported releases, like 72559438.
+
+Reported-by: Pavel Stehule <pavel.stehule@gmail.com>
+Reviewed-by: Dmitry Dolgov <9erthalion6@gmail.com>
+Discussion: https://postgr.es/m/CAFj8pRACpVFr7LMdVYENUkScG5FCYMZDDdSGNU-tch%2Bw98OxYg%40mail.gmail.com
+---
+ src/backend/jit/llvm/llvmjit.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/src/backend/jit/llvm/llvmjit.c b/src/backend/jit/llvm/llvmjit.c
+index 1b79122e31..d46915fad5 100644
+--- a/src/backend/jit/llvm/llvmjit.c
++++ b/src/backend/jit/llvm/llvmjit.c
+@@ -565,8 +565,11 @@ llvm_copy_attributes(LLVMValueRef v_from, LLVMValueRef v_to)
+ 	/* copy function attributes */
+ 	llvm_copy_attributes_at_index(v_from, v_to, LLVMAttributeFunctionIndex);
+ 
+-	/* and the return value attributes */
+-	llvm_copy_attributes_at_index(v_from, v_to, LLVMAttributeReturnIndex);
++	if (LLVMGetTypeKind(LLVMGetFunctionReturnType(v_to)) != LLVMVoidTypeKind)
++	{
++		/* and the return value attributes */
++		llvm_copy_attributes_at_index(v_from, v_to, LLVMAttributeReturnIndex);
++	}
+ 
+ 	/* and each function parameter's attribute */
+ 	param_count = LLVMCountParams(v_from);
