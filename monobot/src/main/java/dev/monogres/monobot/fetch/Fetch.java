@@ -13,6 +13,7 @@ import dev.monogres.monobot.config.output.Versions;
 import dev.monogres.monobot.git.ForgeType;
 import dev.monogres.monobot.git.GitTag;
 import dev.monogres.monobot.git.Repo;
+import dev.monogres.monobot.git.TagLister;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -52,6 +53,8 @@ public class Fetch {
 
   @Inject ArchiveMetadataExtractor archiveMetadataExtractor;
 
+  @Inject TagLister tagLister;
+
   private record VersionDownloadResult(
       Version version, GitTag tag, String sha256, Path archivePath, String stripPrefix) {}
 
@@ -59,7 +62,7 @@ public class Fetch {
       MonobotConfig monobotConfig, Repo repo, Versions versions, Metadata metadata) {
     GitTag[] tags;
     try {
-      tags = GitTag.getTags(monobotConfig.repoUrl());
+      tags = tagLister.getTags(monobotConfig.repoUrl());
     } catch (GitAPIException e) {
       LOG.warnv(
           e,

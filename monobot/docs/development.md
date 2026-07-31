@@ -102,3 +102,19 @@ checkstyle jar, extracted at build time rather than copied into this
 repository, so upgrading checkstyle brings its rule changes along unmodified.
 Deviations from it live in `.checkstyle-suppressions.xml`. See
 `tools/lint/lint.bzl` for how the three fit together.
+
+## Tests
+
+`RepoConfigSerializationTest` pins repo.json's serialized shape against a
+golden. It uses plain JUnit.
+
+`FetchPipelineTest` drives the whole pipeline, Scan through Fetch to the written
+file, with the two network calls replaced: `TagLister` returns fixed tags and
+`SourceArchive` writes a tarball the test generates instead of downloading one.
+The archive is built rather than committed, with tar and gzip timestamps pinned
+so its sha256 is reproducible and the digest in the golden is derived from real
+bytes.
+
+A single `quarkus_test` target covers the whole suite: it is the JUnit console
+launcher on an augmented classpath, so plain tests and `@QuarkusTest` ones run
+under the same rule.

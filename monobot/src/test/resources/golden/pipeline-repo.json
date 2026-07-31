@@ -1,0 +1,29 @@
+{
+  "sources" : {
+    "github.com" : {
+      "url" : "https://api.github.com/repos/monogres/fixture/tarball/{commit}",
+      "type" : "tar.gz"
+    }
+  },
+  "versions" : {
+    "1.2.3" : {
+      "tag" : "v1.2.3",
+      "sha256" : "b47d6e8003896e3267a784c1c2c1b9de5754b804743c913a313bd0b5cc9db1b6",
+      "strip_prefix" : "monogres-fixture-8cf409d",
+      "commit" : "8cf409d1b669e0e3e22fa79bb54027a4b555e822",
+      "short_commit" : "8cf409d"
+    }
+  },
+  "metadata" : {
+    ".control" : {
+      "1.2.3" : {
+        "default_version" : "1.2.3",
+        "comment" : "a fixture extension",
+        "superuser" : true,
+        "trusted" : false,
+        "relocatable" : false
+      }
+    }
+  },
+  "version" : 1
+}

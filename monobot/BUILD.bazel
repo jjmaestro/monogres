@@ -52,8 +52,15 @@ java_library(
     deps = [
         ":lib",
         "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:io_quarkus_quarkus_junit",
+        "@maven//:io_quarkus_quarkus_junit_mockito",
+        "@maven//:io_quarkus_quarkus_test_common",
+        "@maven//:io_vertx_vertx_core",
+        "@maven//:jakarta_inject_jakarta_inject_api",
+        "@maven//:org_apache_commons_commons_compress",
         "@maven//:org_eclipse_jgit_org_eclipse_jgit",
         "@maven//:org_junit_jupiter_junit_jupiter_api",
+        "@maven//:org_mockito_mockito_core",
     ],
 )
 
