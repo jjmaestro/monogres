@@ -1,0 +1,41 @@
+From b52d9a0dd7f9ec58b86775adcb1d8aa7d4322ad5 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Fri, 31 Jul 2026 01:47:35 +0000
+Subject: [PATCH 1/2] fix(rules): stop registering the app jar as a
+ quarkus_test app root
+
+quarkus_test cannot run against an application that declares @QuarkusMain:
+augmentation fails with the application's own main class reported twice,
+"More than one @QuarkusMain method found with name '': X and X".
+
+OUTPUT_SOURCES_DIR was built from the transitive local classpath, so it
+carried the application jar as well as the test jar. In test mode the
+application jar is already the model's application artifact, because
+collapseTestRoot folds the test root into the application, so passing it
+again as an application root indexes every class in it twice.
+
+The duplication was there for every quarkus_test target. It is invisible
+for beans and REST resources and only becomes an error for @QuarkusMain,
+whose uniqueness check counts annotation instances.
+
+Only the test roots need to arrive through OUTPUT_SOURCES_DIR.
+---
+ quarkus/private/quarkus_test_impl.bzl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/quarkus/private/quarkus_test_impl.bzl b/quarkus/private/quarkus_test_impl.bzl
+index f9e09b9..85824f3 100644
+--- a/quarkus/private/quarkus_test_impl.bzl
++++ b/quarkus/private/quarkus_test_impl.bzl
+@@ -107,7 +107,7 @@ def _test_impl(ctx, integration):
+     # roots exposes their @ConfigRoot classes to both classloaders (SRCFG00027).
+     cp_file = write_runfiles_paths_file(ctx, "_cp.txt", runtime_classpath, ":")
+     ext_rt_jars = collect_extension_runtime_jars(ctx.attr.deps)
+-    direct_jars_file = write_runfiles_paths_file(ctx, "_direct_jars.txt", collect_local_app_jars(ctx.attr.deps, runtime_classpath, ext_rt_jars), ",")
++    direct_jars_file = write_runfiles_paths_file(ctx, "_direct_jars.txt", collect_local_app_jars(ctx.attr.deps, depset(), ext_rt_jars), ",")
+ 
+     tool_jar = ctx.file.quarkifier_tool
+     java_runtime = ctx.attr._java_runtime[java_common.JavaRuntimeInfo]
+-- 
+2.51.2
+

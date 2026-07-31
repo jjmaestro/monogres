@@ -28,6 +28,15 @@ maven.install(
         "io.quarkus:quarkus-vertx:3.33.2",
         "io.vertx:vertx-web-client:4.5.27",
         "org.apache.commons:commons-compress:1.28.0",
+        # Test only. Nothing imports hamcrest or junit-platform-launcher, but
+        # the quarkus_test macro puts them on every test target's compile
+        # classpath, so they have to resolve here.
+        "io.quarkus:quarkus-junit:3.33.2",
+        "io.quarkus:quarkus-junit-mockito:3.33.2",
+        "org.hamcrest:hamcrest:3.0",
+        "org.junit.jupiter:junit-jupiter:6.0.3",
+        "org.junit.platform:junit-platform-console-standalone:6.0.3",
+        "org.junit.platform:junit-platform-launcher:6.0.3",
     ],
     known_contributing_modules = [
         "bazel_worker_java",
@@ -43,6 +52,18 @@ use_repo(maven, "maven")
 # declared above. quarkus_version must be one of the two the ruleset supports:
 # augmentation emits bytecode tied to the patch version.
 bazel_dep(name = "com_clementguillot_rules_quarkus", version = "0.5.2")
+
+# quarkus_test hands the application jar to Quarkus twice, once as the model's
+# application artifact and once more as an application root, so every class in
+# it is indexed twice. Only @QuarkusMain notices, because its uniqueness check
+# counts annotation instances, and monobot has one: augmentation fails with
+# "More than one @QuarkusMain method found" naming Main twice. Filed upstream;
+# drop this once a release carries the fix.
+single_version_override(
+    module_name = "com_clementguillot_rules_quarkus",
+    patch_strip = 1,
+    patches = ["//patches/rules_quarkus:0001-fix-rules-stop-registering-the-app-jar-as-a-quarkus_.patch"],
+)
 
 quarkus = use_extension(
     "@com_clementguillot_rules_quarkus//quarkus:extensions.bzl",
