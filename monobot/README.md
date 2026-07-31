@@ -133,14 +133,16 @@ source archive:
 
 ## Running
 
+From this directory:
+
 ```sh
 configDir=/path/to/config \
 workdir=/tmp/monobot \
 monogresRepo=/path/to/monogres \
-  mvn quarkus:run
+  bazel run //:monobot
 ```
 
 ## Development
 
-See [docs/development.md](docs/development.md) for build instructions, dev
-mode, packaging, and native executable details.
+See [docs/development.md](docs/development.md) for the build, dev mode,
+packaging, and the format and lint gate.
