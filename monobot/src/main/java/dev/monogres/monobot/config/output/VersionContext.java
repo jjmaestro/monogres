@@ -3,10 +3,16 @@ package dev.monogres.monobot.config.output;
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import dev.monogres.monobot.git.ObjectIdUtils;
 import org.eclipse.jgit.lib.ObjectId;
 
+/// `tag`, `sha256` and `strip_prefix` are serialized from fields while `commit` and
+/// `short_commit` come from getters, and Jackson derives the latter from
+/// `Class.getDeclaredMethods()`, whose order the JVM explicitly does not specify. Without a
+/// declared order the two commit keys swap between runs, so repo.json is not reproducible.
+@JsonPropertyOrder({"tag", "sha256", "strip_prefix", "commit", "short_commit"})
 public class VersionContext {
   @JsonProperty(value = "tag")
   private String tag;
