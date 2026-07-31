@@ -1,5 +1,5 @@
 load("@rules_java//java:java_library.bzl", "java_library")
-load("@rules_quarkus//quarkus:defs.bzl", "quarkus_app")
+load("@rules_quarkus//quarkus:defs.bzl", "quarkus_app", "quarkus_test")
 load("//tools/lint:lint.bzl", "checkstyle_test")
 
 exports_files([".checkstyle-suppressions.xml"])
@@ -43,7 +43,32 @@ quarkus_app(
     deps = [":lib"],
 )
 
+java_library(
+    name = "test_lib",
+    testonly = True,
+    srcs = glob(["src/test/java/**/*.java"]),
+    javacopts = ["-parameters"],
+    resources = glob(["src/test/resources/**/*"]),
+    deps = [
+        ":lib",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:org_eclipse_jgit_org_eclipse_jgit",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+    ],
+)
+
+# One target for the whole suite: quarkus_test is the JUnit console launcher on
+# an augmented classpath, so plain tests and @QuarkusTest ones run under the
+# same rule.
+quarkus_test(
+    name = "test",
+    deps = [":test_lib"],
+)
+
 checkstyle_test(
     name = "checkstyle_test",
-    srcs = [":lib"],
+    srcs = [
+        ":lib",
+        ":test_lib",
+    ],
 )
