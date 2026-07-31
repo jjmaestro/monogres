@@ -43,25 +43,25 @@ the classpath up for you.
 
 ## Architectures
 
-monobot builds for `amd64`. `//platforms:targets.bzl` is the single source of
-truth for that list and for the facts derived from it: the `ARCH_CPU` mapping,
-the `//platforms:is_linux_<arch>` config settings, the
+monobot builds for `amd64` and `arm64`. `//platforms:targets.bzl` is the single
+source of truth for that list and for the facts derived from it: the
+`ARCH_CPU` mapping, the `//platforms:is_linux_<arch>` config settings, the
 `//platforms:linux_<arch>` platforms, and the `arch_select()` helper that keys a
 `select()` on them. Nothing else in the tree defines its own architecture list.
 The naming follows the module under `build/`: ARCH is the Debian name (`amd64`),
 CPU is the machine name (`x86_64`).
 
-Only `//:monobot_native` is architecture-specific. Everything else monobot
+Only `//:monobot_native` differs between the two. Everything else monobot
 produces is a jar, and a jar is the same bytes everywhere.
 
 ```sh
 bazel build //...                       # for the machine you are on
-bazel build --config=linux-amd64 //...  # for amd64
+bazel build --config=linux-arm64 //...  # for arm64
 ```
 
 Left alone, Bazel builds for the host, which is what you want when building
-natively. Naming a config selects the platform and puts that architecture's cc
-toolchain first in resolution.
+natively on either architecture. Naming a config selects the platform and puts
+that architecture's cc toolchain first in resolution.
 
 ## Native executable
 
@@ -86,7 +86,10 @@ resource, fixed when the jar is built, so it cannot `select()` on the platform.
 Expect the first build to be slow. It downloads GraalVM and LLVM, and
 native-image itself takes minutes and a few GB of RAM.
 
-### How the binary is linked
+### What each architecture produces
+
+The two are not linked the same way, and the difference is forced by what
+GraalVM supports rather than chosen.
 
 **amd64 is fully static**: no ELF interpreter, no `DT_NEEDED` entries, so it
 runs on any amd64 Linux regardless of what is installed there. Verified on
@@ -97,18 +100,53 @@ packages. It carries a static zlib as well as musl itself, because GraalVM links
 already built against musl, and `.apk` files are gzipped tarballs, so unpacking
 them needs no Alpine tooling.
 
-Moving to glibc instead means pointing the sysroot at
-`debian_stretch_amd64_sysroot.tar.xz`, which chromium publishes, adding
-`cxx_include_layout = {"linux-x86_64": "debian"}` to `llvm.toolchain` because
-those sysroots use Debian's libstdc++ header layout, and replacing the
-`native_build_args` branch with `--static-nolibc`, which links everything
-except the libc. That costs the fully static binary, and is worth it only if
-something needs `dlopen`, NSS, or a glibc-only library, none of which musl
-supports the way glibc does. Portability would then come from the sysroot's age
-rather than from static linking, since glibc is backwards compatible.
+**arm64 is glibc**, built with `--static-nolibc`, which links everything except
+the libc. Static linking is not available on this architecture at all, and the
+gap is narrower than it looks. GraalVM's own musl C layer *is* built for
+aarch64; what is missing is the static JDK libraries, which come from
+[labs-openjdk](https://github.com/graalvm/labs-openjdk-21) and are built against
+musl for `linux-amd64` only:
 
-Two consequences of linking with clang rather than gcc, both in
-`native_build_args`. `--rtlib=compiler-rt --unwindlib=none`, because
+```console
+ls <graalvm-amd64>/lib/svm/clibraries/linux-amd64      # glibc  musl
+ls <graalvm-aarch64>/lib/svm/clibraries/linux-aarch64  # glibc  musl
+ls <graalvm-amd64>/lib/static/linux-amd64              # glibc  musl
+ls <graalvm-aarch64>/lib/static/linux-aarch64          # glibc
+```
+
+Those 80-odd archives are needed by every build, not just static ones, so on
+arm64 no musl build is possible at all, and `--static` is rejected outright
+against glibc. This is upstream's position rather than a local misconfiguration:
+the prerequisite for a static executable is [documented][static-guide] as "Linux
+x64", the musl toolchain Oracle publishes is `linux-amd64`, and Oracle's answer
+on [#10375][] is that "static linking is not supported on Linux AArch64".
+[#4645][], which asks for exactly these libraries, was closed as not planned.
+Support is intended: on [#9490][] a maintainer said in July 2025 that there are
+"plans to add support for static linking on linux/aarch64. Not in JDK 25, but
+hopefully soon." GraalVM 25 is what this builds with, so not yet.
+
+[static-guide]: https://www.graalvm.org/latest/reference-manual/native-image/guides/build-static-executables/
+[#4645]: https://github.com/oracle/graal/issues/4645
+[#9490]: https://github.com/oracle/graal/issues/9490
+[#10375]: https://github.com/oracle/graal/issues/10375
+
+The result depends on glibc and nothing else. Portability comes from the
+sysroot's age rather than from static linking: it is Debian stretch, whose glibc
+is 2.24, and glibc is backwards compatible, so the binary runs against anything
+newer. On a distribution that keeps its loader in a store path, that loader has
+to be reachable at `/lib/ld-linux-aarch64.so.1`; NixOS does this through
+`nix-ld`. Revisit `--static` for arm64 when a GraalVM release ships
+`lib/static/linux-aarch64/musl`.
+
+Making the two symmetric means moving amd64 to glibc, not arm64 to musl: point
+its sysroot at `debian_stretch_amd64_sysroot.tar.xz`, add `linux-x86_64` to
+`cxx_include_layout`, and replace its `native_build_args` branch with
+`--static-nolibc`. That costs the fully static binary, and is worth it only if
+something needs `dlopen`, NSS, or a glibc-only library, none of which musl
+supports the way glibc does.
+
+Two consequences of linking with clang rather than gcc, both in the amd64
+branch of `native_build_args`. `--rtlib=compiler-rt --unwindlib=none`, because
 otherwise clang reaches for gcc's `crtbeginT.o`, `-lgcc` and `-lgcc_eh`, and
 they have to be on the compiler and the linker both because the early "query
 code" step passes only `-H:CCompilerOption` through. And no `--target=...-musl`,
@@ -117,12 +155,100 @@ because the prebuilt LLVM ships compiler-rt only under
 does not exist. The triple only selects search paths; the sysroot is what
 actually supplies musl.
 
+arm64 needs `-H:-CheckToolchain` for a related reason. Before compiling
+anything, native-image runs the compiler with `-v` and identifies it by scanning
+the output, and that scanner does not accept this one: the only architecture its
+Linux branch knows by name is `x86_64`, and against a glibc sysroot clang also
+reports the GCC installation the sysroot bundles, which the musl one does not
+have. native-image names the option itself when it refuses. The check is a
+heuristic and the toolchain behind it is sound, since the same clang and sysroot
+go on to compile and link a working aarch64 binary.
+
 The prebuilt LLVM is not self-contained. `clang`, `ld.lld` and `llvm-ar` each
 need `libz.so.1`, `libzstd.so.1`, `libstdc++.so.6` and `libgcc_s.so.1` from the
 machine, and `ld.lld` additionally needs `libxml2.so.2`. On NixOS the dev shell
 supplies them; `flake.nix` pins libxml2 separately because unstable carries
 2.15, which renamed the soname to `libxml2.so.16`. On a Debian-family machine,
 `libxml2 libstdc++6 zlib1g libzstd1` covers it.
+
+### Building the native executable for the other architecture
+
+`--config=linux-arm64` cross-compiles almost everything. The jars build
+anywhere, and Bazel resolves the arm64 cc toolchain and sysroot correctly. Two
+targets still need an arm64 host, for unrelated reasons.
+
+`//:monobot_native`, because native-image has to run on the architecture it is
+building for: on an amd64 host it fails in the C query step. And `//:test`,
+because the Quarkus model assembly runs the *target* JDK rather than the exec
+one, so the action tries to execute an aarch64 `java` on the host and exits
+255. That is a `rules_quarkus` bug rather than something to configure here,
+and it costs little, since a test built for another architecture is not one
+this machine could run anyway.
+
+So build it on an arm64 machine, or in an arm64 container. With QEMU registered,
+the emulated route works from an amd64 host and is very slow but needs nothing
+else:
+
+```sh
+V=8.4.2
+U=https://github.com/bazelbuild/bazel/releases/download
+
+docker run --rm --platform linux/arm64 -v "$PWD:/src" -w /src debian:trixie \
+  bash -c "
+    apt-get update &&
+    apt-get install -y curl zip unzip openjdk-21-jdk-headless &&
+    curl -fsSLo /usr/local/bin/bazel $U/$V/bazel-$V-linux-arm64 &&
+    chmod +x /usr/local/bin/bazel &&
+    bazel build --symlink_prefix=/ //:monobot_native
+  "
+```
+
+`rules_graalvm` and `toolchains_llvm` both pick their distribution from the
+machine they run on, so nothing needs configuring for this: the container gets
+the aarch64 GraalVM and the aarch64 LLVM on its own.
+
+### Why native-image is not cross-compiled
+
+native-image does have a target selector, `--target=linux-aarch64`, and it does
+work: an aarch64 binary can be produced on an amd64 host, and it runs. It is not
+used here because getting there costs three things, and the result is not the
+same binary a native build produces.
+
+- **A merged JAVA_HOME.** An amd64 distribution carries `lib/static/linux-amd64`
+  and `lib/svm/clibraries/linux-amd64` and no other architecture, and the
+  built-in search paths are validated even when `-H:CLibraryPath` names others,
+  so the two distributions have to be merged into one tree rather than pointed
+  at.
+- **A C Annotation Processor cache.** Cross builds force `-H:+UseCAPCache`,
+  because the query step compiles C and runs it, which a foreign architecture
+  cannot do. No cache ships with the distribution, so one has to be generated on
+  the target architecture and committed. It is not a per-platform artifact:
+  monobot's cache carries a `Substitutions_NativeInfoDirectives` entry that a
+  hello-world one does not, contributed by the native substitutions its
+  dependencies register. Adding an extension that declares `@CContext`
+  directives silently invalidates it, and the resulting failure is an
+  unexplained abort in `[1/8] Initializing`.
+- **`-H:-CheckToolchain` and `-H:-ForeignAPISupport`.** The first waves off the
+  host/target architecture mismatch. The second is not a preference: the
+  Foreign Function and Memory feature picks its ABI from the host, then hands it
+  the target's assembler, and the build dies with
+  `SubstrateAArch64MacroAssembler cannot be cast to AMD64MacroAssembler` inside
+  `ABIs$X86_64.generateTrampolineTemplate`. Disabling FFM is the only way past
+  it, and that makes the cross-built binary strictly less capable than a
+  natively built one.
+
+The emulated container above uses the supported path and produces the real
+artifact, which is why it is the documented route.
+
+It is worth assembling anyway when something arm64-specific needs checking,
+because the speed difference is not marginal: cross-compiling this application
+takes about 45 seconds against half an hour or more emulated. Run it by hand on
+the `native-sources` tree the amd64 build already produces, under
+`bazel-bin/monobot_native-native-sources`, since augmentation output is
+architecture-independent. Regenerate the cache first, on the target
+architecture, with `-H:+NewCAPCache -H:CAPCacheDir=<dir> -H:+ExitAfterCAPCache`,
+which runs only the query step and so costs a minute or two rather than a whole
+image. That is how the arm64 link options here were settled.
 
 ### Why GraalVM 25
 
@@ -180,6 +306,11 @@ exists only for the native build above. `.bazelrc` sets
 `BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1` so Bazel does not probe the host for a
 compiler first: repository rules run with a scrubbed `PATH`, so that probe
 fails even on machines that have one.
+
+One clang serves both architectures, because an LLVM release emits code for
+every target it was built with. `llvm.toolchain` names where clang runs and the
+two `llvm.sysroot` tags name what it compiles for, so `@llvm_toolchain//:all`
+registers one cc toolchain per architecture and `--platforms` chooses.
 
 The sysroot is not optional. An LLVM release ships clang, lld and libc++, but
 no libc: no `stdio.h`, no `crt1.o`, no `libc.so`. Clang would look for those

@@ -15,8 +15,12 @@ goes in differs by architecture, because what native-image can produce does:
     and in one layout, and because .apk files are gzipped tarballs, so no
     Alpine-specific tooling is needed to unpack them.
 
-Whatever the source, it is the same operation, extracting a pinned set of
-archives into one directory, so one rule covers it.
+  - arm64 has no musl option at all: GraalVM ships musl static JDK libraries for
+    linux-amd64 alone. Its sysroot is glibc, from the ones chromium publishes,
+    which are single archives rather than a set of packages.
+
+Both cases are the same operation, extracting a pinned set of archives into one
+directory, so both use this rule.
 """
 
 _BUILD_FILE = """\
@@ -35,9 +39,10 @@ def _sysroot_impl(rctx):
         rctx.download_and_extract(
             output = "sysroot",
             sha256 = sha256,
-            # Stated, because Bazel cannot infer it here: a URL ending in .apk,
-            # which is a gzipped tarball under a name Bazel does not recognise.
-            type = "tar.gz",
+            # Always stated, because the default suits the case Bazel cannot
+            # infer: a URL ending in .apk, which is a gzipped tarball under a
+            # name Bazel does not recognise.
+            type = rctx.attr.type,
             url = url,
         )
 
@@ -47,6 +52,10 @@ sysroot = repository_rule(
         "archives": attr.string_dict(
             doc = "URL to sha256, all extracted into the same sysroot.",
             mandatory = True,
+        ),
+        "type": attr.string(
+            doc = "Archive type, for URLs whose extension does not name one.",
+            default = "tar.gz",
         ),
     },
     doc = "Materializes a sysroot from a set of pinned archives.",

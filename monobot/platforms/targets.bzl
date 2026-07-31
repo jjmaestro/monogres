@@ -5,10 +5,10 @@ from here, so adding one is a change to this dict and to the pinned artifacts it
 implies, not a search through the tree.
 
 Naming follows the module under `build/`: ARCH is the Debian architecture name
-(`amd64`), CPU is the machine name (`x86_64`). The two are not interchangeable,
-and which one a third party wants is not something to guess: Alpine and Bazel's
-own `@platforms//cpu:` say `x86_64`, Docker and Debian say `amd64`, and LLVM
-triples say `x86_64` again.
+(`amd64`, `arm64`), CPU is the machine name (`x86_64`, `aarch64`). The two are
+not interchangeable, and which one a third party wants is not something to
+guess: Alpine and Bazel's own `@platforms//cpu:` say `x86_64`, Docker and Debian
+say `amd64`, and LLVM triples say `x86_64` again.
 
 Only the native executable is architecture-specific. Everything else monobot
 builds is a jar, and a jar is the same bytes everywhere.
@@ -16,6 +16,7 @@ builds is a jar, and a jar is the same bytes everywhere.
 
 ARCH_CPU = {
     "amd64": "x86_64",
+    "arm64": "aarch64",
 }
 
 ARCHS = ARCH_CPU.keys()

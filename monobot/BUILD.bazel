@@ -57,6 +57,20 @@ java_library(
 # clang reaches for gcc's crtbeginT.o, -lgcc and -lgcc_eh, which a musl sysroot
 # has none of. They have to be on the compiler and the linker both, because the
 # early "query code" step passes only -H:CCompilerOption through.
+#
+# arm64 cannot do any of that: GraalVM ships musl static JDK libraries for
+# linux-amd64 alone, so that architecture is glibc, and glibc rules out
+# --static. --static-nolibc is the closest equivalent, linking everything except
+# the libc itself, so the result needs glibc present and nothing else.
+#
+# It also needs -H:-CheckToolchain, which native-image names itself when it
+# refuses. Before compiling anything it runs the compiler with -v and identifies
+# it by scanning the output, and that scanner does not accept this one: the only
+# architecture its Linux branch knows by name is x86_64, and against a glibc
+# sysroot clang reports the sysroot's own bundled GCC as well, which the amd64
+# musl sysroot has none of. The check is a heuristic and the toolchain behind it
+# is sound: the same clang and sysroot compile and link a working aarch64
+# binary, which is what the compile and link steps then go on to use.
 NATIVE_BUILD_ARGS = ["-H:CCompilerOption=-fuse-ld=lld"] + arch_select({
     "amd64": [
         "--static",
@@ -65,6 +79,10 @@ NATIVE_BUILD_ARGS = ["-H:CCompilerOption=-fuse-ld=lld"] + arch_select({
         "-H:CCompilerOption=--unwindlib=none",
         "-H:NativeLinkerOption=--rtlib=compiler-rt",
         "-H:NativeLinkerOption=--unwindlib=none",
+    ],
+    "arm64": [
+        "--static-nolibc",
+        "-H:-CheckToolchain",
     ],
 })
 

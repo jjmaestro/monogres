@@ -187,11 +187,17 @@ register_toolchains("@graalvm_toolchains//:gvm")
 bazel_dep(name = "toolchains_llvm", version = "1.8.0")
 
 # One sysroot per target architecture: a sysroot is the target's libc and
-# headers, so a build reads that architecture's objects out of its own.
+# headers, so building for arm64 means clang reads arm64 objects out of the
+# arm64 one.
 #
-# This one is musl rather than glibc, because the binary is linked statically
-# and native-image allows that only against musl. See
-# //toolchains/sysroot:sysroot.bzl for why Alpine supplies it.
+# The two are not the same libc, and that asymmetry is forced rather than
+# chosen. amd64 links statically, which native-image allows only against musl.
+# The static JDK libraries every build needs are built against musl for
+# linux-amd64 alone, so on arm64 no musl build is possible at all, static or
+# otherwise, and that architecture is glibc. Upstream calls static linking
+# unsupported on aarch64 and intends to add it (oracle/graal#9490), so this is
+# worth revisiting. See //toolchains/sysroot:sysroot.bzl and
+# docs/development.md.
 ALPINE = "https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86_64"
 
 sysroot = use_repo_rule("//toolchains/sysroot:sysroot.bzl", "sysroot")
@@ -205,15 +211,30 @@ sysroot(
     },
 )
 
+# Debian stretch, whose glibc is 2.24. glibc is backwards compatible, so linking
+# against one that old is what makes the result run on current distributions
+# rather than only on ones at least as new as the build machine.
+sysroot(
+    name = "sysroot_linux_aarch64",
+    archives = {
+        "https://commondatastorage.googleapis.com/chrome-linux-sysroot/toolchain/2202c161310ffde63729f29d27fe7bb24a0bc540/debian_stretch_arm64_sysroot.tar.xz": "e39b700d8858d18868544c8c84922f6adfa8419f3f42471b92024ba38eff7aca",
+    },
+    type = "tar.xz",
+)
+
 llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
 llvm.toolchain(
     name = "llvm_toolchain",
+    # The Debian header layout, which is what the chromium glibc sysroot uses.
+    # It applies to every target, but only that sysroot has C++ headers to find:
+    # the musl one carries a libc and zlib and no libstdc++ at all.
+    cxx_include_layout = {"linux-aarch64": "debian"},
     # Stated rather than detected. Left to itself the ruleset reads
     # /etc/os-release and picks an LLVM build per distro, which makes the
     # compiler a property of the developer's machine. Naming it also means the
     # detection cannot fail on a host that has no /etc/os-release. The
     # architecture is still detected: this names where clang runs, and the
-    # `llvm.sysroot` tag below names what it compiles for.
+    # `llvm.sysroot` tags below name what it compiles for.
     exec_os = "linux",
     llvm_versions = {"": "19.1.0"},
 )
@@ -222,8 +243,14 @@ llvm.sysroot(
     label = "@sysroot_linux_x86_64//sysroot",
     targets = ["linux-x86_64"],
 )
+llvm.sysroot(
+    name = "llvm_toolchain",
+    label = "@sysroot_linux_aarch64//sysroot",
+    targets = ["linux-aarch64"],
+)
 use_repo(llvm, "llvm_toolchain")
 
-# `:all` registers a cc toolchain per `llvm.sysroot` target above, each
-# declaring the CPU it targets, so Bazel picks by `--platforms`.
+# One clang, two targets: a single LLVM release cross-compiles to any
+# architecture it was built to emit, so `:all` registers a cc toolchain per
+# `llvm.sysroot` target above and Bazel picks by `--platforms`.
 register_toolchains("@llvm_toolchain//:all")
