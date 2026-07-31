@@ -8,7 +8,7 @@
     <properties>
         <checkstyle-plugin.version>3.6.0</checkstyle-plugin.version>
         <checkstyle.version>13.9.0</checkstyle.version>
-        <compiler-plugin.version>3.14.0</compiler-plugin.version>
+        <compiler-plugin.version>3.15.0</compiler-plugin.version>
         <enforcer-plugin.version>3.6.3</enforcer-plugin.version>
         <google-java-format.version>1.36.0</google-java-format.version>
         <maven.compiler.release>21</maven.compiler.release>
@@ -16,12 +16,12 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
         <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
-        <quarkus.platform.version>3.20.0</quarkus.platform.version>
+        <quarkus.platform.version>3.33.2</quarkus.platform.version>
         <rewrite-plugin.version>6.45.0</rewrite-plugin.version>
         <rewrite-static-analysis.version>2.40.0</rewrite-static-analysis.version>
         <skipITs>true</skipITs>
         <spotless-plugin.version>3.9.0</spotless-plugin.version>
-        <surefire-plugin.version>3.5.2</surefire-plugin.version>
+        <surefire-plugin.version>3.5.6</surefire-plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -53,7 +53,7 @@
         <dependency>
             <groupId>io.quarkiverse.jgit</groupId>
             <artifactId>quarkus-jgit</artifactId>
-            <version>3.3.3</version>
+            <version>3.6.2</version>
         </dependency>
 
         <dependency>
@@ -64,12 +64,12 @@
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-compress</artifactId>
-            <version>1.27.1</version>
+            <version>1.28.0</version>
         </dependency>
 
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-junit5</artifactId>
+            <artifactId>quarkus-junit</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

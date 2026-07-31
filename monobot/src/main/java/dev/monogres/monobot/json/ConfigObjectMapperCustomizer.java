@@ -11,7 +11,7 @@ public class ConfigObjectMapperCustomizer implements ObjectMapperCustomizer {
   @Override
   public void customize(ObjectMapper objectMapper) {
     objectMapper
-        .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+        .setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL)
 
         // For Monogres Bazel's scripts repo.json is important that keys remain ordered
         .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)

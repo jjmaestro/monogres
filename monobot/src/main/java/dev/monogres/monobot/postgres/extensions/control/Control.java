@@ -132,7 +132,7 @@ public record Control(
         properties.entrySet().stream()
             .collect(Collectors.toMap(e -> e.getKey().toString(), e -> e.getValue().toString()));
 
-    var mapper = new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_NULL);
+    var mapper = new ObjectMapper().setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL);
 
     return mapper.convertValue(propertiesMap, Control.class);
   }
