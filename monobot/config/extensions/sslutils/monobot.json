@@ -1,4 +1,12 @@
 {
   "name": "sslutils",
-  "url": "https://github.com/EnterpriseDB/sslutils"
+  "url": "https://github.com/EnterpriseDB/sslutils",
+  "metadata": {
+    "buildtime_dependencies": {
+      "debian13": [ "libssl-dev" ]
+    },
+    "runtime_dependencies" : {
+      "debian13": [ "libssl3t64" ]
+    }
+  }
 }

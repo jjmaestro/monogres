@@ -42,7 +42,7 @@ Each extension has a `monobot.json` file under
 ```json
 {
   "name": "envvar",
-  "url": "https://github.com/theory/pg-envvar/"
+  "url": "https://github.com/theory/pg-envvar"
 }
 ```
 
