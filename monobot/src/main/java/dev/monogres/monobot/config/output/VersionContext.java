@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import dev.monogres.monobot.git.ObjectIdUtils;
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import org.eclipse.jgit.lib.ObjectId;
 
 /// `tag`, `sha256` and `strip_prefix` are serialized from fields while `commit` and
@@ -13,6 +14,7 @@ import org.eclipse.jgit.lib.ObjectId;
 /// `Class.getDeclaredMethods()`, whose order the JVM explicitly does not specify. Without a
 /// declared order the two commit keys swap between runs, so repo.json is not reproducible.
 @JsonPropertyOrder({"tag", "sha256", "strip_prefix", "commit", "short_commit"})
+@RegisterForReflection
 public class VersionContext {
   @JsonProperty(value = "tag")
   private String tag;

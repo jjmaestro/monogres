@@ -4,11 +4,13 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import dev.monogres.monobot.config.Metadata;
+import io.quarkus.runtime.annotations.RegisterForReflection;
 
 /// Every property here is read through a getter, and Jackson derives getter order from
 /// `Class.getDeclaredMethods()`, whose order the JVM explicitly does not specify. Declaring the
 /// order keeps repo.json reproducible; see [VersionContext] for the same hazard.
 @JsonPropertyOrder({"sources", "versions", "metadata", "version"})
+@RegisterForReflection
 public class RepoConfig {
   @JsonProperty("version")
   private final RepoConfigVersion repoConfigVersion;

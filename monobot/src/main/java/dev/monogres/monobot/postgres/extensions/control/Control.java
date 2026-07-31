@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import dev.monogres.monobot.json.CsvStringArrayDeserializer;
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Map;
@@ -15,6 +16,7 @@ import java.util.stream.Collectors;
 /// ($extname.control) file.
 ///
 /// See: [Extension Files](https://www.postgresql.org/docs/current/extend-extensions.html)
+@RegisterForReflection
 public record Control(
     /// The directory containing the extension's SQL script file(s). Unless an absolute path is
     /// given, the name is relative to the installation's SHAREDIR directory. The default behavior

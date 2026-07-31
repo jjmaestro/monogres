@@ -1,8 +1,10 @@
 package dev.monogres.monobot.config.output;
 
 import com.fasterxml.jackson.annotation.JsonValue;
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import java.util.Objects;
 
+@RegisterForReflection
 public record Version(String tag) implements Comparable<Version> {
   public static String normalize(String tag) {
     return tag
