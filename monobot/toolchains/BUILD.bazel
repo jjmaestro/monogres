@@ -1,5 +1,0 @@
-load(":empty_cc_toolchain_config.bzl", "empty_cc_toolchain")
-
-# Registered by MODULE.bazel. See empty_cc_toolchain_config.bzl for why a pure
-# Java module has to provide a CC toolchain at all.
-empty_cc_toolchain(name = "empty_cc")

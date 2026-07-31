@@ -3,9 +3,16 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+
+    # Pinned solely for libxml2. The prebuilt LLVM that monobot's native image
+    # build downloads links `libxml2.so.2`, and libxml2 2.15 renamed the
+    # soname to `libxml2.so.16`, so unstable cannot satisfy it. 24.11 carries
+    # 2.13.8, the last series with the old soname. Drop this once the pinned
+    # LLVM links the new one.
+    nixpkgs-libxml2.url = "github:NixOS/nixpkgs/nixos-24.11";
   };
 
-  outputs = { nixpkgs, ... }:
+  outputs = { nixpkgs, nixpkgs-libxml2, ... }:
     let
       supportedSystems = [
         "x86_64-linux"
@@ -19,7 +26,10 @@
       devShells = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          build = import ./bazel.nix { inherit pkgs; };
+          build = import ./bazel.nix {
+            inherit pkgs;
+            libxml2 = nixpkgs-libxml2.legacyPackages.${system}.libxml2;
+          };
         in
         {
           default = pkgs.mkShell {

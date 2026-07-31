@@ -42,7 +42,8 @@ nb-configuration.xml
 # The bzlmod lock is left out for the same reason the one under build/ is, and
 # with the same cost: the transitive module graph is whatever BCR serves at
 # fetch time on each machine. Everything with a checksum of its own still has
-# one, which is every Maven artifact and both lint jars.
+# one, which is every Maven artifact, both lint jars, the GraalVM archive and
+# every sysroot package.
 # See https://github.com/bazelbuild/bazel/issues/20369
 MODULE.bazel.lock
 /.bazelrc.user

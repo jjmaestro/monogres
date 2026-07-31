@@ -1,0 +1,10 @@
+{
+  "name": "noset",
+  "url": "https://gitlab.com/ongresinc/extensions/noset",
+  "metadata": {
+    "compatible_with": {
+      "0.3.0": ">=14",
+      "0.2.0": ">=12, <14"
+    }
+  }
+}

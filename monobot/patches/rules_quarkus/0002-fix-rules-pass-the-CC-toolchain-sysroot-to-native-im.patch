@@ -1,0 +1,72 @@
+From deaba8cbb1d6a1065b19bc6514654c65005d65bb Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Fri, 31 Jul 2026 04:02:20 +0000
+Subject: [PATCH] fix(rules): pass the CC toolchain sysroot to native-image
+
+quarkus_native_app hands native-image the C compiler via
+-H:CCompilerPath but nothing else from the CC toolchain, so a hermetic
+clang is invoked bare and falls back to the host's /usr/include and
+/usr/lib. On a toolchain configured with a sysroot those are the wrong
+headers; on a distribution that has no /usr/include at all, such as
+NixOS, there are none and the link fails outright.
+
+Forward cc_toolchain.sysroot when the toolchain declares one. Both the
+compile and the link need it, because native-image drives the linker
+through the C compiler and --sysroot on the compile line alone does not
+reach it. Toolchains without a sysroot are unaffected: the argument list
+stays empty and the command is unchanged.
+---
+ quarkus/private/quarkus_native_app_impl.bzl | 20 +++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/quarkus/private/quarkus_native_app_impl.bzl b/quarkus/private/quarkus_native_app_impl.bzl
+index dcf658a..afa1183 100644
+--- a/quarkus/private/quarkus_native_app_impl.bzl
++++ b/quarkus/private/quarkus_native_app_impl.bzl
+@@ -25,6 +25,11 @@ _GVM_TOOLCHAIN_TYPE = "@rules_graalvm//graalvm/toolchain"
+ # path. Monitoring options that may be incompatible with the installed
+ # GraalVM version are stripped. The rewritten args are passed via @argfile
+ # so the -cp line (one entry per dependency jar) never lands on argv (E2BIG).
++#
++# SYSROOT is empty unless the CC toolchain declares one. When it does, the
++# compiler is invoked with it for both the compile and the link: native-image
++# drives the linker through the C compiler, and --sysroot on the compile line
++# alone does not reach it.
+ _NATIVE_IMAGE_SCRIPT = """
+ set -euo pipefail
+ EXECROOT="$(pwd)"
+@@ -35,10 +40,22 @@ case "$CC_PATH" in
+   /*) ;;
+   *) CC_PATH="$EXECROOT/$CC_PATH" ;;
+ esac
++SYSROOT="{sysroot}"
++SYSROOT_ARGS=()
++if [ -n "$SYSROOT" ]; then
++  case "$SYSROOT" in
++    /*) ;;
++    *) SYSROOT="$EXECROOT/$SYSROOT" ;;
++  esac
++  SYSROOT_ARGS=(
++    "-H:CCompilerOption=--sysroot=$SYSROOT"
++    "-H:NativeLinkerOption=--sysroot=$SYSROOT"
++  )
++fi
+ cd "{native_sources}"
+ REWRITTEN_ARGS=$(mktemp)
+ sed -e 's| {runner_name} -jar | -jar |' -e 's|--enable-monitoring=[^ ]*||g' native-image.args > "$REWRITTEN_ARGS"
+-exec "$NATIVE_IMAGE" "@$REWRITTEN_ARGS" -H:CCompilerPath="$CC_PATH" -o "$OUTPUT"
++exec "$NATIVE_IMAGE" "@$REWRITTEN_ARGS" -H:CCompilerPath="$CC_PATH" ${{SYSROOT_ARGS[@]+"${{SYSROOT_ARGS[@]}}"}} -o "$OUTPUT"
+ """
+ 
+ def _run_native_image(ctx, output_dir, binary):
+@@ -66,6 +83,7 @@ def _run_native_image(ctx, output_dir, binary):
+             output = binary.path,
+             runner_name = ctx.label.name + "-runner",
+             cc_path = c_compiler_path,
++            sysroot = cc_toolchain.sysroot or "",
+         ),
+         inputs = depset(
+             direct = [output_dir, native_image_bin.executable],
+-- 
+2.51.2
+

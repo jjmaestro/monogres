@@ -1,4 +1,4 @@
-{ pkgs }:
+{ pkgs, libxml2 }:
 let
   # Bazel's test runner and build actions need these tools on PATH:
   # test-setup.sh needs sed/find, and the docs diff test needs diff/sed/awk.
@@ -22,10 +22,17 @@ let
     if pkgs.stdenv.isLinux then
       pkgs.buildFHSEnv {
         name = "bazelisk";
-        # zlib: needed by the bazelisk-downloaded bazel binary (embedded JDK)
+        # Shared libraries that downloaded, non-nix binaries link against and
+        # would otherwise not find:
+        #   zlib:    the bazelisk-downloaded bazel binary (embedded JDK)
+        #   zstd:    clang from toolchains_llvm (monobot's native image build)
+        #   libxml2: ld.lld from the same toolchain. Comes from its own pin,
+        #            see flake.nix: it is the one soname unstable cannot serve.
         targetPkgs = _: bazelDeps ++ [
+          libxml2
           pkgs.bazelisk
           pkgs.zlib
+          pkgs.zstd
         ];
         runScript = "bazelisk";
       }

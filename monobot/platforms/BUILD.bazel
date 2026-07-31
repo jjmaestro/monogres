@@ -1,0 +1,34 @@
+load(":targets.bzl", "ARCH_CPU", "OS")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["targets.bzl"])
+
+# One config_setting per supported (OS, arch), requiring both constraints
+# together. `arch_select()` in `targets.bzl` keys on these, so a branch is taken
+# only when the OS and the CPU both match.
+[
+    config_setting(
+        name = "is_%s_%s" % (OS, arch),
+        constraint_values = [
+            "@platforms//os:%s" % OS,
+            "@platforms//cpu:%s" % cpu,
+        ],
+    )
+    for arch, cpu in ARCH_CPU.items()
+]
+
+# The platforms `--platforms=` names. `@bazel_tools//tools/cpp:clang` is part of
+# the identity rather than a detail: the C toolchain monobot registers is clang,
+# and stating it here keeps a gcc toolchain from ever resolving by accident.
+[
+    platform(
+        name = "%s_%s" % (OS, arch),
+        constraint_values = [
+            "@platforms//os:%s" % OS,
+            "@platforms//cpu:%s" % cpu,
+            "@bazel_tools//tools/cpp:clang",
+        ],
+    )
+    for arch, cpu in ARCH_CPU.items()
+]

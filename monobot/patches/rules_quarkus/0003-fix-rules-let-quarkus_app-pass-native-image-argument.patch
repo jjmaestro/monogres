@@ -1,0 +1,108 @@
+From f41bba094dff21211c8e2a963bcbbd1785cd46d2 Mon Sep 17 00:00:00 2001
+From: Javier Maestro <jjmaestro@ieee.org>
+Date: Fri, 31 Jul 2026 16:19:00 +0000
+Subject: [PATCH] fix(rules): let quarkus_app pass native-image arguments
+
+quarkus_app takes every native-image argument from the application's
+application.properties, which is a resource file: its contents are fixed
+at the point the jar is built, so an argument cannot vary with the
+platform the target is being built for. Arguments that describe the
+libc, the link mode or the compiler are exactly the ones that do vary,
+and a project that builds for more than one architecture has nowhere to
+put them.
+
+Add a native_build_args attribute, appended after the generated args
+file. A repeated native-image option resolves to its last occurrence, so
+the attribute overrides application.properties rather than conflicting
+with it, and being an attribute it accepts select().
+---
+ quarkus/extensions.bzl                      |  8 +++++++-
+ quarkus/private/quarkus_native_app_impl.bzl | 14 +++++++++++++-
+ 2 files changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/quarkus/extensions.bzl b/quarkus/extensions.bzl
+index 01d6473..caed590 100644
+--- a/quarkus/extensions.bzl
++++ b/quarkus/extensions.bzl
+@@ -1301,7 +1301,8 @@ _TEST_INFRASTRUCTURE_DEPS = [
+ # (a mutable tag lets the same cache key cover different GraalVM versions).
+ _DEFAULT_BUILDER_IMAGE = DEFAULT_NATIVE_BUILDER_IMAGE
+ 
+-def quarkus_app(name, dev = True, dev_build_args = [], native = False, native_container_build = False,
++def quarkus_app(name, dev = True, dev_build_args = [], native = False, native_build_args = [],
++                native_container_build = False,
+                 native_container_runtime = "auto", native_builder_image = _DEFAULT_BUILDER_IMAGE,
+                 **kwargs):
+     \"\"\"Builds a Quarkus application with optional dev-mode and native targets.
+@@ -1318,6 +1319,10 @@ def quarkus_app(name, dev = True, dev_build_args = [], native = False, native_co
+             Must match the flags you pass to `bazel run` for the dev target, otherwise
+             rebuilt classes land in a different output tree and hot-reload syncs stale files.
+         native: If True, creates a <name>_native target using rules_graalvm (host compilation).
++        native_build_args: Extra native-image arguments, appended after the ones augmentation
++            derives from application.properties so they win on conflict. Being an attribute
++            rather than a line in that file, this one accepts select(), which is what
++            arguments that depend on the target platform need.
+         native_container_build: If True, creates a <name>_native target using Docker/Podman (container compilation).
+         native_container_runtime: Container runtime: 'auto' (default), 'docker', or 'podman'.
+         native_builder_image: Builder image for container native compilation.
+@@ -1368,6 +1373,7 @@ def quarkus_app(name, dev = True, dev_build_args = [], native = False, native_co
+         quarkus_native_app_rule(
+             name = name + "_native",
+             main_class = main_class,
++            native_build_args = native_build_args,
+             **common
+         )
+     if native_container_build:
+diff --git a/quarkus/private/quarkus_native_app_impl.bzl b/quarkus/private/quarkus_native_app_impl.bzl
+index afa1183..0944bf5 100644
+--- a/quarkus/private/quarkus_native_app_impl.bzl
++++ b/quarkus/private/quarkus_native_app_impl.bzl
+@@ -8,6 +8,7 @@ This rule is not loaded directly by users — it is instantiated by the
+ quarkus_app macro when native=True, creating a <name>_native target.
+ """
+ 
++load("@bazel_skylib//lib:shell.bzl", "shell")
+ load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain", "use_cpp_toolchain")
+ load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
+ load("@rules_java//java/common:java_info.bzl", "JavaInfo")
+@@ -30,6 +31,10 @@ _GVM_TOOLCHAIN_TYPE = "@rules_graalvm//graalvm/toolchain"
+ # compiler is invoked with it for both the compile and the link: native-image
+ # drives the linker through the C compiler, and --sysroot on the compile line
+ # alone does not reach it.
++#
++# native_build_args comes last, after the args file, because native-image
++# resolves a repeated option to its final occurrence: that is what lets the
++# attribute override what application.properties asked for.
+ _NATIVE_IMAGE_SCRIPT = """
+ set -euo pipefail
+ EXECROOT="$(pwd)"
+@@ -55,7 +60,7 @@ fi
+ cd "{native_sources}"
+ REWRITTEN_ARGS=$(mktemp)
+ sed -e 's| {runner_name} -jar | -jar |' -e 's|--enable-monitoring=[^ ]*||g' native-image.args > "$REWRITTEN_ARGS"
+-exec "$NATIVE_IMAGE" "@$REWRITTEN_ARGS" -H:CCompilerPath="$CC_PATH" ${{SYSROOT_ARGS[@]+"${{SYSROOT_ARGS[@]}}"}} -o "$OUTPUT"
++exec "$NATIVE_IMAGE" "@$REWRITTEN_ARGS" -H:CCompilerPath="$CC_PATH" ${{SYSROOT_ARGS[@]+"${{SYSROOT_ARGS[@]}}"}} {build_args} -o "$OUTPUT"
+ """
+ 
+ def _run_native_image(ctx, output_dir, binary):
+@@ -84,6 +89,10 @@ def _run_native_image(ctx, output_dir, binary):
+             runner_name = ctx.label.name + "-runner",
+             cc_path = c_compiler_path,
+             sysroot = cc_toolchain.sysroot or "",
++            build_args = " ".join([
++                shell.quote(arg)
++                for arg in ctx.attr.native_build_args
++            ]),
+         ),
+         inputs = depset(
+             direct = [output_dir, native_image_bin.executable],
+@@ -178,6 +187,9 @@ quarkus_native_app_rule = rule(
+         "main_class": attr.string(
+             doc = "Override main class. Defaults to the Quarkus runner.",
+         ),
++        "native_build_args": attr.string_list(
++            doc = "Extra native-image arguments, appended last so they win on conflict.",
++        ),
+         "quarkifier_tool": attr.label(
+             allow_single_file = [".jar"],
+             doc = "Quarkifier deploy jar (fat jar with all tool deps bundled).",

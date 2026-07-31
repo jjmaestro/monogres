@@ -12,8 +12,14 @@
   not obvious, and requiring a Javadoc header on every public type and method
   would mean writing them all at once rather than as the API settles. Drop
   these two entries to turn the requirement back on.
+
+  The ruleset allows one capital in a row in a name, and an integration test is
+  named for what runs it: the IT suffix is how build tooling tells integration
+  tests from unit tests. The suffix wins, and only under the tree where it
+  applies.
 -->
 <suppressions>
   <suppress checks="MissingJavadocType" files=".*\.java$"/>
   <suppress checks="MissingJavadocMethod" files=".*\.java$"/>
+  <suppress checks="AbbreviationAsWordInName" files="^.*/src/it/java/.*IT\.java$"/>
 </suppressions>

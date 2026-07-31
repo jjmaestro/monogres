@@ -23,10 +23,19 @@ common --java_runtime_version=remotejdk_21
 common --tool_java_language_version=21
 common --tool_java_runtime_version=remotejdk_21
 
-# Nothing here compiles C++, so do not go looking for a compiler on the host.
-# java_binary still needs C++ toolchain *resolution* to succeed for its
-# optional native launcher; //toolchains:empty_cc satisfies that with a stub.
+# The C toolchain comes from MODULE.bazel, so do not probe the host for one.
+# Without this, cc auto-configuration runs first and fails: bazel scrubs PATH
+# for repository rules, so it cannot see a compiler even when the shell can.
 common --repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
+
+# Target architecture. Only //:monobot_native is architecture-specific: a jar
+# is the same bytes everywhere. Left unset, Bazel builds for the machine it is
+# running on, which is what you want when building natively; name a platform
+# explicitly to say which architecture the build is for.
+#
+# The platform is all that is needed. Each cc toolchain declares the CPU it
+# targets, so naming the platform resolves the matching one on its own.
+common:linux-amd64 --platforms=//platforms:linux_amd64
 
 build --nostamp
 build --incompatible_strict_action_env

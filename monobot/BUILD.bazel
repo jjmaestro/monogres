@@ -1,6 +1,11 @@
 load("@rules_java//java:java_library.bzl", "java_library")
 load("@rules_quarkus//quarkus:defs.bzl", "quarkus_app", "quarkus_test")
+load("//platforms:targets.bzl", "arch_select")
 load("//tools/lint:lint.bzl", "checkstyle_test")
+
+# //tests runs the built applications, so it needs to see them. Nothing else
+# does: monobot is a binary, not a library other packages build against.
+package(default_visibility = ["//tests:__pkg__"])
 
 exports_files([".checkstyle-suppressions.xml"])
 
@@ -36,9 +41,42 @@ java_library(
     ],
 )
 
+# The native-image arguments that describe how the binary is linked, as opposed
+# to what the application needs from it: those are in application.properties,
+# which holds for every architecture. These do not, so they are here, where
+# select() works.
+#
+# -fuse-ld=lld because native-image invokes the compiler directly, outside
+# Bazel's link machinery, and so never sees the toolchain's choice of linker.
+# Left alone clang looks for a plain `ld`; an LLVM toolchain ships `ld.lld`.
+#
+# amd64 links statically, which drops the ELF interpreter and every shared
+# library, so the binary runs on any amd64 Linux whatever is installed there.
+# native-image allows that only against musl, hence --libc. The compiler-rt
+# options are a consequence of linking with clang rather than gcc: without them
+# clang reaches for gcc's crtbeginT.o, -lgcc and -lgcc_eh, which a musl sysroot
+# has none of. They have to be on the compiler and the linker both, because the
+# early "query code" step passes only -H:CCompilerOption through.
+NATIVE_BUILD_ARGS = ["-H:CCompilerOption=-fuse-ld=lld"] + arch_select({
+    "amd64": [
+        "--static",
+        "--libc=musl",
+        "-H:CCompilerOption=--rtlib=compiler-rt",
+        "-H:CCompilerOption=--unwindlib=none",
+        "-H:NativeLinkerOption=--rtlib=compiler-rt",
+        "-H:NativeLinkerOption=--unwindlib=none",
+    ],
+})
+
+# native gives //:monobot_native. native-image emits object code and then links
+# it, so this target needs a real C compiler as well as GraalVM: the rule
+# resolves the CC toolchain and hands the compiler to native-image as
+# -H:CCompilerPath.
 quarkus_app(
     name = "monobot",
     main_class = "dev.monogres.monobot.main.Main",
+    native = True,
+    native_build_args = NATIVE_BUILD_ARGS,
     version = "1.0.0",
     deps = [":lib"],
 )
@@ -72,9 +110,28 @@ quarkus_test(
     deps = [":test_lib"],
 )
 
+# Integration test sources. Only the library lives here, because a glob cannot
+# reach across packages and there is no BUILD file under src/; the test target
+# that runs them is in //tests with the rest of the artifact-level tests. Kept
+# out of :test_lib because @QuarkusMainIntegrationTest needs the packaged
+# application, so it cannot run under the plain JUnit target.
+java_library(
+    name = "it_lib",
+    testonly = True,
+    srcs = glob(["src/it/java/**/*.java"]),
+    deps = [
+        # Not imported by anything here, but the model assembler resolves the
+        # application under test through the test library's direct deps.
+        ":lib",
+        "@maven//:io_quarkus_quarkus_junit",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+    ],
+)
+
 checkstyle_test(
     name = "checkstyle_test",
     srcs = [
+        ":it_lib",
         ":lib",
         ":test_lib",
     ],

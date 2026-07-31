@@ -1,0 +1,94 @@
+load("@rules_quarkus//quarkus:defs.bzl", "quarkus_integration_test")
+load(":e2e.bzl", "monobot_e2e_test")
+
+exports_files(["e2e_test.sh"])
+
+filegroup(
+    name = "config_offline",
+    srcs = glob(["config-offline/**"]),
+)
+
+filegroup(
+    name = "config_noset",
+    srcs = glob(["config-noset/**"]),
+)
+
+# Bazel has no way to make one target depend on another target's test result, so
+# the JVM check is also expressed as a build action. Its output file is an input
+# of the native tests below, which is what actually orders the two: a JVM
+# application that cannot read its own config fails this action, and the native
+# image is then never worth building.
+genrule(
+    name = "jvm_gate",
+    srcs = [":config_offline"],
+    outs = ["jvm_gate.ok"],
+    cmd = " ".join([
+        "$(execpath //tests:e2e_test.sh)",
+        "--app $(execpath //:monobot)",
+        "--expect monobot-no-such-repository",
+        "--config-files $(execpaths :config_offline)",
+        "> $@ 2>&1 || { cat $@; exit 1; }",
+    ]),
+    tools = [
+        "//:monobot",
+        "//tests:e2e_test.sh",
+    ],
+)
+
+# The offline pair. Cheap, no network, and the shape that catches a packaged
+# application which cannot construct its own JSON types.
+monobot_e2e_test(
+    name = "e2e_offline",
+    app = "//:monobot",
+    config = ":config_offline",
+    expect = "monobot-no-such-repository",
+)
+
+monobot_e2e_test(
+    name = "e2e_offline_native",
+    app = "//:monobot_native",
+    config = ":config_offline",
+    expect = "monobot-no-such-repository",
+    gate = ":jvm_gate",
+)
+
+# The golden pair. A real scan of one extension against the real forge, so it is
+# out of the default gate: `bazel test //tests:e2e_golden_native` runs it. noset
+# is the subject because it is small, three versions, and no longer released, so
+# the golden does not go stale behind us.
+monobot_e2e_test(
+    name = "e2e_golden",
+    app = "//:monobot",
+    config = ":config_noset",
+    golden = "goldens/noset-repo.json",
+    tags = [
+        "external",
+        "manual",
+        "requires-network",
+    ],
+)
+
+monobot_e2e_test(
+    name = "e2e_golden_native",
+    app = "//:monobot_native",
+    config = ":config_noset",
+    gate = ":jvm_gate",
+    golden = "goldens/noset-repo.json",
+    tags = [
+        "external",
+        "manual",
+        "requires-network",
+    ],
+)
+
+# The same question //tests:e2e_offline_native asks, put the way Quarkus puts
+# it: a JUnit test that launches the packaged application. Its sources are a
+# library at the root because globs cannot cross packages, but the test belongs
+# here with everything else that runs a built artifact. Builds a native image,
+# so it stays out of the default gate.
+quarkus_integration_test(
+    name = "it_native",
+    app = "//:monobot_native",
+    tags = ["manual"],
+    deps = ["//:it_lib"],
+)
