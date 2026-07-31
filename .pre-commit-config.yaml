@@ -13,6 +13,7 @@ exclude: >-
     .*\.(patch|diff)$
     |.*\.lock$
     |.*/introspect/.*\.json$
+    |monobot/maven_install\.json$
     |rbe/auth/.*\.json$
   )$
 repos:
@@ -124,36 +125,32 @@ repos:
       - id: jsonnetfmt
   - repo: local
     hooks:
-      # Three goals in the order they have to run: OpenRewrite makes the
-      # tree-level fixes, spotless lays the result out, checkstyle then has
-      # nothing left to report. They read their configuration from
-      # monobot/pom.xml and take no file arguments, so each covers that module
-      # and no other java in the repo; `files` only decides whether the module
-      # is worth starting Maven for at all.
-      - id: monobot-rewrite
-        name: monobot-rewrite
-        entry: &mvnd >-
-          mvnd --batch-mode --quiet --file monobot/pom.xml
+      # Two hooks in the order they have to run: format lays the code out with
+      # google-java-format, then test holds the result to everything else.
+      # That second one compiles, which is where Error Prone runs, so it
+      # covers the bug patterns as well as checkstyle and the unit tests.
+      #
+      # Both are scoped by being run from monobot/, which is its own Bazel
+      # module; `files` only decides whether the module is worth starting
+      # Bazel for at all.
+      - id: monobot-format
+        name: monobot-format
+        entry: &bazel >-
+          bash -c 'cd monobot && exec bazel "$@"' bazel
         args:
-          - rewrite:run
+          - run
+          - //tools/lint:format
         language: system
-        files: &java ^monobot/.*\.java$
+        files: ^monobot/.*\.java$
         pass_filenames: false
-      - id: monobot-spotless
-        name: monobot-spotless
-        entry: *mvnd
+      - id: monobot-test
+        name: monobot-test
+        entry: *bazel
         args:
-          - spotless:apply
+          - test
+          - //...
         language: system
-        files: *java
-        pass_filenames: false
-      - id: monobot-checkstyle
-        name: monobot-checkstyle
-        entry: *mvnd
-        args:
-          - checkstyle:check
-        language: system
-        files: *java
+        files: ^monobot/
         pass_filenames: false
   - repo: local
     hooks:

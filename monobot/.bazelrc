@@ -1,0 +1,45 @@
+# /* vim: set filetype=sh : */
+#
+# monobot is its own Bazel module, independent of the one under build/: it
+# produces a standalone binary and knows nothing about the extension build. It
+# borrows that module's habits (hermetic toolchains, pinned locks) without
+# depending on it.
+
+common --show_timestamps
+common --progress_in_terminal_title
+common --incompatible_disallow_empty_glob
+common --attempt_to_print_relative_paths
+common --check_direct_dependencies=error
+
+# The JDK. Bazel's default runtime is `local_jdk`, which takes whatever javac
+# happens to be on PATH; remotejdk_21 is downloaded and checksummed by
+# rules_java, so the compiler is a fixed artifact rather than a property of the
+# machine. Which version of rules_java supplies it is not pinned: the bzlmod
+# lock is not committed, and .gitignore says why. These four lines are where the
+# language level is declared; the dev shell installs no JDK of its own to
+# disagree with them.
+common --java_language_version=21
+common --java_runtime_version=remotejdk_21
+common --tool_java_language_version=21
+common --tool_java_runtime_version=remotejdk_21
+
+# Nothing here compiles C++, so do not go looking for a compiler on the host.
+# java_binary still needs C++ toolchain *resolution* to succeed for its
+# optional native launcher; //toolchains:empty_cc satisfies that with a stub.
+common --repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
+
+build --nostamp
+build --incompatible_strict_action_env
+build --reuse_sandbox_directories
+build --nolegacy_external_runfiles
+build --spawn_strategy=sandboxed
+build --genrule_strategy=sandboxed
+
+test --build_tests_only
+test --test_output=errors
+
+common:debug --announce_rc
+common:debug --verbose_failures
+common:debug --nokeep_going
+
+try-import %workspace%/.bazelrc.user

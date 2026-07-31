@@ -1,0 +1,4 @@
+load("//tools/lint:lint.bzl", "lint_tools")
+
+# See lint.bzl for what the gate is made of and why each piece is here.
+lint_tools(name = "format")

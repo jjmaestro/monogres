@@ -1,0 +1,97 @@
+"""monobot: a metadata bot that generates Monogres extension repo.json files.
+
+A standalone Bazel module. It shares no dependency with the module under build/;
+the repo.json files it emits are just files at a path as far as monobot is
+concerned.
+"""
+
+module(
+    name = "monobot",
+    version = "1.0.0",
+    compatibility_level = 1,
+)
+
+bazel_dep(name = "rules_java", version = "9.7.0")
+bazel_dep(name = "rules_jvm_external", version = "7.1")
+
+# Runtime artifacts only. Quarkus deployment artifacts are resolved from these
+# by rules_quarkus, which reads each jar's META-INF/quarkus-extension.properties
+# rather than guessing a `-deployment` suffix.
+#
+# The io.quarkus:* versions all track the Quarkus release below.
+maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+maven.install(
+    artifacts = [
+        "io.quarkiverse.jgit:quarkus-jgit:3.6.2",
+        "io.quarkus:quarkus-arc:3.33.2",
+        "io.quarkus:quarkus-jackson:3.33.2",
+        "io.quarkus:quarkus-vertx:3.33.2",
+        "io.vertx:vertx-web-client:4.5.27",
+        "org.apache.commons:commons-compress:1.28.0",
+    ],
+    known_contributing_modules = [
+        "bazel_worker_java",
+        "protobuf",
+    ],
+    lock_file = "//:maven_install.json",
+)
+use_repo(maven, "maven")
+
+# Quarkus augmentation. rules_quarkus reads maven_install.json, finds every jar
+# carrying META-INF/quarkus-extension.properties, and resolves the exact
+# deployment-artifact each descriptor names, so only runtime artifacts are
+# declared above. quarkus_version must be one of the two the ruleset supports:
+# augmentation emits bytecode tied to the patch version.
+bazel_dep(name = "com_clementguillot_rules_quarkus", version = "0.5.2")
+
+quarkus = use_extension(
+    "@com_clementguillot_rules_quarkus//quarkus:extensions.bzl",
+    "quarkus",
+)
+quarkus.toolchain(
+    lock_file = "//:maven_install.json",
+    quarkus_version = "3.33.2",
+)
+use_repo(quarkus, "rules_quarkus")
+
+# The format and lint gate, dev-only: none of it is on the application's
+# classpath or in its runfiles, so a module depending on monobot should not
+# fetch any of it. Error Prone is absent because it already runs inside every
+# javac action rules_java drives, leaving only the tools that are not part of a
+# compile.
+bazel_dep(name = "aspect_rules_lint", version = "2.7.2", dev_dependency = True)
+
+# Taken as the fat release jars upstream publishes rather than resolved through
+# maven.install above, because one resolution is one classpath: a checkstyle
+# transitive could otherwise pick the version of a library the application also
+# uses. rules_lint's own tools.checkstyle/tools.google_java_format extensions
+# hardcode older versions with no way to override them, so fetch the jars here.
+# Both are shaded, so neither brings anything else along.
+#
+# google-java-format decides how the tree is laid out and checkstyle decides
+# what it is then held to, so a bump to either reformats or re-gates every file.
+# Change them deliberately, on their own.
+http_jar = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_jar")
+
+http_jar(
+    name = "google_java_format",
+    dev_dependency = True,
+    sha256 = "23696de05dd20d85c1449c8de9f2419030799508f5356570e979f7f96e59d8d6",
+    url = "https://github.com/google/google-java-format/releases/download/v1.36.0/google-java-format-1.36.0-all-deps.jar",
+)
+
+http_jar(
+    name = "checkstyle",
+    dev_dependency = True,
+    sha256 = "4aa042449984e3f2ea670b039e39b29e116a037e823c32f59b84d04739a8a94c",
+    url = "https://github.com/checkstyle/checkstyle/releases/download/checkstyle-13.9.0/checkstyle-13.9.0-all.jar",
+)
+
+# monobot compiles no C++, but java_binary pulls in the C++ toolchain type for
+# its optional native launcher, so resolution has to find something. Rather than
+# a real compiler (host gcc, or a downloaded LLVM that would never run),
+# register an empty toolchain: analysis succeeds and any actual C++ compile
+# fails loudly. See //toolchains:BUILD.bazel.
+bazel_dep(name = "rules_cc", version = "0.2.22")
+
+register_toolchains("//toolchains:empty_cc")

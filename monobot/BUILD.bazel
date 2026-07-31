@@ -1,0 +1,49 @@
+load("@rules_java//java:java_library.bzl", "java_library")
+load("@rules_quarkus//quarkus:defs.bzl", "quarkus_app")
+load("//tools/lint:lint.bzl", "checkstyle_test")
+
+exports_files([".checkstyle-suppressions.xml"])
+
+java_library(
+    name = "lib",
+    srcs = glob(["src/main/java/**/*.java"]),
+    # Jackson introspects constructor parameter names to bind json properties,
+    # so dropping this changes how records deserialize and serialize.
+    javacopts = ["-parameters"],
+    resources = glob(["src/main/resources/**/*"]),
+    deps = [
+        # quarkus-arc, quarkus-vertx and quarkus-jgit are not imported directly,
+        # but augmentation needs them in the application model, so strict deps
+        # alone would not have asked for them.
+        "@maven//:io_quarkiverse_jgit_quarkus_jgit",
+        "@maven//:io_quarkus_quarkus_arc",
+        "@maven//:io_quarkus_quarkus_vertx",
+        "@maven//:com_fasterxml_jackson_core_jackson_annotations",
+        "@maven//:com_fasterxml_jackson_core_jackson_core",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:io_quarkus_quarkus_core",
+        "@maven//:io_quarkus_quarkus_jackson",
+        "@maven//:io_vertx_vertx_core",
+        "@maven//:io_vertx_vertx_web_client",
+        "@maven//:io_vertx_vertx_web_common",
+        "@maven//:jakarta_annotation_jakarta_annotation_api",
+        "@maven//:jakarta_enterprise_jakarta_enterprise_cdi_api",
+        "@maven//:jakarta_inject_jakarta_inject_api",
+        "@maven//:org_apache_commons_commons_compress",
+        "@maven//:org_eclipse_jgit_org_eclipse_jgit",
+        "@maven//:org_eclipse_microprofile_config_microprofile_config_api",
+        "@maven//:org_jboss_logging_jboss_logging",
+    ],
+)
+
+quarkus_app(
+    name = "monobot",
+    main_class = "dev.monogres.monobot.main.Main",
+    version = "1.0.0",
+    deps = [":lib"],
+)
+
+checkstyle_test(
+    name = "checkstyle_test",
+    srcs = [":lib"],
+)
