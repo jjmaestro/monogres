@@ -10,20 +10,17 @@ public class GitlabRepo extends AbstractOrgNameRepo {
       "https://{0}/api/v4/projects/{1}/repository/archive.tar.gz?sha={2}";
   private static final String ARCHIVE_URL_EXTENSION_TYPE = "tar.gz";
 
+  /// GitLab namespaces nest, so everything before the last segment is the organization.
   private static String parseOrganization(URL url) {
-    var name = parseName(url);
+    var segments = pathSegments(url);
 
-    return url.getPath()
-        .substring("/".length(), url.getPath().length() - name.length() - "/".length());
+    return String.join("/", segments.subList(0, segments.size() - 1));
   }
 
   private static String parseName(URL url) {
-    var paths = url.getPath().replaceFirst("^/", "").split("/");
-    if (paths.length < 2) {
-      throw new IllegalArgumentException("Invalid repo URL " + url);
-    }
+    var segments = pathSegments(url);
 
-    return paths[paths.length - 1];
+    return segments.get(segments.size() - 1);
   }
 
   public GitlabRepo(URL url) {

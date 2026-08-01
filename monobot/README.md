@@ -78,7 +78,8 @@ With rules for tags a version cannot be read from as they stand:
 Fields:
 
 - `name` (required) -- Extension name.
-- `url` (required) -- Git repository URL (GitHub or GitLab).
+- `url` (required) -- Git repository URL (GitHub or GitLab). A trailing slash
+  and a `.git` suffix are both accepted and both ignored.
 - `versions` (optional) -- How tags become versions, and which are kept.
   - `replace` -- Ordered `[regex, replacement]` pairs. The first regex to match
     the whole tag name is the one applied, so the more specific replacement

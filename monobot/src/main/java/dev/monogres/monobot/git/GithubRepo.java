@@ -31,13 +31,16 @@ public class GithubRepo extends AbstractOrgNameRepo {
 
   private static final String ARCHIVE_URL_EXTENSION_TYPE = "tar.gz";
 
+  /// GitHub repositories are `{org}/{name}` and nothing deeper, which is the one place the two
+  /// forges differ about what a repository URL may look like.
   private static String parseUrlItem(URL url, int item) {
-    var paths = url.getPath().replaceFirst("^/", "").split("/");
-    if (paths.length != 2) {
-      throw new IllegalArgumentException("Invalid repo URL " + url);
+    var segments = pathSegments(url);
+    if (segments.size() != 2) {
+      throw new IllegalArgumentException(
+          "Invalid repo URL " + url + ": expected exactly {org}/{name}");
     }
 
-    return paths[item];
+    return segments.get(item);
   }
 
   private static String parseOrganization(URL url) {

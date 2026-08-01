@@ -2,11 +2,14 @@ package dev.monogres.monobot.git;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URI;
 import java.net.URL;
 import org.eclipse.jgit.lib.ObjectId;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /// The archive URL and the strip prefix are predictions about a third party's archive layout, not
 /// readings of the archive that was downloaded: nothing compares either against the tarball. So
@@ -112,5 +115,60 @@ class ForgeRepoTest {
   @Test
   void gitlabRefusesRepoUrlWithoutOrgAndName() {
     assertThrows(IllegalArgumentException.class, () -> repo("https://gitlab.com/only-one-element"));
+  }
+
+  /// The two shapes of the same URL a person copies out of a browser or a clone command. Neither
+  /// forge minds either of them, and both travel: a trailing slash into an empty path segment and
+  /// `.git` into the name, where they become an archive URL that 404s and a strip prefix that is
+  /// simply wrong, with nothing said about it.
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "https://github.com/theory/pg-envvar",
+        "https://github.com/theory/pg-envvar/",
+        "https://github.com/theory/pg-envvar.git",
+        "https://github.com/theory/pg-envvar.git/"
+      })
+  void githubReadsTheSameRepositoryOutOfEveryFormOfItsUrl(String repoUrl) {
+    assertEquals(
+        "https://api.github.com/repos/theory/pg-envvar/tarball/{commit}",
+        repo(repoUrl).getArchiveUrlTemplate());
+    assertEquals("theory-pg-envvar-8cf409d", repo(repoUrl).getArchiveStripPrefix(TAG));
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "https://gitlab.com/ongresinc/extensions/noset",
+        "https://gitlab.com/ongresinc/extensions/noset/",
+        "https://gitlab.com/ongresinc/extensions/noset.git",
+        "https://gitlab.com/ongresinc/extensions/noset.git/"
+      })
+  void gitlabReadsTheSameRepositoryOutOfEveryFormOfItsUrl(String repoUrl) {
+    assertEquals(
+        "https://gitlab.com/api/v4/projects/ongresinc%2Fextensions%2Fnoset"
+            + "/repository/archive.tar.gz?sha={commit}",
+        repo(repoUrl).getArchiveUrlTemplate());
+    assertEquals(
+        "noset-" + COMMIT_SHA + "-" + COMMIT_SHA, repo(repoUrl).getArchiveStripPrefix(TAG));
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "https://github.com/",
+        "https://github.com/theory",
+        "https://github.com/theory/",
+        "https://gitlab.com/",
+        "https://gitlab.com/group",
+        "https://gitlab.com/group/",
+        "https://github.com/theory/.git"
+      })
+  void neitherForgeAcceptsUrlThatNamesNoRepository(String repoUrl) {
+    var failure = assertThrows(IllegalArgumentException.class, () -> repo(repoUrl));
+
+    assertTrue(
+        failure.getMessage().contains(repoUrl),
+        "the failure does not name the URL: " + failure.getMessage());
   }
 }

@@ -117,6 +117,7 @@ java_library(
         "@maven//:org_apache_commons_commons_compress",
         "@maven//:org_eclipse_jgit_org_eclipse_jgit",
         "@maven//:org_junit_jupiter_junit_jupiter_api",
+        "@maven//:org_junit_jupiter_junit_jupiter_params",
         "@maven//:org_mockito_mockito_core",
     ],
 )
