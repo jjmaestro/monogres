@@ -49,7 +49,7 @@ public class GithubRepo extends AbstractOrgNameRepo {
   }
 
   public GithubRepo(URL url) {
-    super(url, parseOrganization(url), parseName(url));
+    super(parseOrganization(url), parseName(url));
   }
 
   @Override

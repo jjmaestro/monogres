@@ -7,8 +7,6 @@ public interface Repo {
   /// substitute.
   String COMMIT_PLACEHOLDER = "{commit}";
 
-  URL getUrl();
-
   ForgeType getForgeType();
 
   String getArchiveUrlExtension();

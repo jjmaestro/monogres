@@ -27,7 +27,7 @@ public class GitlabRepo extends AbstractOrgNameRepo {
   }
 
   public GitlabRepo(URL url) {
-    super(url, parseOrganization(url), parseName(url));
+    super(parseOrganization(url), parseName(url));
   }
 
   @Override

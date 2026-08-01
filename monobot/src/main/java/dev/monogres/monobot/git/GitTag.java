@@ -31,10 +31,6 @@ public record GitTag(String name, ObjectId commit) implements Comparable<GitTag>
         .toArray(GitTag[]::new);
   }
 
-  public boolean referenceIsTag(Ref reference) {
-    return reference.getName().startsWith(Constants.R_TAGS);
-  }
-
   @Override
   public int compareTo(GitTag o) {
     return name.compareTo(o.name);
