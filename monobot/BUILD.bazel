@@ -38,6 +38,7 @@ java_library(
         "@maven//:org_eclipse_jgit_org_eclipse_jgit",
         "@maven//:org_eclipse_microprofile_config_microprofile_config_api",
         "@maven//:org_jboss_logging_jboss_logging",
+        "@maven//:org_semver4j_semver4j",
     ],
 )
 

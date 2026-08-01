@@ -73,9 +73,17 @@ public class Fetch {
     }
 
     var downloadFutures = new ArrayList<Future<VersionDownloadResult>>();
+    var versionsFound = 0;
 
     for (var tag : tags) {
-      var version = new Version(tag.name());
+      var versionFound = Version.find(monobotConfig.versionSpec().rewrite(tag.name()));
+
+      if (versionFound.isEmpty()) {
+        continue;
+      }
+
+      versionsFound++;
+      var version = versionFound.get();
       if (versions.containsKey(version)) {
         continue;
       }
@@ -92,6 +100,12 @@ public class Fetch {
                           version, tag, sha256, archivePath, repo.getArchiveStripPrefix(tag)));
 
       downloadFutures.add(downloadFuture);
+    }
+
+    if (versionsFound == 0) {
+      LOG.warnv(
+          "[{0}]: None of the {1} tags of {2} names a version",
+          monobotConfig.name(), tags.length, monobotConfig.repoUrl());
     }
 
     if (downloadFutures.isEmpty()) {

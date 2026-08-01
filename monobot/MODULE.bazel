@@ -35,6 +35,7 @@ maven.install(
         "io.quarkus:quarkus-vertx:3.33.2",
         "io.vertx:vertx-web-client:4.5.27",
         "org.apache.commons:commons-compress:1.28.0",
+        "org.semver4j:semver4j:6.0.0",
         # Test only. Nothing imports hamcrest or junit-platform-launcher, but
         # the quarkus_test macro puts them on every test target's compile
         # classpath, so they have to resolve here.

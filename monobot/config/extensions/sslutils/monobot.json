@@ -1,6 +1,11 @@
 {
   "name": "sslutils",
   "url": "https://github.com/EnterpriseDB/sslutils",
+  "versions": {
+    "replace": [
+      ["v([0-9]+)\\.([0-9]+)-([0-9]+)", "$1.$2.0-$3"]
+    ]
+  },
   "metadata": {
     "buildtime_dependencies": {
       "debian13": [ "libssl-dev" ]

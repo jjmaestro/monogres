@@ -70,7 +70,7 @@ public class ArchiveMetadataExtractor {
       // It is simpler to use mapper.readTree(control). But it does not respect null serialization
       // preferences
       var controlJsonNode = objectMapper.readTree(objectMapper.writeValueAsString(control));
-      metadataContext.put(version.normalize(), controlJsonNode);
+      metadataContext.put(version.version(), controlJsonNode);
     } catch (JsonProcessingException e) {
       throw new RuntimeException(e);
     }
@@ -88,7 +88,7 @@ public class ArchiveMetadataExtractor {
     try {
       var jsonNode =
           objectMapper.readTree(extractFromArchive(tarIn, entry, MAX_SIZE_BYTES_PGXN_META_JSON));
-      metadataContext.put(version.normalize(), jsonNode);
+      metadataContext.put(version.version(), jsonNode);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

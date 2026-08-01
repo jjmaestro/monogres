@@ -12,6 +12,7 @@ public record MonobotConfig(
     @Nonnull String name,
     @JsonProperty(value = "type") ComponentType componentType,
     @Nonnull @JsonProperty(value = "url") URL repoUrl,
+    @JsonProperty(value = "versions") VersionSpec versionSpec,
     Metadata metadata) {
   public MonobotConfig {
     // Enforce default values that are enums
@@ -20,6 +21,9 @@ public record MonobotConfig(
     }
     if (componentType == null) {
       componentType = ComponentType.EXTENSION;
+    }
+    if (versionSpec == null) {
+      versionSpec = new VersionSpec();
     }
   }
 }

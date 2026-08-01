@@ -61,12 +61,36 @@ With optional metadata:
 }
 ```
 
+With rules for tags a version cannot be read from as they stand:
+
+```json
+{
+  "name": "sslutils",
+  "url": "https://github.com/EnterpriseDB/sslutils",
+  "versions": {
+    "replace": [
+      ["v([0-9]+)\\.([0-9]+)-([0-9]+)", "$1.$2.0-$3"]
+    ]
+  }
+}
+```
+
 Fields:
 
 - `name` (required) -- Extension name.
 - `url` (required) -- Git repository URL (GitHub or GitLab).
+- `versions` (optional) -- How tags become versions.
+  - `replace` -- Ordered `[regex, replacement]` pairs. The first regex to match
+    the whole tag name is the one applied, so the more specific replacement
+    rules should go first. A tag no rule matches is read as it stands.
 - `metadata` (optional) -- Additional metadata to include (verbatim) in the
   output, keyed by category and version.
+
+A version is a semantic version, with two liberties: a leading `v` is ignored,
+and a missing patch component is filled in, so `v1.2` is version `1.2.0`. A tag
+that names no version is skipped, and monobot warns when none of an extension's
+tags names one. Tags are ordered by semantic version precedence, and
+`repo.json` presents them newest first.
 
 ### Output: `repo.json`
 

@@ -18,6 +18,7 @@
     "org.junit.jupiter:junit-jupiter": -1032504578,
     "org.junit.platform:junit-platform-console-standalone": -1481831078,
     "org.junit.platform:junit-platform-launcher": -779382379,
+    "org.semver4j:semver4j": 112733284,
     "repositories": -1949687017
   },
   "__RESOLVED_ARTIFACTS_HASH": {
@@ -226,6 +227,7 @@
     "org.ow2.asm:asm-commons": 33716409,
     "org.ow2.asm:asm-tree": -1173653421,
     "org.ow2.asm:asm-util": 1667785410,
+    "org.semver4j:semver4j": -1632308558,
     "org.slf4j:slf4j-api": -1521593912,
     "org.wildfly.common:wildfly-common": 1448937172
   },
@@ -1466,6 +1468,12 @@
       },
       "version": "9.9.1"
     },
+    "org.semver4j:semver4j": {
+      "shasums": {
+        "jar": "43d5e02f60e2b1f8ff0c92139f612a547691a1debe6bea32b0a70ba5a3bcbdd7"
+      },
+      "version": "6.0.0"
+    },
     "org.slf4j:slf4j-api": {
       "shasums": {
         "jar": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832"
@@ -2307,6 +2315,9 @@
       "org.ow2.asm:asm",
       "org.ow2.asm:asm-analysis",
       "org.ow2.asm:asm-tree"
+    ],
+    "org.semver4j:semver4j": [
+      "org.jspecify:jspecify"
     ],
     "org.wildfly.common:wildfly-common": [
       "io.smallrye.common:smallrye-common-cpu",
@@ -4263,6 +4274,12 @@
     "org.ow2.asm:asm-util": [
       "org.objectweb.asm.util"
     ],
+    "org.semver4j:semver4j": [
+      "org.semver4j",
+      "org.semver4j.internal",
+      "org.semver4j.processor",
+      "org.semver4j.range"
+    ],
     "org.slf4j:slf4j-api": [
       "org.slf4j",
       "org.slf4j.event",
@@ -4501,6 +4518,7 @@
       "org.ow2.asm:asm-commons",
       "org.ow2.asm:asm-tree",
       "org.ow2.asm:asm-util",
+      "org.semver4j:semver4j",
       "org.slf4j:slf4j-api",
       "org.wildfly.common:wildfly-common"
     ]
