@@ -12,10 +12,13 @@ public class CsvStringArrayDeserializer extends JsonDeserializer<String[]> {
       throws IOException, JacksonException {
     var csv = p.getText();
 
-    if (csv == null || csv.isEmpty()) {
+    // Stripped first, because splitting on the commas takes the whitespace around each of them and
+    // leaves the whitespace at the two ends of the value: the first and last names would keep it,
+    // and a name with a space in front of it is a different name.
+    if (csv == null || csv.strip().isEmpty()) {
       return null;
     }
 
-    return csv.split("\\s*,\\s*");
+    return csv.strip().split("\\s*,\\s*");
   }
 }

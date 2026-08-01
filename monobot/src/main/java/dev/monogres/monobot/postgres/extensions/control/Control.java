@@ -1,16 +1,14 @@
 package dev.monogres.monobot.postgres.extensions.control;
 
+import com.fasterxml.jackson.annotation.JsonAnyGetter;
+import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import dev.monogres.monobot.json.CsvStringArrayDeserializer;
 import io.quarkus.runtime.annotations.RegisterForReflection;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.util.Map;
-import java.util.Properties;
-import java.util.stream.Collectors;
 
 /// Java record modeling the fields, defaults and invariants of a Postgres extension's control
 /// ($extname.control) file.
@@ -86,8 +84,18 @@ public record Control(
     /// loaded into exactly the named schema and not any other. The schema parameter is consulted
     /// only when initially creating an extension, not during extension updates. See Section 36.17.2
     /// for more information.
-    String schema) {
+    String schema,
+
+    /// Every directive of the file this record does not model, written back out beside the ones it
+    /// does. Postgres adds directives from release to release and an archive is read once and
+    /// catalogued for good, so a directive that arrives before this record knows the name of it is
+    /// still something the upstream declared about that version.
+    @JsonAnySetter @JsonAnyGetter Map<String, String> extra) {
   public Control {
+    if (extra == null) {
+      extra = Map.of();
+    }
+
     // Set proper defaults for boolean fields
     if (superuser == null) {
       superuser = true;
@@ -105,37 +113,9 @@ public record Control(
     }
   }
 
-  // Postgres .control files are conceptually very similar to Java Properties, and we can parse them
-  // this way
-  private static Properties parseFromBytes(byte[] bytes) {
-    var properties = new Properties();
-
-    try (var bis = new ByteArrayInputStream(bytes)) {
-      properties.load(bis);
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
-
-    // Due to .control file format, values may remain single-quoted. Strip it
-    properties.replaceAll(
-        (key, value) -> {
-          if (value instanceof String strVal && strVal.startsWith("'") && strVal.endsWith("'")) {
-            return strVal.substring(1, strVal.length() - 1); // remove surrounding single quotes
-          }
-          return value;
-        });
-
-    return properties;
-  }
-
   public static Control fromBytes(byte[] bytes) {
-    var properties = parseFromBytes(bytes);
-    Map<String, String> propertiesMap =
-        properties.entrySet().stream()
-            .collect(Collectors.toMap(e -> e.getKey().toString(), e -> e.getValue().toString()));
-
     var mapper = new ObjectMapper().setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL);
 
-    return mapper.convertValue(propertiesMap, Control.class);
+    return mapper.convertValue(ControlParser.parse(bytes), Control.class);
   }
 }

@@ -149,6 +149,9 @@ the extension follows PGXN's convention, then all information under
 }
 ```
 
+Any control directive monobot does not model is carried through beside the
+ones it does.
+
 ## Supported Forges
 
 | Forge | Archive URL pattern |
