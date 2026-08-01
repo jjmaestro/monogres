@@ -8,7 +8,7 @@
   "versions" : {
     "1.2.3" : {
       "tag" : "v1.2.3",
-      "sha256" : "b47d6e8003896e3267a784c1c2c1b9de5754b804743c913a313bd0b5cc9db1b6",
+      "sha256" : "a368ed4acab124596fc167c76836182f0a403ff558a8d8845b88b9dcea107c45",
       "strip_prefix" : "monogres-fixture-8cf409d",
       "commit" : "8cf409d1b669e0e3e22fa79bb54027a4b555e822",
       "short_commit" : "8cf409d"

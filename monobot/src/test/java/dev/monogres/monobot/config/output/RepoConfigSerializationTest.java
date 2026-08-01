@@ -6,9 +6,14 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.monogres.monobot.config.Metadata;
 import dev.monogres.monobot.config.MetadataContext;
+import dev.monogres.monobot.git.ForgeType;
+import dev.monogres.monobot.git.GitTag;
+import dev.monogres.monobot.git.Repo;
 import dev.monogres.monobot.json.ConfigObjectMapperCustomizer;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import org.eclipse.jgit.lib.ObjectId;
 import org.junit.jupiter.api.Test;
@@ -29,37 +34,47 @@ class RepoConfigSerializationTest {
     return mapper;
   }
 
+  private static Repo nosetRepo() {
+    try {
+      var url = URI.create("https://gitlab.com/ongresinc/extensions/noset").toURL();
+      return ForgeType.getRepo(url);
+    } catch (MalformedURLException e) {
+      throw new AssertionError(e);
+    }
+  }
+
   private static RepoConfig sampleRepoConfig() throws IOException {
+    // Both the templated URL and every strip prefix come from the forge that would have produced
+    // them, so the golden cannot pin a value the application does not emit.
+    var repo = nosetRepo();
+
     var sources = new Sources();
     sources.put(
-        "gitlab.com",
-        new SourceContext(
-            "https://gitlab.com/api/v4/projects/ongresinc%2Fextensions%2Fnoset"
-                + "/repository/archive.tar.gz?sha={commit}",
-            "tar.gz"));
-
-    // The commit is named once per version: it is the tag's object id and it is twice over in
-    // the strip prefix GitLab serves, and three hand-written copies is three chances to differ.
-    var commit020 = "13d4473ae30dc618c8740d9dd0608730e506f799";
-    var commit030 = "8cf409d1b669e0e3e22fa79bb54027a4b555e822";
+        repo.getForgeType().getDomain(),
+        new SourceContext(repo.getArchiveUrlTemplate(), repo.getArchiveUrlExtension()));
 
     // Added ascending on purpose: Versions is a TreeMap that sorts descending, so the golden
     // pins the sort rather than the insertion order.
+    var tag020 =
+        new GitTag("v0.2.0", ObjectId.fromString("13d4473ae30dc618c8740d9dd0608730e506f799"));
+    var tag030 =
+        new GitTag("v0.3.0", ObjectId.fromString("8cf409d1b669e0e3e22fa79bb54027a4b555e822"));
+
     var versions = new Versions();
     versions.put(
         new Version("0.2.0"),
         new VersionContext(
-            "v0.2.0",
-            ObjectId.fromString(commit020),
+            tag020.name(),
+            tag020.commit(),
             "8062260cb4c872fa0dc252a67e5235d8de3207f799e58b7c3588198ff4a1cadf",
-            "noset-" + commit020 + "-" + commit020));
+            repo.getArchiveStripPrefix(tag020)));
     versions.put(
         new Version("0.3.0"),
         new VersionContext(
-            "v0.3.0",
-            ObjectId.fromString(commit030),
+            tag030.name(),
+            tag030.commit(),
             "17c198106379fbf979ede46096550c48dec623075403d4d6684a00ee8a1be2d3",
-            "noset-" + commit030 + "-" + commit030));
+            repo.getArchiveStripPrefix(tag030)));
 
     var json = new ObjectMapper();
     var control = new MetadataContext();
