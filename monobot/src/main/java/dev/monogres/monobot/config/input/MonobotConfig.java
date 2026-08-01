@@ -13,7 +13,8 @@ public record MonobotConfig(
     @JsonProperty(value = "type") ComponentType componentType,
     @Nonnull @JsonProperty(value = "url") URL repoUrl,
     @JsonProperty(value = "versions") VersionSpec versionSpec,
-    Metadata metadata) {
+    Metadata metadata,
+    boolean disabled) {
   public MonobotConfig {
     // Enforce default values that are enums
     if (monobotConfigVersion == null) {

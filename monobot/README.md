@@ -96,6 +96,9 @@ Fields:
     extension whose last release predates the cutoff still reaches the catalog.
 - `metadata` (optional) -- Additional metadata to include (verbatim) in the
   output, keyed by category and version.
+- `disabled` (optional) -- When `true`, the extension is left alone: no tags
+  are listed, no archives downloaded, and the `repo.json` a previous run wrote
+  stays as it is.
 
 A version is a semantic version, with two liberties: a leading `v` is ignored,
 and a missing patch component is filled in, so `v1.2` is version `1.2.0`. A tag

@@ -179,6 +179,14 @@ public class Fetch {
 
   public Future<Void> fetch(MonobotConfigFile monobotConfigFile) {
     var monobotConfig = monobotConfigFile.monobotConfig();
+
+    if (monobotConfig.disabled()) {
+      LOG.infov(
+          "[{0}]: {1} is disabled, so no tag of it is looked at",
+          monobotConfig.name(), monobotConfig.repoUrl());
+      return Future.succeededFuture();
+    }
+
     var monobotConfigDir = monobotConfigFile.configFile().getParent();
     var relPath = Path.of(configDir).relativize(monobotConfigDir);
     var outputDir = Path.of(monogresRepo, DIR_BUILD).resolve(relPath);
