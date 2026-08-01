@@ -258,4 +258,19 @@ class FetchPipelineTest {
         "a disabled extension must produce no repo.json");
     assertTrue(downloaded.isEmpty(), "a disabled extension must download nothing");
   }
+
+  @Test
+  void writesNothingWhenNoArchiveCarriesMetadata() throws Exception {
+    PipelineFixture.writeConfig("extensions/fixture", CONFIG.formatted("fixture", "fixture"));
+    archivesByCommit.put(
+        PipelineFixture.commitSha("aa3"),
+        PipelineFixture.archive("fixture-aa3/README.md", "nothing to see", 0L));
+    tags(new GitTag("v1.2.3", PipelineFixture.objectId("aa3")));
+
+    run();
+
+    assertFalse(
+        Files.exists(PipelineFixture.repoJson("extensions/fixture")),
+        "an archive with neither META.json nor a control file must produce no repo.json");
+  }
 }

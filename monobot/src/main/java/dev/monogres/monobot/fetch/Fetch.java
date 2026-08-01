@@ -205,17 +205,34 @@ public class Fetch {
             v ->
                 vertx.executeBlocking(
                     () -> {
+                      // A catalog entry is a version and what that version is, so an extension
+                      // that yielded one without the other is not catalogued at all. The
+                      // alternative is a repo.json holding the formulas for building download
+                      // URLs and no version to build one for.
+                      if (versions.isEmpty()) {
+                        LOG.warnv(
+                            "[{0}]: no version was catalogued, so no repo.json is written",
+                            monobotConfig.name());
+                        return null;
+                      }
+
+                      if (metadata.isEmpty()) {
+                        LOG.warnv(
+                            "[{0}]: no version came with metadata, so no repo.json is written."
+                                + " No archive carried a META.json or a {0}.control, and `name` is"
+                                + " what names that file, so a name that is not the control file"
+                                + " stem of the extension looks exactly like this",
+                            monobotConfig.name());
+                        return null;
+                      }
+
                       var sources = new Sources();
                       var sourcesContext =
                           new SourceContext(
                               repo.getArchiveUrlTemplate(), repo.getArchiveUrlExtension());
                       sources.put(repo.getForgeType().getDomain(), sourcesContext);
 
-                      var repoConfig =
-                          new RepoConfig(
-                              sources,
-                              versions.isEmpty() ? null : versions,
-                              metadata.isEmpty() ? null : metadata);
+                      var repoConfig = new RepoConfig(sources, versions, metadata);
                       writeConfigFile(outputDir, FILENAME_REPO_JSON, repoConfig);
                       return null;
                     }));

@@ -1,6 +1,7 @@
 package dev.monogres.monobot.fetch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -207,5 +208,18 @@ class FetchCutoffTest {
     // 0.9.0 is the newest and is stored already, so the exemption is spent on a version that
     // needed no archive, and no tag reaches the cutoff.
     assertEquals(List.of("0.9.0"), versionsWritten());
+  }
+
+  @Test
+  void anExtensionOlderThanTheCutoffIsNotCataloguedWithoutKeepNewest() throws Exception {
+    archiveModifiedAt("0.1.0", BEFORE_CUTOFF);
+    archiveModifiedAt("0.3.0", BEFORE_CUTOFF);
+    listTags("0.3.0", "0.1.0");
+
+    run();
+
+    assertFalse(
+        Files.exists(PipelineFixture.repoJson(EXTENSION_DIR)),
+        "a cutoff that rejects every version leaves nothing to catalogue");
   }
 }
