@@ -46,12 +46,12 @@ public class GitlabRepo extends AbstractOrgNameRepo {
   }
 
   @Override
-  public String getArchiveUrlRaw(String gitTag) {
+  protected String archiveUrl(String commit) {
     return MessageFormat.format(
         ARCHIVE_URL_PATH_MESSAGE_FORMAT_TEMPLATE,
         getForgeType().getApiDomain(),
         getApiId(),
-        gitTag);
+        commit);
   }
 
   @Override

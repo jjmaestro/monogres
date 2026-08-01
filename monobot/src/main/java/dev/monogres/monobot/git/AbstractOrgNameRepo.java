@@ -22,20 +22,18 @@ public abstract class AbstractOrgNameRepo extends AbstractRepo {
     return name;
   }
 
+  /// The forge's archive URL for one commit, or for [Repo#COMMIT_PLACEHOLDER]. The two forms
+  /// are built the same way, so only one of them can be a [URL].
+  protected abstract String archiveUrl(String commit);
+
   @Override
-  public String getArchiveUrlRaw(GitTag gitTag) {
-    return getArchiveUrlRaw(gitTag.commit().name());
+  public String getArchiveUrlTemplate() {
+    return archiveUrl(COMMIT_PLACEHOLDER);
   }
 
   @Override
   public URL getArchiveUrl(GitTag gitTag) {
-    return getArchiveUrl(gitTag.commit().name());
-  }
-
-  @Override
-  public URL getArchiveUrl(String gitTag) {
-    String formattedUrl = getArchiveUrlRaw(gitTag);
-    var uri = URI.create(formattedUrl);
+    var uri = URI.create(archiveUrl(gitTag.commit().name()));
 
     try {
       return uri.toURL();

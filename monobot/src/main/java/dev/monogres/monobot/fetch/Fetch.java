@@ -132,7 +132,7 @@ public class Fetch {
     }
 
     var repoUrl = monobotConfig.repoUrl();
-    var repo = ForgeType.getByRepoUrl(repoUrl).newRepo(repoUrl);
+    var repo = ForgeType.getRepo(repoUrl);
 
     return fetchVersionsByTag(monobotConfig, repo, versions, metadata)
         .compose(
@@ -142,7 +142,7 @@ public class Fetch {
                       var sources = new Sources();
                       var sourcesContext =
                           new SourceContext(
-                              repo.getArchiveUrlRaw("{commit}"), repo.getArchiveUrlExtension());
+                              repo.getArchiveUrlTemplate(), repo.getArchiveUrlExtension());
                       sources.put(repo.getForgeType().getDomain(), sourcesContext);
 
                       var repoConfig =
