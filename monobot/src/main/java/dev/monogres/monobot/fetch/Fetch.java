@@ -23,6 +23,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Optional;
@@ -66,7 +67,10 @@ public class Fetch {
   /// downloads happen to complete in: the newest of everything this run knows about, whether it
   /// came from the tag listing or from the catalog being merged into.
   private boolean isRecentEnough(
-      MonobotConfig monobotConfig, VersionDownloadResult result, Optional<Version> newest) {
+      MonobotConfig monobotConfig,
+      VersionDownloadResult result,
+      Optional<Version> newest,
+      Instant lastModified) {
     var versionSpec = monobotConfig.versionSpec();
     var cutoff = versionSpec.cutoff();
 
@@ -75,7 +79,6 @@ public class Fetch {
       return true;
     }
 
-    var lastModified = archiveMetadataExtractor.lastModified(result.archivePath());
     var isRecentEnough = !lastModified.isBefore(cutoff.get());
 
     if (!isRecentEnough) {
@@ -160,7 +163,15 @@ public class Fetch {
                     () -> {
                       for (var i = 0; i < compositeFuture.size(); i++) {
                         var result = (VersionDownloadResult) compositeFuture.resultAt(i);
-                        if (!isRecentEnough(monobotConfig, result, newest)) {
+                        // One read per archive, answering both the cutoff and the metadata.
+                        // Gunzipping and walking a whole tarball is the most expensive thing this
+                        // program does per version, and this block is ordered, so every one of
+                        // them serialises behind the last.
+                        var contents =
+                            archiveMetadataExtractor.read(
+                                monobotConfig.name(), result.archivePath());
+                        if (!isRecentEnough(
+                            monobotConfig, result, newest, contents.lastModified())) {
                           continue;
                         }
                         versions.put(
@@ -170,8 +181,7 @@ public class Fetch {
                                 result.tag().commit(),
                                 result.sha256(),
                                 result.stripPrefix()));
-                        archiveMetadataExtractor.addFromArchive(
-                            monobotConfig.name(), result.version(), result.archivePath(), metadata);
+                        archiveMetadataExtractor.addContents(result.version(), contents, metadata);
                       }
                       return null;
                     }));

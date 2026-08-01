@@ -150,7 +150,8 @@ the extension follows PGXN's convention, then all information under
 ```
 
 Any control directive monobot does not model is carried through beside the
-ones it does.
+ones it does. Key order is fixed rather than incidental, so two runs over the
+same inputs produce the same bytes.
 
 ## Supported Forges
 

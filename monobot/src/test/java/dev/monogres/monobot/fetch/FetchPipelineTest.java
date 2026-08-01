@@ -106,6 +106,13 @@ class FetchPipelineTest {
     return out;
   }
 
+  private List<String> metadataKeysIn(String relativeDir, String category) throws IOException {
+    var tree = objectMapper.readTree(PipelineFixture.repoJson(relativeDir).toFile());
+    var out = new ArrayList<String>();
+    tree.get("metadata").get(category).fieldNames().forEachRemaining(out::add);
+    return out;
+  }
+
   @BeforeEach
   void setUp() throws Exception {
     PipelineFixture.resetTree();
@@ -202,7 +209,7 @@ class FetchPipelineTest {
   }
 
   @Test
-  void twoDigitComponentsAreOrderedBySemverNotByString() throws Exception {
+  void twoDigitComponentsOrderTheSameInVersionsAndMetadata() throws Exception {
     PipelineFixture.writeConfig("extensions/fixture", CONFIG.formatted("fixture", "fixture"));
     for (var seed : List.of("ca2", "ca9", "cb0")) {
       serve("fixture", "1.0.0", PipelineFixture.commitSha(seed));
@@ -214,7 +221,9 @@ class FetchPipelineTest {
 
     run();
 
-    assertEquals(List.of("1.10.0", "1.9.0", "1.2.0"), versionsIn("extensions/fixture"));
+    var expected = List.of("1.10.0", "1.9.0", "1.2.0");
+    assertEquals(expected, versionsIn("extensions/fixture"));
+    assertEquals(expected, metadataKeysIn("extensions/fixture", ".control"));
   }
 
   @Test

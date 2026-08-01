@@ -7,6 +7,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.TreeSet;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
@@ -48,7 +50,12 @@ final class PipelineFixture {
   }
 
   static byte[] archive(String entryName, String content, long modifiedMillis) throws IOException {
-    var body = content.getBytes(StandardCharsets.UTF_8);
+    return archive(new LinkedHashMap<>(Map.of(entryName, content)), modifiedMillis);
+  }
+
+  /// Several entries, written in the order the map iterates. Which order a forge writes its
+  /// entries in is the forge's decision, so a test that depends on one has to name it.
+  static byte[] archive(Map<String, String> entries, long modifiedMillis) throws IOException {
     var raw = new ByteArrayOutputStream();
 
     var gzipParameters = new GzipParameters();
@@ -56,15 +63,18 @@ final class PipelineFixture {
 
     try (var gz = new GzipCompressorOutputStream(raw, gzipParameters);
         var tar = new TarArchiveOutputStream(gz)) {
-      var entry = new TarArchiveEntry(entryName);
-      entry.setSize(body.length);
-      entry.setModTime(modifiedMillis);
-      entry.setIds(0, 0);
-      entry.setNames("", "");
-      entry.setMode(TAR_MODE_RW_R_R);
-      tar.putArchiveEntry(entry);
-      tar.write(body);
-      tar.closeArchiveEntry();
+      for (var written : entries.entrySet()) {
+        var body = written.getValue().getBytes(StandardCharsets.UTF_8);
+        var entry = new TarArchiveEntry(written.getKey());
+        entry.setSize(body.length);
+        entry.setModTime(modifiedMillis);
+        entry.setIds(0, 0);
+        entry.setNames("", "");
+        entry.setMode(TAR_MODE_RW_R_R);
+        tar.putArchiveEntry(entry);
+        tar.write(body);
+        tar.closeArchiveEntry();
+      }
     }
 
     return raw.toByteArray();
