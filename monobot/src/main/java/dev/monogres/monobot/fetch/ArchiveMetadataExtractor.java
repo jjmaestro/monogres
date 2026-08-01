@@ -16,6 +16,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.text.MessageFormat;
+import java.time.Instant;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
@@ -94,6 +95,33 @@ public class ArchiveMetadataExtractor {
     }
 
     return metadataContext;
+  }
+
+  /// When the archive was last touched, taken as the newest modification time it records for any
+  /// entry. An archive with no entries reports [Instant#MIN], which no cutoff accepts.
+  ///
+  /// This is what a forge writes into the archive it serves, and it is the only date available
+  /// without asking the forge a second question: the tag listing carries commit ids and nothing
+  /// else.
+  public Instant lastModified(Path archivePath) {
+    try (var fis = new FileInputStream(archivePath.toFile());
+        var bis = new BufferedInputStream(fis);
+        var gzipIn = new GzipCompressorInputStream(bis);
+        var tarIn = new TarArchiveInputStream(gzipIn)) {
+      TarArchiveEntry entry;
+      var lastModified = Instant.MIN;
+
+      while ((entry = tarIn.getNextEntry()) != null) {
+        var modified = entry.getLastModifiedTime().toInstant();
+        if (modified.isAfter(lastModified)) {
+          lastModified = modified;
+        }
+      }
+
+      return lastModified;
+    } catch (IOException e) {
+      throw new RuntimeException("Error while reading " + archivePath, e);
+    }
   }
 
   public void addFromArchive(String name, Version version, Path archivePath, Metadata metadata) {

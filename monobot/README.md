@@ -79,10 +79,21 @@ Fields:
 
 - `name` (required) -- Extension name.
 - `url` (required) -- Git repository URL (GitHub or GitLab).
-- `versions` (optional) -- How tags become versions.
+- `versions` (optional) -- How tags become versions, and which are kept.
   - `replace` -- Ordered `[regex, replacement]` pairs. The first regex to match
     the whole tag name is the one applied, so the more specific replacement
     rules should go first. A tag no rule matches is read as it stands.
+  - `satisfy` -- A [node-semver](https://github.com/npm/node-semver#ranges)
+    range every kept version has to satisfy, such as `>=1.0.0 <2.0.0` or
+    `^1 || ^3`. There is no negation, so what to leave out is written as what
+    to keep around it: `<1.0.0 || >1.9.9`. Unlike in node, pre-releases take
+    part, because `1.4.0-2` here is a packaging revision of a release rather
+    than a candidate for one.
+  - `after` -- A datetime, such as `2020-01-01T00:00:00Z`. Filters versions
+    whose archive was last modified before the datetime. This is read from the
+    archive, so it narrows what is in the catalog, and not what is downloaded.
+  - `keepNewest` -- Keeps the newest version regardless of `after`, so an
+    extension whose last release predates the cutoff still reaches the catalog.
 - `metadata` (optional) -- Additional metadata to include (verbatim) in the
   output, keyed by category and version.
 

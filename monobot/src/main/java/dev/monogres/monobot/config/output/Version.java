@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import java.util.Optional;
 import org.semver4j.Semver;
+import org.semver4j.range.RangeListFactory;
 
 /// One version of one extension, ordered by semantic version precedence rather than by the text it
 /// was read from, so `1.10.0` comes after `1.9.0`.
@@ -41,9 +42,20 @@ public final class Version implements Comparable<Version> {
         .or(() -> Optional.ofNullable(Semver.parse(version + ".0")));
   }
 
+  public static boolean isRange(String range) {
+    return !RangeListFactory.create(range, true).get().isEmpty();
+  }
+
   @JsonValue
   public String version() {
     return semver.getVersion();
+  }
+
+  /// Whether this version falls in a node-semver range. Pre-releases take part, unlike in node,
+  /// because a version such as `1.4.0-2` here is a packaging revision of a release rather than a
+  /// candidate for one, and leaving them out would drop them from every range.
+  public boolean satisfies(String range) {
+    return semver.satisfies(range, /* includePreRelease= */ true);
   }
 
   @Override

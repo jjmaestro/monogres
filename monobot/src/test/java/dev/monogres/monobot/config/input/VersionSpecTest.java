@@ -1,16 +1,19 @@
 package dev.monogres.monobot.config.input;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.monogres.monobot.config.output.Version;
+import java.time.Instant;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
-/// How a tag name becomes the string a version is read from, and which `versions` blocks are
-/// rejected rather than accepted and left doing nothing.
+/// How a tag name becomes the string a version is read from, which of the versions are kept, and
+/// which `versions` blocks are rejected rather than accepted and left doing nothing.
 class VersionSpecTest {
   private static final String CONFIG_TEMPLATE =
       """
@@ -29,7 +32,11 @@ class VersionSpecTest {
               Pattern.compile(regexAndReplacement[2 * i]), regexAndReplacement[2 * i + 1]);
     }
 
-    return new VersionSpec(replace);
+    return new VersionSpec(replace, null, null, false);
+  }
+
+  private static VersionSpec satisfying(String range) {
+    return new VersionSpec(null, range, null, false);
   }
 
   private static MonobotConfig configWith(String versionsJson) throws Exception {
@@ -100,6 +107,55 @@ class VersionSpecTest {
     assertEquals("v1.2.3", new VersionSpec().rewrite("v1.2.3"));
   }
 
+  // ---------------------------------------------------------------- selecting
+
+  @Test
+  void everyVersionIsKeptWhenThereIsNoRange() {
+    assertTrue(new VersionSpec().satisfiedBy(new Version("0.0.1")));
+  }
+
+  @Test
+  void theRangeDecidesWhichVersionsAreKept() {
+    var spec = satisfying(">=1.0.0 <2.0.0");
+
+    assertTrue(spec.satisfiedBy(new Version("1.5.0")));
+    assertFalse(spec.satisfiedBy(new Version("0.9.0")));
+    assertFalse(spec.satisfiedBy(new Version("2.0.0")));
+  }
+
+  @Test
+  void anExclusionIsWrittenAsWhatSurroundsIt() {
+    // node-semver has no negation, so what is dropped is stated as what is kept around it.
+    var spec = satisfying("<1.0.0 || >1.9.9");
+
+    assertTrue(spec.satisfiedBy(new Version("0.9.0")));
+    assertFalse(spec.satisfiedBy(new Version("1.5.0")));
+    assertTrue(spec.satisfiedBy(new Version("2.0.0")));
+  }
+
+  @Test
+  void packagingRevisionsAreInsideTheRangeOfTheirRelease() {
+    // In node a pre-release is a candidate for a release and ranges leave it out. Here 1.4.0-2 is
+    // the second packaging of 1.4.0, and a range that dropped it would drop most of sslutils.
+    assertTrue(satisfying(">=1.0.0").satisfiedBy(new Version("1.4.0-2")));
+  }
+
+  @Test
+  void theCutoffIsReadAsAnInstant() {
+    var spec = new VersionSpec(null, null, "2020-01-01T00:00:00Z", true);
+
+    assertEquals(Instant.parse("2020-01-01T00:00:00Z"), spec.cutoff().orElseThrow());
+    assertTrue(spec.keepNewest());
+  }
+
+  @Test
+  void thereIsNoCutoffUnlessOneIsGiven() {
+    var spec = new VersionSpec();
+
+    assertTrue(spec.cutoff().isEmpty());
+    assertFalse(spec.keepNewest());
+  }
+
   // ---------------------------------------------------------------- rejected
 
   @Test
@@ -107,6 +163,35 @@ class VersionSpecTest {
     assertThrows(
         IllegalArgumentException.class,
         () -> spec("REL(.*)", "$1", "REL(.*)", "$1-something-else"));
+  }
+
+  @Test
+  void rangeNoVersionCouldSatisfyIsRejected() {
+    // The library reads this as a range with nothing in it, which keeps no version at all, so a
+    // typo would empty the catalog in silence.
+    assertThrows(IllegalArgumentException.class, () -> satisfying("not a range"));
+    assertRejected(
+        """
+        {"satisfy": "not a range"}
+        """);
+  }
+
+  @Test
+  void emptyRangeIsRejected() {
+    // This one is read as >=0.0.0, so it keeps everything and says nothing.
+    assertThrows(IllegalArgumentException.class, () -> satisfying(""));
+  }
+
+  @Test
+  void cutoffThatIsNotAnInstantIsRejected() {
+    assertThrows(
+        IllegalArgumentException.class, () -> new VersionSpec(null, null, "2020-01-01", false));
+  }
+
+  @Test
+  void keepNewestWithNothingToSpareItFromIsRejected() {
+    assertThrows(
+        IllegalArgumentException.class, () -> new VersionSpec(null, ">=1.0.0", null, true));
   }
 
   // ---------------------------------------------------------------- through Jackson
@@ -124,8 +209,27 @@ class VersionSpecTest {
   }
 
   @Test
-  void theEmptyBlockRewritesNothing() throws Exception {
-    assertEquals("v1.2.3", configWith("{}").versionSpec().rewrite("v1.2.3"));
+  void theSelectionIsReadFromTheBlockToo() throws Exception {
+    var versionSpec =
+        configWith(
+                """
+                {"satisfy": ">=1.0.0 <2.0.0", "after": "2020-01-01T00:00:00Z", "keepNewest": true}
+                """)
+            .versionSpec();
+
+    assertTrue(versionSpec.satisfiedBy(new Version("1.5.0")));
+    assertFalse(versionSpec.satisfiedBy(new Version("2.0.0")));
+    assertEquals(Instant.parse("2020-01-01T00:00:00Z"), versionSpec.cutoff().orElseThrow());
+    assertTrue(versionSpec.keepNewest());
+  }
+
+  @Test
+  void theEmptyBlockRewritesNothingAndKeepsEverything() throws Exception {
+    var versionSpec = configWith("{}").versionSpec();
+
+    assertEquals("v1.2.3", versionSpec.rewrite("v1.2.3"));
+    assertTrue(versionSpec.satisfiedBy(new Version("0.0.1")));
+    assertTrue(versionSpec.cutoff().isEmpty());
   }
 
   @Test
@@ -171,7 +275,7 @@ class VersionSpecTest {
   }
 
   @Test
-  void anAbsentBlockGivesTheSpecThatRewritesNothing() throws Exception {
+  void anAbsentBlockGivesTheSpecThatRewritesNothingAndKeepsEverything() throws Exception {
     var json =
         """
         {
@@ -180,8 +284,10 @@ class VersionSpecTest {
         }
         """;
 
-    var monobotConfig = new ObjectMapper().readValue(json, MonobotConfig.class);
+    var versionSpec = new ObjectMapper().readValue(json, MonobotConfig.class).versionSpec();
 
-    assertEquals("v1.2.3", monobotConfig.versionSpec().rewrite("v1.2.3"));
+    assertEquals("v1.2.3", versionSpec.rewrite("v1.2.3"));
+    assertTrue(versionSpec.satisfiedBy(new Version("0.0.1")));
+    assertTrue(versionSpec.cutoff().isEmpty());
   }
 }
