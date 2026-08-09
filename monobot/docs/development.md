@@ -418,10 +418,12 @@ the pair says which of the two layers a failure is in.
 
 Two shapes:
 
-- **offline**, in the default gate. Points at a host that does not resolve, and
+- **offline**, in the default gate. Tagged `block-network`, so the sandbox gives
+  the run loopback and nothing else and its tag listing cannot reach a forge. It
   asserts on a URL that appears nowhere but inside the config, so only a run that
-  deserialized it can produce it. Everything a packaging fault touches has
-  already happened by the time the fetch fails. Costs a second.
+  deserialized it can produce it, and on the exit status, which is `2` because
+  the one extension it scans is one that failed. Everything a packaging fault
+  touches has already happened by the time the fetch fails. Costs a second.
 - **golden**, tagged out of the default gate. A real scan of one extension
   compared byte for byte, so it needs the network:
   `bazel test //tests:e2e_golden_native`. noset is the subject because it is
@@ -431,9 +433,12 @@ Two shapes:
 `//tests:it_native` asks the offline question again in Java, with
 `@QuarkusMainIntegrationTest` launching the binary and `LaunchResult` carrying
 its output. It is the same check in the idiom Quarkus users expect, and it is
-what to copy when a test needs real Java rather than a shell. It builds a native
-image, so it is tagged `manual`. Note that the rule behind it has no `data`
-attribute, so its fixture is written at run time rather than taken from a file.
+what to copy when a test needs real Java rather than a shell. It is tagged
+`manual` because the question is already answered in the default gate by
+`//tests:e2e_offline_native`, over the same binary: a second harness over it
+buys coverage of the harness rather than of monobot. Note that the rule behind
+it has no `data` attribute, so its fixture is written at run time rather than
+taken from a file.
 
 Bazel cannot make one target depend on another target's test result, so the JVM
 check is also expressed as a build action, `//tests:jvm_gate`, whose output file

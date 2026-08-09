@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import dev.monogres.monobot.report.RunSummary;
 import dev.monogres.monobot.scan.Scan;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
@@ -12,9 +13,12 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.ThrowingSupplier;
 
-/// The main thread waits on a latch a Vert.x thread counts down. Nothing else settles the
-/// composite future, so a request that never answers leaves the process waiting for as long as it
-/// is left running.
+/// The main thread waits on a latch a Vert.x thread counts down, and what it reports afterwards.
+/// Nothing else settles the composite future, so a request that never answers leaves the process
+/// waiting for as long as it is left running.
+///
+/// The exit code tells three outcomes apart: everything the scan found completed, some completed
+/// and some failed, or none completed.
 class MainRunTimeoutTest {
   private static final Duration RUN_TIMEOUT = Duration.ofMillis(250);
   private static final Duration GIVE_UP = Duration.ofSeconds(5);
@@ -25,6 +29,7 @@ class MainRunTimeoutTest {
 
     var app = new Main.MyApp();
     app.scan = scan;
+    app.summary = new RunSummary();
     app.runTimeout = runTimeout;
 
     return app;
@@ -37,18 +42,46 @@ class MainRunTimeoutTest {
     return assertTimeoutPreemptively(GIVE_UP, (ThrowingSupplier<Integer>) app::run);
   }
 
+  /// A run that did not finish catalogued nothing it can answer for, so it reports the same
+  /// outcome as a run in which nothing succeeded.
   @Test
   void givesUpWhenTheScanDoesNotSettleInTime() throws Exception {
-    assertEquals(1, runWithin(app(Promise.<Void>promise().future(), RUN_TIMEOUT)));
+    assertEquals(
+        RunSummary.NOTHING_SUCCEEDED,
+        runWithin(app(Promise.<Void>promise().future(), RUN_TIMEOUT)));
   }
 
   @Test
   void reportsSuccessWhenTheScanSucceeds() throws Exception {
-    assertEquals(0, runWithin(app(Future.succeededFuture(), RUN_TIMEOUT)));
+    assertEquals(
+        RunSummary.EVERYTHING_SUCCEEDED, runWithin(app(Future.succeededFuture(), RUN_TIMEOUT)));
+  }
+
+  /// A composite that failed says something failed even where the summary counted nothing against
+  /// it, which is what a wholesale-mocked scan produces.
+  @Test
+  void reportsFailureWhenTheScanFails() throws Exception {
+    assertEquals(
+        RunSummary.SOME_EXTENSIONS_FAILED,
+        runWithin(app(Future.failedFuture(new RuntimeException("boom")), RUN_TIMEOUT)));
   }
 
   @Test
-  void reportsFailureWhenTheScanFails() throws Exception {
-    assertEquals(1, runWithin(app(Future.failedFuture(new RuntimeException("boom")), RUN_TIMEOUT)));
+  void reportsThatNothingSucceededWhenEveryExtensionFailed() throws Exception {
+    var app = app(Future.succeededFuture(), RUN_TIMEOUT);
+    app.summary.extensionScanned();
+    app.summary.extensionFailed();
+
+    assertEquals(RunSummary.NOTHING_SUCCEEDED, runWithin(app));
+  }
+
+  @Test
+  void reportsThatSomeFailedWhenOthersSucceeded() throws Exception {
+    var app = app(Future.succeededFuture(), RUN_TIMEOUT);
+    app.summary.extensionScanned();
+    app.summary.extensionScanned();
+    app.summary.extensionFailed();
+
+    assertEquals(RunSummary.SOME_EXTENSIONS_FAILED, runWithin(app));
   }
 }

@@ -26,30 +26,45 @@ genrule(
         "$(execpath //tests:e2e_test.sh)",
         "--app $(execpath //:monobot)",
         "--expect monobot-no-such-repository",
+        "--expect-status 2",
         "--config-files $(execpaths :config_offline)",
         "> $@ 2>&1 || { cat $@; exit 1; }",
     ]),
+    tags = ["block-network"],
     tools = [
         "//:monobot",
         "//tests:e2e_test.sh",
     ],
 )
 
-# The offline pair. Cheap, no network, and the shape that catches a packaged
-# application which cannot construct its own JSON types.
+# The offline pair. Cheap, and the shape that catches a packaged application
+# which cannot construct its own JSON types.
+#
+# block-network is what makes them offline. The config names a real host, so
+# without it every invocation resolves github.com and asks it for a repository,
+# and the two outcomes are indistinguishable: whichever error comes back is
+# reported the same way, and the string the run is checked for is printed either
+# way. With it the sandbox gives the run loopback and nothing else.
 monobot_e2e_test(
     name = "e2e_offline",
     app = "//:monobot",
     config = ":config_offline",
     expect = "monobot-no-such-repository",
+    expect_status = 2,
+    tags = ["block-network"],
 )
 
+# In the default gate on purpose, native image and all: it is the only check
+# that proves the image can construct the types it reads its own config with,
+# and //tests:jvm_gate keeps it from being built until the JVM run has passed.
 monobot_e2e_test(
     name = "e2e_offline_native",
     app = "//:monobot_native",
     config = ":config_offline",
     expect = "monobot-no-such-repository",
+    expect_status = 2,
     gate = ":jvm_gate",
+    tags = ["block-network"],
 )
 
 # The golden pair. A real scan of one extension against the real forge, so it is
@@ -84,8 +99,12 @@ monobot_e2e_test(
 # The same question //tests:e2e_offline_native asks, put the way Quarkus puts
 # it: a JUnit test that launches the packaged application. Its sources are a
 # library at the root because globs cannot cross packages, but the test belongs
-# here with everything else that runs a built artifact. Builds a native image,
-# so it stays out of the default gate.
+# here with everything else that runs a built artifact.
+#
+# manual because it asks a question already answered: the native image is in the
+# default gate through //tests:e2e_offline_native, and a second harness over the
+# same binary buys coverage of the harness rather than of monobot. It is here as
+# the shape to copy when a check needs real Java rather than a shell.
 quarkus_integration_test(
     name = "it_native",
     app = "//:monobot_native",

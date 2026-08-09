@@ -15,6 +15,7 @@ import dev.monogres.monobot.git.ForgeType;
 import dev.monogres.monobot.git.GitTag;
 import dev.monogres.monobot.git.Repo;
 import dev.monogres.monobot.git.TagLister;
+import dev.monogres.monobot.report.RunSummary;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -63,6 +64,8 @@ public class Fetch {
   @Inject ArchiveMetadataExtractor archiveMetadataExtractor;
 
   @Inject TagLister tagLister;
+
+  @Inject RunSummary summary;
 
   private record VersionDownloadResult(
       Version version, GitTag tag, String sha256, Path archivePath, String stripPrefix) {}
@@ -126,6 +129,7 @@ public class Fetch {
         .transform(
             listed -> {
               if (listed.failed()) {
+                summary.extensionFailed();
                 LOG.warnv(
                     listed.cause(),
                     "[{0}]: Error while fetching tags from repo {1}",
@@ -171,6 +175,7 @@ public class Fetch {
       var versionFound = Version.find(versionSpec.rewrite(tag.name()));
 
       if (versionFound.isEmpty()) {
+        summary.versionSkipped(RunSummary.Skipped.NO_VERSION_IN_TAG);
         continue;
       }
 
@@ -180,11 +185,13 @@ public class Fetch {
         LOG.infov(
             "[{0}]: Tag {1} ({2}) is outside {3}",
             monobotConfig.name(), tag.name(), version, versionSpec.satisfy());
+        summary.versionSkipped(RunSummary.Skipped.OUTSIDE_SATISFY);
         continue;
       }
 
       candidates.add(version);
       if (versions.containsKey(version)) {
+        summary.versionSkipped(RunSummary.Skipped.ALREADY_STORED);
         continue;
       }
 
@@ -194,13 +201,21 @@ public class Fetch {
       var downloadFuture =
           archiveDigest(repo, tag, archivePath)
               .map(
-                  sha256 ->
-                      Optional.of(
-                          new VersionDownloadResult(
-                              version, tag, sha256, archivePath, repo.getArchiveStripPrefix(tag))))
+                  sha256 -> {
+                    // Logged here rather than beside the request, which knows the URL and not the
+                    // extension it belongs to, so attributing a download meant reversing the URL.
+                    LOG.infov(
+                        "[{0}]: Tag {1} ({2}) is at {3}",
+                        monobotConfig.name(), tag.name(), version, archivePath);
+
+                    return Optional.of(
+                        new VersionDownloadResult(
+                            version, tag, sha256, archivePath, repo.getArchiveStripPrefix(tag)));
+                  })
               .recover(
                   err -> {
                     refused.incrementAndGet();
+                    summary.versionSkipped(RunSummary.Skipped.REFUSED_DOWNLOAD);
                     LOG.errorv(
                         err,
                         "[{0}]: Tag {1} ({2}) could not be downloaded",
@@ -248,8 +263,12 @@ public class Fetch {
                           if (isRecentEnough(
                               monobotConfig, result, newest, contents.lastModified())) {
                             catalogue(result, contents, versions, metadata);
+                            summary.versionAdded();
+                          } else {
+                            summary.versionSkipped(RunSummary.Skipped.BEFORE_CUTOFF);
                           }
                         } catch (RuntimeException e) {
+                          summary.versionSkipped(RunSummary.Skipped.UNREADABLE_ARCHIVE);
                           LOG.errorv(
                               e,
                               "[{0}]: Tag {1} ({2}) has an archive that cannot be read",
@@ -319,6 +338,7 @@ public class Fetch {
 
                       var repoConfig = new RepoConfig(sources, versions, metadata);
                       writeConfigFile(outputDir, FILENAME_REPO_JSON, repoConfig);
+                      summary.catalogWritten();
                       return refused;
                     }))
         // Reported after the catalogue has been written rather than instead of writing it: the
@@ -329,6 +349,7 @@ public class Fetch {
               if (refused == NOTHING_REFUSED) {
                 return Future.<Void>succeededFuture();
               }
+              summary.extensionFailed();
 
               return Future.<Void>failedFuture(
                   new IOException(

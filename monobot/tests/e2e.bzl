@@ -14,9 +14,10 @@ running the pair says which of the two layers a failure is in.
 
 Two shapes, because they answer different questions:
 
-  - offline: points at a host that does not resolve. Everything before the fetch
-    still has to work, which is exactly where the reflection defect lands, so
-    this belongs in the default gate and costs a second.
+  - offline: tagged `block-network`, so the sandbox gives the run loopback and
+    nothing else and the tag listing cannot reach a forge. Everything before the
+    fetch still has to work, which is exactly where the reflection defect lands,
+    so this belongs in the default gate and costs a second.
   - golden: a real scan of one small extension, compared byte for byte. It needs
     the network, so it is tagged out of the default gate; it is what catches a
     change in the serialized shape or in a digest.
@@ -24,7 +25,15 @@ Two shapes, because they answer different questions:
 
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
-def monobot_e2e_test(name, app, config, expect = None, golden = None, gate = None, **kwargs):
+def monobot_e2e_test(
+        name,
+        app,
+        config,
+        expect = None,
+        expect_status = None,
+        golden = None,
+        gate = None,
+        **kwargs):
     """Runs a built monobot against a config tree and checks what it produced.
 
     Args:
@@ -36,6 +45,9 @@ def monobot_e2e_test(name, app, config, expect = None, golden = None, gate = Non
         expect: Optional string the output has to contain. Give it a value that
             only a deserialized config can produce, such as a URL that appears
             nowhere but inside the JSON.
+        expect_status: Optional exit status the run has to end with. 0 means
+            every extension completed, 1 that some completed and some failed, 2
+            that none completed. Defaults to 0.
         golden: Optional `repo.json` the run has to reproduce exactly. Its
             absence selects the offline shape, which checks how far the run got
             rather than what it wrote.
@@ -45,6 +57,9 @@ def monobot_e2e_test(name, app, config, expect = None, golden = None, gate = Non
     """
     args = ["--app", "$(rootpath {})".format(app)]
     data = [app, config]
+
+    if expect_status != None:
+        args += ["--expect-status", str(expect_status)]
 
     if expect:
         args += ["--expect", expect]

@@ -101,8 +101,10 @@ public class SourceArchive {
         // settles after the last byte reaches the disk.
         .as(BodyCodec.pipe(writeStream, false))
         .send()
-        .onSuccess(res -> LOG.infov("Successfully downloaded {0}", url))
-        .onFailure(err -> LOG.warnv(err, "Failure downloading {0}", url))
+        // Not logged here. This knows the URL and not the extension it belongs to, and every other
+        // message in the pipeline is prefixed with the extension, so a line from here could only be
+        // attributed by reversing the URL. The caller has both and reports it.
+
         // Cast because the deprecated Function overload is equally applicable to a method
         // reference.
         .eventually((Supplier<Future<Void>>) writeStream::close)

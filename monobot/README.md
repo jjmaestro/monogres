@@ -44,6 +44,32 @@ are optional have defaults in `src/main/resources/application.properties`:
 | `tagListTimeout` | no | How long one tag listing may take, as an ISO8601 duration, applied as both the connect and the read timeout. Defaults to `PT30S`. Counted in whole seconds, and anything under a second is raised to one. |
 | `runTimeout` | no | How long the whole scan may take, as an ISO8601 duration. Defaults to `PT1H`. Reaching it exits non-zero. |
 
+### Exit status and the run summary
+
+Every run prints one summary line on its way out, whatever the outcome, giving
+how many extensions were scanned, how many of them failed, how many versions
+were added, how many were skipped and why, and how many `repo.json` files were
+written:
+
+```text
+Scanned 3 extensions, 1 of them failed: 5 versions added, 41 skipped
+  (38 already catalogued, 2 outside satisfy, 1 refused downloads), 2 repo.json written
+```
+
+A failed extension does not stop the run, so the exit status is what says one
+happened:
+
+| Status | Meaning |
+| --- | --- |
+| `0` | Every extension the scan found completed. |
+| `1` | Some extensions completed and some failed. |
+| `2` | No extension completed: either every one of them failed, or the run did not finish within `runTimeout`. |
+
+An extension fails when its `monobot.json` cannot be read, when its stored
+`repo.json` cannot be read, when its tags cannot be listed, or when any of its
+archives could not be downloaded. Everything else is a skip, and skips are
+reported in the summary rather than in the exit status.
+
 ### Input: `monobot.json`
 
 Each extension has a `monobot.json` file under

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.monogres.monobot.config.input.MonobotConfig;
 import dev.monogres.monobot.config.input.MonobotConfigFile;
 import dev.monogres.monobot.fetch.Fetch;
+import dev.monogres.monobot.report.RunSummary;
 import io.vertx.core.Future;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -28,6 +29,8 @@ public class Scan {
 
   @Inject Fetch fetch;
 
+  @Inject RunSummary summary;
+
   private List<Path> scanConfigPaths(Path root) throws IOException {
     try (var filesStream =
         Files.walk(root, FileVisitOption.FOLLOW_LINKS)
@@ -50,9 +53,12 @@ public class Scan {
   /// answers for one extension, and the tree holds one file per extension, so one of them being
   /// unreadable is reported against that extension and leaves the rest of the scan to carry on.
   private Future<Void> scanConfig(Path componentPath) {
+    summary.extensionScanned();
+
     try {
       return fetch.fetch(new MonobotConfigFile(parseComponentConfig(componentPath), componentPath));
     } catch (RuntimeException e) {
+      summary.extensionFailed();
       LOG.errorv(e, "[{0}]: cannot be scanned", componentPath);
 
       return Future.failedFuture(e);

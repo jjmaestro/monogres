@@ -7,6 +7,7 @@ set -euo pipefail
 APP=
 GOLDEN=
 EXPECT=
+EXPECT_STATUS=0
 CONFIG_FILES=()
 
 while [[ $# -gt 0 ]]; do
@@ -14,6 +15,7 @@ while [[ $# -gt 0 ]]; do
     --app) APP="$2"; shift 2 ;;
     --golden) GOLDEN="$2"; shift 2 ;;
     --expect) EXPECT="$2"; shift 2 ;;
+    --expect-status) EXPECT_STATUS="$2"; shift 2 ;;
     # Named only so the gate is built before this runs; nothing reads it.
     --gate) shift 2 ;;
     --config-files) shift; CONFIG_FILES=("$@"); break ;;
@@ -57,13 +59,19 @@ grep -q 'monobot .* started' "${LOG}" || fail "the application did not start"
 
 # A value that can only be in the output if the config was deserialized into an
 # object and its fields read back out. A run that never got that far, or that
-# got a half-built object, cannot produce it. monobot reports a failed extension
-# and carries on, so the exit status says nothing here and this does.
+# got a half-built object, cannot produce it.
 if [[ -n "${EXPECT}" ]]; then
   grep -qF -- "${EXPECT}" "${LOG}" || fail "expected '${EXPECT}' in the output"
 fi
 
-[[ "${status}" -eq 0 ]] || fail "the run exited ${status}"
+# One line on the way out of every run, whatever the outcome.
+grep -q 'Scanned .* extensions' "${LOG}" || fail "the run printed no summary"
+
+# 0 every extension completed, 1 some completed and some failed, 2 none
+# completed. A failed extension does not stop the run, so this is what says one
+# happened.
+[[ "${status}" -eq "${EXPECT_STATUS}" ]] \
+  || fail "the run exited ${status}, expected ${EXPECT_STATUS}"
 
 [[ -n "${GOLDEN}" ]] || exit 0
 
