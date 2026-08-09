@@ -52,6 +52,8 @@ public class Fetch {
 
   @Inject SourceArchive sourceArchive;
 
+  @Inject DownloadLimiter downloadLimiter;
+
   @Inject ObjectMapper objectMapper;
 
   @Inject ArchiveMetadataExtractor archiveMetadataExtractor;
@@ -134,8 +136,8 @@ public class Fetch {
           Path.of(workdir, DIR_ARCHIVES, monobotConfig.name(), tag.commit().name() + ".tar.gz");
 
       var downloadFuture =
-          sourceArchive
-              .sha256UrlFile(repo.getArchiveUrl(tag), archivePath)
+          downloadLimiter
+              .withPermit(() -> sourceArchive.sha256UrlFile(repo.getArchiveUrl(tag), archivePath))
               .map(
                   sha256 ->
                       new VersionDownloadResult(

@@ -19,21 +19,23 @@ Monobot runs as a pipeline with three phases:
 3. **Write** -- Produces a `repo.json` catalog in the monogres build tree.
    Existing versions are preserved (incremental updates).
 
-All archive downloads run concurrently via Vert.x async futures.
+Archive downloads run concurrently via Vert.x async futures, up to
+`maxConcurrentDownloads` of them at a time across the whole scan.
 
 ## Configuration
 
 ### Runtime Properties
 
-Monobot reads four properties, three of them required, provided as
-environment variables or command line properties (`-D...`). The one that
-is optional has a default in `src/main/resources/application.properties`:
+Monobot reads five properties, three of them required, provided as
+environment variables or command line properties (`-D...`). The two that
+are optional have defaults in `src/main/resources/application.properties`:
 
 | Property | Required | Description |
 | --- | --- | --- |
 | `configDir` | yes | Root directory containing the `monobot.json` files (typically `config/` subfolder within the project) |
 | `workdir` | yes | Working directory for downloaded archives |
 | `monogresRepo` | yes | Path to the monogres repository (output goes to `{monogresRepo}/build/`), typically a monogres git checkout |
+| `maxConcurrentDownloads` | no | How many archive downloads may be in flight at once, across the whole scan rather than per extension. Defaults to `4`. |
 | `downloadTimeout` | no | How long one download may take, as an ISO8601 duration. Defaults to `PT5M`. |
 
 ### Input: `monobot.json`
