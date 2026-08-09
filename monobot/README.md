@@ -22,6 +22,10 @@ Monobot runs as a pipeline with three phases:
 Archive downloads run concurrently via Vert.x async futures, up to
 `maxConcurrentDownloads` of them at a time across the whole scan.
 
+An archive already in `{workdir}/archives/` is not fetched again: the spool is
+addressed by commit, so a file there is that commit's archive, and it is what
+records which commits a previous run already fetched.
+
 ## Configuration
 
 ### Runtime Properties

@@ -139,6 +139,22 @@ public class Fetch {
             });
   }
 
+  /// The digest of this commit's archive, fetching it only if the spool does not already hold it.
+  ///
+  /// The spool is addressed by commit, so a file at that path is that commit's archive and nothing
+  /// else, which makes it the record of what has already been fetched. Without that record the
+  /// only one is `repo.json`, and an extension no version carried metadata for writes none, so
+  /// every run starts with an empty catalog and asks the forge for every tag again. Forever, at
+  /// exit 0, against a client with no credentials and no retry budget.
+  private Future<String> archiveDigest(Repo repo, GitTag tag, Path archivePath) {
+    if (Files.exists(archivePath)) {
+      return sourceArchive.digest(archivePath);
+    }
+
+    return downloadLimiter.withPermit(
+        () -> sourceArchive.sha256UrlFile(repo.getArchiveUrl(tag), archivePath));
+  }
+
   /// How many of this extension's archives the forge would not serve. Each download recovers into
   /// an empty result rather than failing, because one archive answers for one version: a composite
   /// that fails on the first refusal discards the versions that downloaded beside it, and does it
@@ -176,8 +192,7 @@ public class Fetch {
           Path.of(workdir, DIR_ARCHIVES, monobotConfig.name(), tag.commit().name() + ".tar.gz");
 
       var downloadFuture =
-          downloadLimiter
-              .withPermit(() -> sourceArchive.sha256UrlFile(repo.getArchiveUrl(tag), archivePath))
+          archiveDigest(repo, tag, archivePath)
               .map(
                   sha256 ->
                       Optional.of(
