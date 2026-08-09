@@ -10,6 +10,7 @@ import dev.monogres.monobot.config.output.Sources;
 import dev.monogres.monobot.config.output.Version;
 import dev.monogres.monobot.config.output.VersionContext;
 import dev.monogres.monobot.config.output.Versions;
+import dev.monogres.monobot.fetch.ArchiveMetadataExtractor.ArchiveContents;
 import dev.monogres.monobot.git.ForgeType;
 import dev.monogres.monobot.git.GitTag;
 import dev.monogres.monobot.git.Repo;
@@ -23,10 +24,12 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -37,6 +40,8 @@ public class Fetch {
   private static final String DIR_ARCHIVES = "archives";
   private static final String DIR_BUILD = "build";
   private static final String FILENAME_REPO_JSON = "repo.json";
+
+  private static final int NOTHING_REFUSED = 0;
 
   @ConfigProperty(name = "workdir")
   String workdir;
@@ -91,6 +96,21 @@ public class Fetch {
     return isRecentEnough;
   }
 
+  /// What the catalog records about one version, all of it read from the archive that version was
+  /// tagged at. The archive is read first so that a version it cannot answer for is left out
+  /// altogether rather than recorded with no metadata against it.
+  private void catalogue(
+      VersionDownloadResult result,
+      ArchiveContents contents,
+      Versions versions,
+      Metadata metadata) {
+    archiveMetadataExtractor.addContents(result.version(), contents, metadata);
+    versions.put(
+        result.version(),
+        new VersionContext(
+            result.tag().name(), result.tag().commit(), result.sha256(), result.stripPrefix()));
+  }
+
   /// The listing is a blocking network round trip, so it runs on a worker rather than on the
   /// thread that asked for it. Run inline, every extension's listing completes before
   /// [dev.monogres.monobot.main.Main] arms `runTimeout`, which leaves the phase with the most
@@ -99,7 +119,7 @@ public class Fetch {
   ///
   /// A listing that fails leaves the run carrying on with that extension untouched, since its
   /// stored `repo.json` is still the best answer available for it.
-  private Future<Void> fetchVersionsByTag(
+  private Future<Integer> fetchVersionsByTag(
       MonobotConfig monobotConfig, Repo repo, Versions versions, Metadata metadata) {
     return vertx
         .executeBlocking(() -> tagLister.getTags(monobotConfig.repoUrl()), false)
@@ -111,7 +131,7 @@ public class Fetch {
                     "[{0}]: Error while fetching tags from repo {1}",
                     monobotConfig.name(),
                     monobotConfig.repoUrl());
-                return Future.<Void>succeededFuture();
+                return Future.succeededFuture(NOTHING_REFUSED);
               }
 
               return downloadVersionsByTag(
@@ -119,10 +139,15 @@ public class Fetch {
             });
   }
 
-  private Future<Void> downloadVersionsByTag(
+  /// How many of this extension's archives the forge would not serve. Each download recovers into
+  /// an empty result rather than failing, because one archive answers for one version: a composite
+  /// that fails on the first refusal discards the versions that downloaded beside it, and does it
+  /// while they are still in flight.
+  private Future<Integer> downloadVersionsByTag(
       MonobotConfig monobotConfig, Repo repo, Versions versions, Metadata metadata, GitTag[] tags) {
     var versionSpec = monobotConfig.versionSpec();
-    var downloadFutures = new ArrayList<Future<VersionDownloadResult>>();
+    var downloadFutures = new ArrayList<Future<Optional<VersionDownloadResult>>>();
+    var refused = new AtomicInteger();
     var candidates = new ArrayList<Version>(versions.keySet());
     var versionsFound = 0;
 
@@ -155,8 +180,20 @@ public class Fetch {
               .withPermit(() -> sourceArchive.sha256UrlFile(repo.getArchiveUrl(tag), archivePath))
               .map(
                   sha256 ->
-                      new VersionDownloadResult(
-                          version, tag, sha256, archivePath, repo.getArchiveStripPrefix(tag)));
+                      Optional.of(
+                          new VersionDownloadResult(
+                              version, tag, sha256, archivePath, repo.getArchiveStripPrefix(tag))))
+              .recover(
+                  err -> {
+                    refused.incrementAndGet();
+                    LOG.errorv(
+                        err,
+                        "[{0}]: Tag {1} ({2}) could not be downloaded",
+                        monobotConfig.name(),
+                        tag.name(),
+                        version);
+                    return Future.succeededFuture(Optional.empty());
+                  });
 
       downloadFutures.add(downloadFuture);
     }
@@ -168,7 +205,7 @@ public class Fetch {
     }
 
     if (downloadFutures.isEmpty()) {
-      return Future.succeededFuture();
+      return Future.succeededFuture(NOTHING_REFUSED);
     }
 
     var newest = candidates.stream().max(Comparator.naturalOrder());
@@ -179,28 +216,34 @@ public class Fetch {
                 vertx.executeBlocking(
                     () -> {
                       for (var i = 0; i < compositeFuture.size(); i++) {
-                        var result = (VersionDownloadResult) compositeFuture.resultAt(i);
-                        // One read per archive, answering both the cutoff and the metadata.
-                        // Gunzipping and walking a whole tarball is the most expensive thing this
-                        // program does per version, and this block is ordered, so every one of
-                        // them serialises behind the last.
-                        var contents =
-                            archiveMetadataExtractor.read(
-                                monobotConfig.name(), result.archivePath());
-                        if (!isRecentEnough(
-                            monobotConfig, result, newest, contents.lastModified())) {
+                        Optional<VersionDownloadResult> downloaded = compositeFuture.resultAt(i);
+                        if (downloaded.isEmpty()) {
                           continue;
                         }
-                        versions.put(
-                            result.version(),
-                            new VersionContext(
-                                result.tag().name(),
-                                result.tag().commit(),
-                                result.sha256(),
-                                result.stripPrefix()));
-                        archiveMetadataExtractor.addContents(result.version(), contents, metadata);
+
+                        var result = downloaded.get();
+                        try {
+                          // One read per archive, answering both the cutoff and the metadata.
+                          // Gunzipping and walking a whole tarball is the most expensive thing this
+                          // program does per version, and this block is ordered, so every one of
+                          // them serialises behind the last.
+                          var contents =
+                              archiveMetadataExtractor.read(
+                                  monobotConfig.name(), result.archivePath());
+                          if (isRecentEnough(
+                              monobotConfig, result, newest, contents.lastModified())) {
+                            catalogue(result, contents, versions, metadata);
+                          }
+                        } catch (RuntimeException e) {
+                          LOG.errorv(
+                              e,
+                              "[{0}]: Tag {1} ({2}) has an archive that cannot be read",
+                              monobotConfig.name(),
+                              result.tag().name(),
+                              result.version());
+                        }
                       }
-                      return null;
+                      return refused.get();
                     }));
   }
 
@@ -229,7 +272,7 @@ public class Fetch {
 
     return fetchVersionsByTag(monobotConfig, repo, versions, metadata)
         .compose(
-            v ->
+            refused ->
                 vertx.executeBlocking(
                     () -> {
                       // A catalog entry is a version and what that version is, so an extension
@@ -240,7 +283,7 @@ public class Fetch {
                         LOG.warnv(
                             "[{0}]: no version was catalogued, so no repo.json is written",
                             monobotConfig.name());
-                        return null;
+                        return refused;
                       }
 
                       if (metadata.isEmpty()) {
@@ -250,7 +293,7 @@ public class Fetch {
                                 + " what names that file, so a name that is not the control file"
                                 + " stem of the extension looks exactly like this",
                             monobotConfig.name());
-                        return null;
+                        return refused;
                       }
 
                       var sources = new Sources();
@@ -261,14 +304,44 @@ public class Fetch {
 
                       var repoConfig = new RepoConfig(sources, versions, metadata);
                       writeConfigFile(outputDir, FILENAME_REPO_JSON, repoConfig);
-                      return null;
-                    }));
+                      return refused;
+                    }))
+        // Reported after the catalogue has been written rather than instead of writing it: the
+        // versions that did download are as good as they would have been on their own, and the
+        // ones that did not are what the run has to answer for.
+        .compose(
+            refused -> {
+              if (refused == NOTHING_REFUSED) {
+                return Future.<Void>succeededFuture();
+              }
+
+              return Future.<Void>failedFuture(
+                  new IOException(
+                      "["
+                          + monobotConfig.name()
+                          + "]: "
+                          + refused
+                          + " archives could not be downloaded"));
+            });
   }
 
-  private void writeConfigFile(Path configDir, String filename, Object object) {
+  /// Written beside the destination and then moved onto it, so what is there is either the whole
+  /// previous document or the whole new one. Written in place, a write that stops partway leaves a
+  /// document that is neither, and that stops the extension for good: reading it back is how the
+  /// next run starts, and deleting it by hand forfeits every sha256 it recorded.
+  ///
+  /// The temporary file is in the same directory because an atomic move is a rename, and a rename
+  /// does not cross filesystems.
+  void writeConfigFile(Path configDir, String filename, Object object) {
     try {
       Files.createDirectories(configDir);
-      objectMapper.writeValue(configDir.resolve(filename).toFile(), object);
+      var written = Files.createTempFile(configDir, filename, ".tmp");
+      try {
+        objectMapper.writeValue(written.toFile(), object);
+        Files.move(written, configDir.resolve(filename), StandardCopyOption.ATOMIC_MOVE);
+      } finally {
+        Files.deleteIfExists(written);
+      }
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

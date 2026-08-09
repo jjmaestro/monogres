@@ -13,9 +13,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class Scan {
+  private static final Logger LOG = Logger.getLogger(Scan.class);
+
   private static final String CONFIG_JSON = "monobot.json";
 
   @ConfigProperty(name = "configDir")
@@ -42,19 +45,33 @@ public class Scan {
     }
   }
 
+  /// Everything an extension needs before its first request: reading its `monobot.json`, reading
+  /// the `repo.json` a previous run left, and working out which forge its URL names. Each of those
+  /// answers for one extension, and the tree holds one file per extension, so one of them being
+  /// unreadable is reported against that extension and leaves the rest of the scan to carry on.
+  private Future<Void> scanConfig(Path componentPath) {
+    try {
+      return fetch.fetch(new MonobotConfigFile(parseComponentConfig(componentPath), componentPath));
+    } catch (RuntimeException e) {
+      LOG.errorv(e, "[{0}]: cannot be scanned", componentPath);
+
+      return Future.failedFuture(e);
+    }
+  }
+
   public Future<Void> run() throws IOException {
     var path = Path.of(configDir);
 
-    var fetchFutures =
-        scanConfigPaths(path).stream()
-            .map(p -> new MonobotConfigFile(parseComponentConfig(p), p))
-            .map(fetch::fetch)
-            .toList();
+    var fetchFutures = scanConfigPaths(path).stream().map(this::scanConfig).toList();
 
     if (fetchFutures.isEmpty()) {
       return Future.succeededFuture();
     }
 
-    return Future.all(fetchFutures).mapEmpty();
+    // Joined rather than all-ed, so this settles when every extension has settled and not when the
+    // first one fails. Failing early returns from the run, which tears down Vert.x while the other
+    // extensions are still writing, and which of them got as far as their repo.json then depends
+    // on how the teardown was timed.
+    return Future.join(fetchFutures).mapEmpty();
   }
 }
