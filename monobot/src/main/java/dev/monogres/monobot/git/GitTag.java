@@ -1,6 +1,7 @@
 package dev.monogres.monobot.git;
 
 import java.net.URL;
+import java.time.Duration;
 import java.util.Collections;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
@@ -19,8 +20,14 @@ public record GitTag(String name, ObjectId commit) implements Comparable<GitTag>
     this(reference.getName().substring(Constants.R_TAGS.length()), getCommitId(reference));
   }
 
-  public static GitTag[] getTags(URL url) throws GitAPIException {
+  /// JGit leaves its timeout at zero unless told otherwise, and it propagates that zero to the
+  /// transport as an infinite connect and an infinite read timeout, so a forge that completes the
+  /// handshake and then answers nothing holds this call for as long as the process lives. The
+  /// transport counts in whole seconds, and zero is the value that means no bound, so anything
+  /// under a second is raised to one rather than rounded down into it.
+  public static GitTag[] getTags(URL url, Duration timeout) throws GitAPIException {
     return Git.lsRemoteRepository()
+        .setTimeout((int) Math.max(1L, timeout.toSeconds()))
         .setRemote(url.toString())
         .setTags(true)
         .setHeads(false)

@@ -26,8 +26,8 @@ Archive downloads run concurrently via Vert.x async futures, up to
 
 ### Runtime Properties
 
-Monobot reads five properties, three of them required, provided as
-environment variables or command line properties (`-D...`). The two that
+Monobot reads seven properties, three of them required, provided as
+environment variables or command line properties (`-D...`). The four that
 are optional have defaults in `src/main/resources/application.properties`:
 
 | Property | Required | Description |
@@ -37,6 +37,8 @@ are optional have defaults in `src/main/resources/application.properties`:
 | `monogresRepo` | yes | Path to the monogres repository (output goes to `{monogresRepo}/build/`), typically a monogres git checkout |
 | `maxConcurrentDownloads` | no | How many archive downloads may be in flight at once, across the whole scan rather than per extension. Defaults to `4`. |
 | `downloadTimeout` | no | How long one download may take, as an ISO8601 duration. Defaults to `PT5M`. |
+| `tagListTimeout` | no | How long one tag listing may take, as an ISO8601 duration, applied as both the connect and the read timeout. Defaults to `PT30S`. Counted in whole seconds, and anything under a second is raised to one. |
+| `runTimeout` | no | How long the whole scan may take, as an ISO8601 duration. Defaults to `PT1H`. Reaching it exits non-zero. |
 
 ### Input: `monobot.json`
 

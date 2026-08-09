@@ -27,7 +27,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Optional;
-import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -92,20 +91,36 @@ public class Fetch {
     return isRecentEnough;
   }
 
+  /// The listing is a blocking network round trip, so it runs on a worker rather than on the
+  /// thread that asked for it. Run inline, every extension's listing completes before
+  /// [dev.monogres.monobot.main.Main] arms `runTimeout`, which leaves the phase with the most
+  /// network in it outside the only bound on the process. Unordered, so one slow forge holds up
+  /// only itself; how many run at once is the size of the Vert.x worker pool.
+  ///
+  /// A listing that fails leaves the run carrying on with that extension untouched, since its
+  /// stored `repo.json` is still the best answer available for it.
   private Future<Void> fetchVersionsByTag(
       MonobotConfig monobotConfig, Repo repo, Versions versions, Metadata metadata) {
-    GitTag[] tags;
-    try {
-      tags = tagLister.getTags(monobotConfig.repoUrl());
-    } catch (GitAPIException e) {
-      LOG.warnv(
-          e,
-          "[{0}]: Error while fetching tags from repo {1}",
-          monobotConfig.name(),
-          monobotConfig.repoUrl());
-      return Future.succeededFuture();
-    }
+    return vertx
+        .executeBlocking(() -> tagLister.getTags(monobotConfig.repoUrl()), false)
+        .transform(
+            listed -> {
+              if (listed.failed()) {
+                LOG.warnv(
+                    listed.cause(),
+                    "[{0}]: Error while fetching tags from repo {1}",
+                    monobotConfig.name(),
+                    monobotConfig.repoUrl());
+                return Future.<Void>succeededFuture();
+              }
 
+              return downloadVersionsByTag(
+                  monobotConfig, repo, versions, metadata, listed.result());
+            });
+  }
+
+  private Future<Void> downloadVersionsByTag(
+      MonobotConfig monobotConfig, Repo repo, Versions versions, Metadata metadata, GitTag[] tags) {
     var versionSpec = monobotConfig.versionSpec();
     var downloadFutures = new ArrayList<Future<VersionDownloadResult>>();
     var candidates = new ArrayList<Version>(versions.keySet());
