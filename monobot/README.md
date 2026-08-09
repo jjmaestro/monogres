@@ -25,14 +25,16 @@ All archive downloads run concurrently via Vert.x async futures.
 
 ### Runtime Properties
 
-Monobot requires three properties, provided as environment variables or
-command line properties (`-D...`):
+Monobot reads four properties, three of them required, provided as
+environment variables or command line properties (`-D...`). The one that
+is optional has a default in `src/main/resources/application.properties`:
 
-| Property | Description |
-| --- | --- |
-| `configDir` | Root directory containing the `monobot.json` files (typically `config/` subfolder within the project) |
-| `workdir` | Working directory for downloaded archives |
-| `monogresRepo` | Path to the monogres repository (output goes to `{monogresRepo}/build/`), typically a monogres git checkout |
+| Property | Required | Description |
+| --- | --- | --- |
+| `configDir` | yes | Root directory containing the `monobot.json` files (typically `config/` subfolder within the project) |
+| `workdir` | yes | Working directory for downloaded archives |
+| `monogresRepo` | yes | Path to the monogres repository (output goes to `{monogresRepo}/build/`), typically a monogres git checkout |
+| `downloadTimeout` | no | How long one download may take, as an ISO8601 duration. Defaults to `PT5M`. |
 
 ### Input: `monobot.json`
 

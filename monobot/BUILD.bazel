@@ -113,6 +113,7 @@ java_library(
         "@maven//:io_quarkus_quarkus_junit_mockito",
         "@maven//:io_quarkus_quarkus_test_common",
         "@maven//:io_vertx_vertx_core",
+        "@maven//:io_vertx_vertx_web_client",
         "@maven//:jakarta_inject_jakarta_inject_api",
         "@maven//:org_apache_commons_commons_compress",
         "@maven//:org_eclipse_jgit_org_eclipse_jgit",
