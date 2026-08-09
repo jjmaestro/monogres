@@ -9,15 +9,15 @@ JSON catalogs (`repo.json`) used by
 
 ## How It Works
 
-Monobot runs as a pipeline with three phases:
+Monobot runs as a pipeline with two phases:
 
 1. **Scan** -- Recursively discovers `monobot.json` files under the config
    directory.
 2. **Fetch** -- For each extension, fetches Git tags, downloads source
    archives (by commit, not tag name, for stability), computes SHA256
-   checksums, and extracts metadata from the archive contents.
-3. **Write** -- Produces a `repo.json` catalog in the monogres build tree.
-   Existing versions are preserved (incremental updates).
+   checksums, extracts metadata from the archive contents, and writes a
+   `repo.json` catalog into the monogres build tree. Existing versions are
+   preserved (incremental updates).
 
 Archive downloads run concurrently via Vert.x async futures, up to
 `maxConcurrentDownloads` of them at a time across the whole scan.
@@ -113,7 +113,14 @@ With rules for tags a version cannot be read from as they stand:
 
 Fields:
 
-- `name` (required) -- Extension name.
+- `name` (required) -- Extension name, and three things follow from it. It is
+  the stem of the control file looked for inside each archive
+  (`{name}.control`), the subdirectory of `{workdir}/archives/` the archives are
+  spooled under, and the prefix every log line about the extension carries. The
+  stem is the one that bites: it is the extension's own name and not the
+  repository's, and the two diverge routinely, so `pgvector` needs
+  `"name": "vector"`. A name that matches no control file produces no metadata,
+  which produces no `repo.json`, with one WARN line saying so.
 - `url` (required) -- Git repository URL (GitHub or GitLab). A trailing slash
   and a `.git` suffix are both accepted and both ignored.
 - `versions` (optional) -- How tags become versions, and which are kept.
@@ -160,16 +167,17 @@ the extension follows PGXN's convention, then all information under
 {
   "sources": {
     "github.com": {
-      "url": "https://api.github.com/repos/theory/pg-envvar/tarball/{commit}"
+      "url": "https://api.github.com/repos/theory/pg-envvar/tarball/{commit}",
+      "type": "tar.gz"
     }
   },
   "versions": {
     "1.0.1": {
       "tag": "v1.0.1",
-      "commit": "de3737097e3df093031c4e88300ebcd345582e36",
-      "short_commit": "de37370",
       "sha256": "1b6fbc4e095a934faf404e603bc40828eb3e0512...",
-      "strip_prefix": "theory-pg-envvar-de37370"
+      "strip_prefix": "theory-pg-envvar-de37370",
+      "commit": "de3737097e3df093031c4e88300ebcd345582e36",
+      "short_commit": "de37370"
     }
   },
   "metadata": {
@@ -178,12 +186,18 @@ the extension follows PGXN's convention, then all information under
         "default_version": "1.0.0",
         "comment": "Get the value of a server environment variable",
         "superuser": true,
+        "trusted": false,
         "relocatable": true
       }
     }
-  }
+  },
+  "version": 1
 }
 ```
+
+`version`, `sources.*.type` and the three `.control` booleans are emitted
+unconditionally, the booleans because a control file that declares none of them
+still has the defaults Postgres would apply.
 
 Any control directive monobot does not model is carried through beside the
 ones it does. Key order is fixed rather than incidental, so two runs over the
