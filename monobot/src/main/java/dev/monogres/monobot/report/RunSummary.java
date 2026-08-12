@@ -23,8 +23,8 @@ public class RunSummary {
   /// None completed: either every extension failed, or the run did not finish in time.
   public static final int NOTHING_SUCCEEDED = 2;
 
-  /// Why a tag the listing returned is not a catalog entry this run. These are the ordinary
-  /// outcomes, not failures: most of a steady-state run is `ALREADY_STORED`.
+  /// Why something the run looked at is not in what it produced. These are the ordinary outcomes,
+  /// not failures: most of a steady-state run is `ALREADY_STORED`.
   public enum Skipped {
     NO_VERSION_IN_TAG("tags naming no version"),
     OUTSIDE_SATISFY("outside satisfy"),
@@ -32,7 +32,8 @@ public class RunSummary {
     BEFORE_CUTOFF("before the cutoff"),
     UNREADABLE_ARCHIVE("unreadable archives"),
     REFUSED_DOWNLOAD("refused downloads"),
-    DIGEST_DISAGREES("digests the catalog disagrees with");
+    DIGEST_DISAGREES("digests the catalog disagrees with"),
+    NOT_A_DOWNLOAD("entries naming no archive");
 
     private final String description;
 
@@ -48,7 +49,7 @@ public class RunSummary {
   private final AtomicInteger extensions = new AtomicInteger();
   private final AtomicInteger failedExtensions = new AtomicInteger();
   private final AtomicInteger versionsAdded = new AtomicInteger();
-  private final AtomicInteger catalogsWritten = new AtomicInteger();
+  private final AtomicInteger documentsWritten = new AtomicInteger();
 
   /// Every key is present from the start, so the counters are only ever read and incremented and
   /// the map itself is never written to from more than one thread.
@@ -76,8 +77,11 @@ public class RunSummary {
     skipped.get(reason).incrementAndGet();
   }
 
-  public void catalogWritten() {
-    catalogsWritten.incrementAndGet();
+  /// One entry's document, whichever of the two a run produces. A generate run writes `repo.json`
+  /// and an import run writes the `monobot.json` it comes from, so counting them by name would
+  /// mean one of the two counts being zero and saying nothing.
+  public void documentWritten() {
+    documentsWritten.incrementAndGet();
   }
 
   public int exitCode() {
@@ -104,8 +108,8 @@ public class RunSummary {
         + " skipped"
         + reasons()
         + ", "
-        + catalogsWritten.get()
-        + " repo.json written";
+        + documentsWritten.get()
+        + " documents written";
   }
 
   private String reasons() {

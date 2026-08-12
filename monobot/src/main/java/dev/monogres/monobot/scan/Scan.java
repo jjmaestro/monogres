@@ -1,6 +1,8 @@
 package dev.monogres.monobot.scan;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.monogres.monobot.catalog.Import;
+import dev.monogres.monobot.config.Mode;
 import dev.monogres.monobot.config.input.MonobotConfig;
 import dev.monogres.monobot.config.input.MonobotConfigFile;
 import dev.monogres.monobot.fetch.Fetch;
@@ -21,21 +23,30 @@ public class Scan {
   private static final Logger LOG = Logger.getLogger(Scan.class);
 
   private static final String CONFIG_JSON = "monobot.json";
+  private static final String REPO_JSON = "repo.json";
 
   @ConfigProperty(name = "catalogDir")
   String catalogDir;
+
+  @ConfigProperty(name = "mode")
+  Mode mode;
 
   @Inject ObjectMapper objectMapper;
 
   @Inject Fetch fetch;
 
+  @Inject Import catalogImport;
+
   @Inject RunSummary summary;
 
-  private List<Path> scanConfigPaths(Path root) throws IOException {
+  /// Every entry in the tree, named by the file that says it is one. Which file that is depends on
+  /// which way the run goes: a generate run is driven by the `monobot.json` files, and an import
+  /// run by the `repo.json` files that do not have one yet.
+  private List<Path> entries(Path root, String filename) throws IOException {
     try (var filesStream =
         Files.walk(root, FileVisitOption.FOLLOW_LINKS)
             .filter(Files::isRegularFile)
-            .filter(path -> CONFIG_JSON.equals(path.getFileName().toString()))) {
+            .filter(path -> filename.equals(path.getFileName().toString()))) {
       return filesStream.toList();
     }
   }
@@ -48,10 +59,10 @@ public class Scan {
     }
   }
 
-  /// Everything an extension needs before its first request: reading its `monobot.json`, reading
-  /// the `repo.json` a previous run left, and working out which forge its URL names. Each of those
-  /// answers for one extension, and the tree holds one file per extension, so one of them being
-  /// unreadable is reported against that extension and leaves the rest of the scan to carry on.
+  /// Everything an extension needs before its first request: reading its `monobot.json`, and
+  /// reading the `repo.json` a previous run left. Each answers for one extension, and the tree
+  /// holds one file per extension, so one of them being unreadable is reported against that
+  /// extension and leaves the rest of the scan to carry on.
   private Future<Void> scanConfig(Path componentPath) {
     summary.extensionScanned();
 
@@ -65,10 +76,39 @@ public class Scan {
     }
   }
 
-  public Future<Void> run() throws IOException {
-    var path = Path.of(catalogDir);
+  /// The catalog read the other way round, which asks nothing of the network and so runs to
+  /// completion here rather than composing futures.
+  private Future<Void> importCatalog(Path root) throws IOException {
+    var failed = false;
 
-    var fetchFutures = scanConfigPaths(path).stream().map(this::scanConfig).toList();
+    for (var catalogued : entries(root, REPO_JSON)) {
+      summary.extensionScanned();
+      try {
+        if (catalogImport.entry(catalogued)) {
+          summary.documentWritten();
+        } else {
+          summary.versionSkipped(RunSummary.Skipped.NOT_A_DOWNLOAD);
+        }
+      } catch (IOException | RuntimeException e) {
+        failed = true;
+        summary.extensionFailed();
+        LOG.errorv(e, "[{0}]: cannot be imported", catalogued);
+      }
+    }
+
+    return failed
+        ? Future.failedFuture(new IOException("some entries could not be imported"))
+        : Future.succeededFuture();
+  }
+
+  public Future<Void> run() throws IOException {
+    var root = Path.of(catalogDir);
+
+    if (mode == Mode.IMPORT) {
+      return importCatalog(root);
+    }
+
+    var fetchFutures = entries(root, CONFIG_JSON).stream().map(this::scanConfig).toList();
 
     if (fetchFutures.isEmpty()) {
       return Future.succeededFuture();

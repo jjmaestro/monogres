@@ -551,7 +551,7 @@ public class Fetch {
         FILENAME_REPO_JSON,
         new RepoConfig(monobotConfig.sources(), merged, monobotConfig.metadata()),
         differed);
-    summary.catalogWritten();
+    summary.documentWritten();
   }
 
   private RepoConfig readOrCreateRepoConfig(File repoConfigFile) {
