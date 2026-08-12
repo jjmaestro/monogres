@@ -1,29 +1,29 @@
 {
-  "sources" : {
-    "github.com" : {
-      "url" : "https://api.github.com/repos/monogres/fixture/tarball/{commit}",
-      "type" : "tar.gz"
+  "sources": {
+    "github.com": {
+      "url": "https://api.github.com/repos/monogres/fixture/tarball/{commit}",
+      "type": "tar.gz"
     }
   },
-  "versions" : {
-    "1.2.3" : {
-      "tag" : "v1.2.3",
-      "sha256" : "a368ed4acab124596fc167c76836182f0a403ff558a8d8845b88b9dcea107c45",
-      "strip_prefix" : "monogres-fixture-8cf409d",
-      "commit" : "8cf409d1b669e0e3e22fa79bb54027a4b555e822",
-      "short_commit" : "8cf409d"
+  "versions": {
+    "1.2.3": {
+      "tag": "v1.2.3",
+      "sha256": "a368ed4acab124596fc167c76836182f0a403ff558a8d8845b88b9dcea107c45",
+      "strip_prefix": "monogres-fixture-8cf409d",
+      "commit": "8cf409d1b669e0e3e22fa79bb54027a4b555e822",
+      "short_commit": "8cf409d"
     }
   },
-  "metadata" : {
-    ".control" : {
-      "1.2.3" : {
-        "default_version" : "1.2.3",
-        "comment" : "a fixture extension",
-        "superuser" : true,
-        "trusted" : false,
-        "relocatable" : false
+  "metadata": {
+    ".control": {
+      "1.2.3": {
+        "default_version": "1.2.3",
+        "comment": "a fixture extension",
+        "superuser": true,
+        "trusted": false,
+        "relocatable": false
       }
     }
   },
-  "version" : 1
+  "version": 1
 }

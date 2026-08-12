@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "{commit}",
+      "gh_org": "michelp",
+      "name": "pgjwt",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{commit}",
+      "url": "https://github.com/{gh_org}/{name}/archive/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "0.2.0": {
+      "commit": "f3d82fd30151e754e19ce5d6a06c71c20689ce3d",
+      "sha256": "dae8ed99eebb7593b43013f6532d772b12dfecd55548d2673f2dfd0163f6d2b9"
+    }
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "0.2.0": ">=16"
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "cascade": true
+      }
+    }
+  }
+}

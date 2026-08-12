@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "name": "age",
+      "strip_prefix": "{name}-{tag_dir}",
+      "url": "https://github.com/apache/age/archive/refs/tags/{tag}.tar.gz"
+    }
+  },
+  "versions": {
+    "1.8.0": {
+      "tag": "PG18/v1.8.0-rc0",
+      "tag_dir": "PG18-v1.8.0-rc0",
+      "sha256": "c9036f9fb6fe545aa20e333743c661810966288cda9922ac89f4d82d9ee6e99b"
+    },
+    "1.7.0": {
+      "tag": "PG17/v1.7.0-rc0",
+      "tag_dir": "PG17-v1.7.0-rc0",
+      "sha256": "ef3c44ffed1690bbe8652d3466434c42faf1133f3ea7cdad3331f012144495d2"
+    },
+    "1.6.0": {
+      "tag": "PG16/v1.6.0-rc0",
+      "tag_dir": "PG16-v1.6.0-rc0",
+      "sha256": "0a7fa64180b7a38b447a30018e0752dada2f1e9fb65d99e3e318b81214d20b51"
+    }
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "1.8.0": ">=18",
+        "1.7.0": ">=17, <18",
+        "1.6.0": ">=16, <17"
+      }
+    },
+    "test_ext": {
+      "test_overrides": {
+        "regress": {
+          "temp_instance": "regress/instance"
+        }
+      }
+    }
+  }
+}

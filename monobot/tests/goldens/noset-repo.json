@@ -1,61 +1,61 @@
 {
-  "sources" : {
-    "gitlab.com" : {
-      "url" : "https://gitlab.com/api/v4/projects/ongresinc%2Fextensions%2Fnoset/repository/archive.tar.gz?sha={commit}",
-      "type" : "tar.gz"
+  "sources": {
+    "gitlab.com": {
+      "url": "https://gitlab.com/api/v4/projects/ongresinc%2Fextensions%2Fnoset/repository/archive.tar.gz?sha={commit}",
+      "type": "tar.gz"
     }
   },
-  "versions" : {
-    "0.3.0" : {
-      "tag" : "v0.3.0",
-      "sha256" : "17c198106379fbf979ede46096550c48dec623075403d4d6684a00ee8a1be2d3",
-      "strip_prefix" : "noset-8cf409d1b669e0e3e22fa79bb54027a4b555e822-8cf409d1b669e0e3e22fa79bb54027a4b555e822",
-      "commit" : "8cf409d1b669e0e3e22fa79bb54027a4b555e822",
-      "short_commit" : "8cf409d"
+  "versions": {
+    "0.3.0": {
+      "tag": "v0.3.0",
+      "sha256": "17c198106379fbf979ede46096550c48dec623075403d4d6684a00ee8a1be2d3",
+      "strip_prefix": "noset-8cf409d1b669e0e3e22fa79bb54027a4b555e822-8cf409d1b669e0e3e22fa79bb54027a4b555e822",
+      "commit": "8cf409d1b669e0e3e22fa79bb54027a4b555e822",
+      "short_commit": "8cf409d"
     },
-    "0.2.0" : {
-      "tag" : "v0.2.0",
-      "sha256" : "8062260cb4c872fa0dc252a67e5235d8de3207f799e58b7c3588198ff4a1cadf",
-      "strip_prefix" : "noset-13d4473ae30dc618c8740d9dd0608730e506f799-13d4473ae30dc618c8740d9dd0608730e506f799",
-      "commit" : "13d4473ae30dc618c8740d9dd0608730e506f799",
-      "short_commit" : "13d4473"
+    "0.2.0": {
+      "tag": "v0.2.0",
+      "sha256": "8062260cb4c872fa0dc252a67e5235d8de3207f799e58b7c3588198ff4a1cadf",
+      "strip_prefix": "noset-13d4473ae30dc618c8740d9dd0608730e506f799-13d4473ae30dc618c8740d9dd0608730e506f799",
+      "commit": "13d4473ae30dc618c8740d9dd0608730e506f799",
+      "short_commit": "13d4473"
     },
-    "0.1.0" : {
-      "tag" : "v0.1.0",
-      "sha256" : "00d19c1e8d1fceeab187a917b1d092759e90259ca6ec8b06e04654525b6cae43",
-      "strip_prefix" : "noset-08614b526907859f78b18835ea7cc04fd644a6a8-08614b526907859f78b18835ea7cc04fd644a6a8",
-      "commit" : "08614b526907859f78b18835ea7cc04fd644a6a8",
-      "short_commit" : "08614b5"
+    "0.1.0": {
+      "tag": "v0.1.0",
+      "sha256": "00d19c1e8d1fceeab187a917b1d092759e90259ca6ec8b06e04654525b6cae43",
+      "strip_prefix": "noset-08614b526907859f78b18835ea7cc04fd644a6a8-08614b526907859f78b18835ea7cc04fd644a6a8",
+      "commit": "08614b526907859f78b18835ea7cc04fd644a6a8",
+      "short_commit": "08614b5"
     }
   },
-  "metadata" : {
-    ".control" : {
-      "0.3.0" : {
-        "default_version" : "0.3.0",
-        "comment" : "Module for blocking SET variables for non-super users.",
-        "superuser" : true,
-        "trusted" : false,
-        "relocatable" : false
+  "metadata": {
+    ".control": {
+      "0.3.0": {
+        "default_version": "0.3.0",
+        "comment": "Module for blocking SET variables for non-super users.",
+        "superuser": true,
+        "trusted": false,
+        "relocatable": false
       },
-      "0.2.0" : {
-        "default_version" : "0.2.0",
-        "comment" : "module to avoid SET command for specific user",
-        "superuser" : true,
-        "trusted" : false,
-        "relocatable" : false
+      "0.2.0": {
+        "default_version": "0.2.0",
+        "comment": "module to avoid SET command for specific user",
+        "superuser": true,
+        "trusted": false,
+        "relocatable": false
       },
-      "0.1.0" : {
-        "default_version" : "0.1.0",
-        "comment" : "module to avoid SET command for specific user",
-        "superuser" : true,
-        "trusted" : false,
-        "relocatable" : false
+      "0.1.0": {
+        "default_version": "0.1.0",
+        "comment": "module to avoid SET command for specific user",
+        "superuser": true,
+        "trusted": false,
+        "relocatable": false
       }
     },
-    "compatible_with" : {
-      "0.3.0" : ">=14",
-      "0.2.0" : ">=12, <14"
+    "compatible_with": {
+      "0.3.0": ">=14",
+      "0.2.0": ">=12, <14"
     }
   },
-  "version" : 1
+  "version": 1
 }

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "sources": {
+    "gl": {
+      "tag": "v{version}",
+      "gl_org": "ongresinc",
+      "name": "noset",
+      "filename": "noset-{tag}",
+      "strip_prefix": "{filename}",
+      "url": "https://gitlab.com/{gl_org}/extensions/{name}/-/archive/v{version}/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "0.3.0": {
+      "sha256": "d6d2c778d336bb027de35e5aba74899dacbb086be0a182a7c539397fcb52542e"
+    },
+    "0.2.0": {
+      "sha256": "77bcb59adf95dd725f5c18ad74e54b075b059f963e23440d996d2aa7b3c7c660"
+    }
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "0.3.0": ">=14",
+        "0.2.0": ">=12, <14"
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "extensions": ["noset"]
+      },
+      "test": {
+        "*": {
+          "regress": {
+            "kind": "regress",
+            "tests": ["noset"],
+            "temp_config": "noset.conf"
+          }
+        }
+      }
+    }
+  }
+}

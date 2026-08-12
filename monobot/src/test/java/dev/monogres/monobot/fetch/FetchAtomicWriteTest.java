@@ -25,13 +25,11 @@ class FetchAtomicWriteTest {
       {"sources": {}, "versions": {}, "metadata": {}, "version": 1}\
       """;
 
-  private static final int OVER_ONE_BUFFER = 16 * 1024;
-
-  /// A document Jackson starts writing and cannot finish. The first property is longer than the
-  /// generator's buffer, so it has already reached the file by the time the second one throws.
+  /// A document the mapper reads part of and then refuses, which is every way a write can fail
+  /// short of the disk itself.
   public static class HalfWritable {
     public String getEarly() {
-      return "x".repeat(OVER_ONE_BUFFER);
+      return "read";
     }
 
     public String getLate() {
@@ -85,7 +83,7 @@ class FetchAtomicWriteTest {
   void completedWriteReplacesTheStoredDocument() throws Exception {
     fetch().writeConfigFile(directory, "repo.json", List.of("replaced"));
 
-    assertEquals("[\"replaced\"]", Files.readString(target));
+    assertEquals("[\"replaced\"]\n", Files.readString(target));
     try (var entries = Files.list(directory)) {
       assertTrue(entries.toList().size() == 1, "the write left a file beside repo.json");
     }

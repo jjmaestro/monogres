@@ -15,6 +15,7 @@ import dev.monogres.monobot.git.ForgeType;
 import dev.monogres.monobot.git.GitTag;
 import dev.monogres.monobot.git.Repo;
 import dev.monogres.monobot.git.TagLister;
+import dev.monogres.monobot.json.CatalogPrinter;
 import dev.monogres.monobot.report.RunSummary;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
@@ -373,7 +374,7 @@ public class Fetch {
       Files.createDirectories(configDir);
       var written = Files.createTempFile(configDir, filename, ".tmp");
       try {
-        objectMapper.writeValue(written.toFile(), object);
+        Files.writeString(written, CatalogPrinter.print(objectMapper.valueToTree(object)));
         Files.move(written, configDir.resolve(filename), StandardCopyOption.ATOMIC_MOVE);
       } finally {
         Files.deleteIfExists(written);

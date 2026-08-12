@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "EnterpriseDB",
+      "name": "sslutils",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/EnterpriseDB/sslutils/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "1.4": {
+      "sha256": "58baceebde4024dceb6c6de9a25fbf602c35add2dc84de968112126555e27461"
+    }
+  },
+  "metadata": {
+    "test_ext": {
+      "smoke": {
+        "extensions": ["sslutils"]
+      }
+    },
+    "deps": {
+      "buildtime": {
+        "debian": {
+          "12": {
+            "*": ["libssl-dev"]
+          },
+          "13": {
+            "*": ["libssl-dev"]
+          }
+        }
+      },
+      "runtime": {
+        "debian": {
+          "12": {
+            "*": ["libssl3"]
+          },
+          "13": {
+            "*": ["libssl3"]
+          }
+        }
+      }
+    }
+  }
+}

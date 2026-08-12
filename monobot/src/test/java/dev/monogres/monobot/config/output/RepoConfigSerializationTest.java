@@ -9,6 +9,7 @@ import dev.monogres.monobot.config.MetadataContext;
 import dev.monogres.monobot.git.ForgeType;
 import dev.monogres.monobot.git.GitTag;
 import dev.monogres.monobot.git.Repo;
+import dev.monogres.monobot.json.CatalogPrinter;
 import dev.monogres.monobot.json.ConfigObjectMapperCustomizer;
 import java.io.IOException;
 import java.io.InputStream;
@@ -100,15 +101,20 @@ class RepoConfigSerializationTest {
     try (InputStream in =
         RepoConfigSerializationTest.class.getClassLoader().getResourceAsStream(GOLDEN)) {
       assertNotNull(in, GOLDEN + " is missing from the test resources");
-      // The golden is a normal newline-terminated text file; writeValueAsString does not append
-      // one, so drop it before comparing.
-      return new String(in.readAllBytes(), StandardCharsets.UTF_8).stripTrailing();
+      return new String(in.readAllBytes(), StandardCharsets.UTF_8);
     }
+  }
+
+  /// The whole way out: the mapper decides the content and [CatalogPrinter] the layout, which is
+  /// what [dev.monogres.monobot.fetch.Fetch] writes to disk. Comparing the mapper's own output
+  /// would pin a document the application never produces.
+  private static String serialized() throws IOException {
+    return CatalogPrinter.print(configuredMapper().valueToTree(sampleRepoConfig()));
   }
 
   @Test
   void serializesToTheGolden() throws IOException {
-    assertEquals(golden(), configuredMapper().writeValueAsString(sampleRepoConfig()));
+    assertEquals(golden(), serialized());
   }
 
   /// Jackson caches the serializer it builds for a type, so one serialization can only ever
@@ -118,7 +124,7 @@ class RepoConfigSerializationTest {
   void propertyOrderDoesNotDependOnIntrospectionOrder() throws IOException {
     var expected = golden();
     for (int i = 0; i < 20; i++) {
-      assertEquals(expected, configuredMapper().writeValueAsString(sampleRepoConfig()));
+      assertEquals(expected, serialized());
     }
   }
 }
