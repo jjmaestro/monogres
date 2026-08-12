@@ -40,7 +40,8 @@ class FetchStoredConfigTest {
       """
       {
         "name": "%s",
-        "url": "https://github.com/monogres/%s"
+        "url": "https://github.com/monogres/%s",
+        "versions": { "replace": [["^v(.*)$", "$1"]] }
       }
       """;
 

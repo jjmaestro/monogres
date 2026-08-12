@@ -45,7 +45,10 @@ class FetchCutoffTest {
       {
         "name": "fixture",
         "url": "https://github.com/monogres/fixture",
-        "versions": { "after": "2020-01-01T00:00:00Z"%s }
+        "versions": {
+          "replace": [["^v(.*)$", "$1"]],
+          "after": "2020-01-01T00:00:00Z"%s
+        }
       }
       """;
 

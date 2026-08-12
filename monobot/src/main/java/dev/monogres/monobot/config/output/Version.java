@@ -1,42 +1,49 @@
 package dev.monogres.monobot.config.output;
 
 import com.fasterxml.jackson.annotation.JsonValue;
+import dev.monogres.monobot.config.NaturalOrder;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import java.util.Optional;
 import org.semver4j.Semver;
 import org.semver4j.range.RangeListFactory;
 
-/// One version of one extension, ordered by semantic version precedence rather than by the text it
-/// was read from, so `1.10.0` comes after `1.9.0`.
+/// One version of one entry, held as the string the catalog keys it on and never rewritten.
 ///
-/// [Versions] keys on this, so a `repo.json` read back from disk rebuilds the key from the json
-/// property name through [#Version(String)] and writes it back through [#version()].
+/// Rewriting is what a semantic version parser would do, and the key cannot afford it: `{version}`
+/// is substituted into `strip_prefix` and `url` as it stands, so a key normalised to three
+/// components names an archive that is not there. sslutils is `1.4` and unpacks to `sslutils-1.4`,
+/// postgres is `16.11`, and openhalo is `1beta1`, which no parser reads at all.
+///
+/// Semantic versioning is therefore a view over the string rather than what it is. [#satisfies]
+/// parses it, [#find] asks only whether it parses, and ordering is [NaturalOrder], which every key
+/// has.
 @RegisterForReflection
 public final class Version implements Comparable<Version> {
-  private final Semver semver;
-
-  private Version(Semver semver) {
-    this.semver = semver;
-  }
+  private final String version;
 
   public Version(String version) {
-    this(
-        semverOf(version)
-            .orElseThrow(() -> new IllegalArgumentException(version + " is not a version")));
+    if (version == null || version.isBlank()) {
+      throw new IllegalArgumentException("a version is a string and not a blank one");
+    }
+    this.version = version;
   }
 
-  /// `Optional.empty()` where the constructor throws: a repository can tag what is not a version,
-  /// and the scan skips those.
+  /// `Optional.empty()` where the string names no version, which is the question asked of a
+  /// discovered tag: a repository tags what is not a release, and the scan skips those. What comes
+  /// back holds the string as it stands, so the `replace` rule spells the key and the parser only
+  /// says whether it is one.
   public static Optional<Version> find(String version) {
-    return semverOf(version).map(Version::new);
+    return version == null || version.isBlank()
+        ? Optional.empty()
+        : semverOf(version).map(parsed -> new Version(version));
   }
 
   /// A missing patch component is the one liberty taken, because two components is a version the
-  /// catalog consumer accepts and semver does not. A leading `v` needs no handling here, the parser
-  /// reads past it.
+  /// catalog holds and semver does not. A leading `v` needs no handling here, the parser reads
+  /// past it.
   ///
   /// Coercion would go further and is deliberately not used: it reads `REL1_2_3` as `1.0.0`, which
-  /// catalogues a version the tag never named.
+  /// would call a tag a version on the strength of a digit in it.
   private static Optional<Semver> semverOf(String version) {
     return Optional.ofNullable(Semver.parse(version))
         .or(() -> Optional.ofNullable(Semver.parse(version + ".0")));
@@ -48,33 +55,41 @@ public final class Version implements Comparable<Version> {
 
   @JsonValue
   public String version() {
-    return semver.getVersion();
+    return version;
   }
 
   /// Whether this version falls in a node-semver range. Pre-releases take part, unlike in node,
   /// because a version such as `1.4.0-2` here is a packaging revision of a release rather than a
   /// candidate for one, and leaving them out would drop them from every range.
+  ///
+  /// A key no parser reads has no range that keeps it, and saying so is the only honest answer:
+  /// reporting it as outside every range would drop it from a catalog that pins it.
   public boolean satisfies(String range) {
-    return semver.satisfies(range, /* includePreRelease= */ true);
+    return semverOf(version)
+        .orElseThrow(
+            () ->
+                new IllegalArgumentException(
+                    version + " is not a semantic version, so no range decides it"))
+        .satisfies(range, /* includePreRelease= */ true);
   }
 
   @Override
   public int compareTo(Version version) {
-    return semver.compareTo(version.semver);
+    return NaturalOrder.compare(this.version, version.version);
   }
 
   @Override
   public boolean equals(Object object) {
-    return object instanceof Version version && semver.equals(version.semver);
+    return object instanceof Version other && version.equals(other.version);
   }
 
   @Override
   public int hashCode() {
-    return semver.hashCode();
+    return version.hashCode();
   }
 
   @Override
   public String toString() {
-    return version();
+    return version;
   }
 }

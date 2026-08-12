@@ -33,7 +33,8 @@ class FetchTagListingTest {
       """
       {
         "name": "fixture",
-        "url": "https://github.com/monogres/fixture"
+        "url": "https://github.com/monogres/fixture",
+        "versions": { "replace": [["^v(.*)$", "$1"]] }
       }
       """;
 
