@@ -1,0 +1,9 @@
+{
+  "default_version": "1.15",
+  "comment": "incremental view maintenance on PostgreSQL",
+  "module_pathname": "$libdir/pg_ivm",
+  "superuser": true,
+  "trusted": false,
+  "relocatable": false,
+  "schema": "pg_catalog"
+}

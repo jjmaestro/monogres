@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "name": "citus",
+  "url": "https://github.com/citusdata/citus",
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "citusdata",
+      "name": "citus",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/citusdata/citus/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": ["14.1.0"]
+  },
+  "metadata": {
+    "patches": [
+      {
+        "label": "//catalog/extensions/citus/patches:0001-14.1.0-fix-hardcoded-cpp.patch",
+        "spec": ">=14.1.0/*"
+      },
+      {
+        "label": "//catalog/extensions/citus/patches:0002-14.1.0-cross-compile-skip-pg_config-probe.patch",
+        "spec": ">=14.1.0/*"
+      }
+    ],
+    "compatible_with": {
+      "postgres": {
+        "14.1.0": ">=16.5,!=17.0"
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "extensions": ["citus"],
+        "preload": ["citus"],
+        "cascade": true
+      },
+      "test": {
+        "*": {
+          "fullsuite": {
+            "kind": "manual",
+            "note": "citus pg_regress_multi.pl + mitmproxy; non-hermetic, run by hand"
+          },
+          "integration": {
+            "kind": "integration",
+            "preload": ["citus"],
+            "num_clusters": 2,
+            "assertion_script": "//catalog/extensions/citus/tests:integration.sh"
+          }
+        }
+      }
+    },
+    "deps": {
+      "buildtime": {
+        "debian": {
+          "12": {
+            "*": [
+              "libcurl4-openssl-dev",
+              "liblz4-dev",
+              "libssl-dev",
+              "libzstd-dev"
+            ]
+          },
+          "13": {
+            "*": [
+              "libcurl4-openssl-dev",
+              "liblz4-dev",
+              "libssl-dev",
+              "libzstd-dev"
+            ]
+          }
+        }
+      },
+      "runtime": {
+        "debian": {
+          "12": {
+            "*": ["libcurl4", "liblz4-1", "libssl3", "libzstd1"]
+          },
+          "13": {
+            "*": ["libcurl4", "liblz4-1", "libssl3", "libzstd1"]
+          }
+        }
+      }
+    }
+  }
+}

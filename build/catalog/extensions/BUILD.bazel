@@ -13,6 +13,13 @@ exports_files(
     ["index.json"] + glob([
         "**/repo.json",
         "*/introspect/*.json",
+    ]) + glob([
+        # What monobot reads to generate the `repo.json` beside it, and what
+        # each version's archive carried, one directory per version. A contrib
+        # entry has neither: it names no archive, so there is nothing to
+        # download and nothing that came out of one.
+        "*/monobot.json",
+        "*/metadata/*/*.json",
     ]) + glob(
         [
             # A pgrx extension's committed `Cargo.lock`, per version: read at

@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "name": "pgrouting",
+  "url": "https://github.com/pgRouting/pgrouting",
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "pgRouting",
+      "name": "pgrouting",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/pgRouting/pgrouting/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": ["4.0.1"]
+  },
+  "metadata": {
+    "build_system": "cmake",
+    "build_args": [
+      "-DPOSTGRESQL_PG_CONFIG={pg_config}",
+      "-DCMAKE_BUILD_TYPE=Release"
+    ],
+    "compatible_with": {
+      "postgres": {
+        "4.0.1": ">=16"
+      }
+    },
+    "deps": {
+      "buildtime": {
+        "debian": {
+          "12": {
+            "*": ["libboost-dev"]
+          },
+          "13": {
+            "*": ["libboost-dev"]
+          }
+        }
+      }
+    },
+    "test_ext": {
+      "requires": ["postgis"],
+      "smoke": {
+        "extensions": ["pgrouting"],
+        "cascade": true
+      }
+    }
+  }
+}

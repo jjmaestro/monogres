@@ -1,0 +1,8 @@
+{
+  "default_version": "1.7",
+  "comment": "HTTP client for PostgreSQL, allows web page retrieval inside the database.",
+  "module_pathname": "$libdir/http",
+  "superuser": true,
+  "trusted": false,
+  "relocatable": false
+}

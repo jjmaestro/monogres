@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "name": "hll",
+  "url": "https://github.com/citusdata/postgresql-hll",
+  "sources": {
+    "gh": {
+      "tag": "v{upstream_version}",
+      "gh_org": "citusdata",
+      "name": "postgresql-hll",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{upstream_version}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": {
+      "2.21.0": {
+        "upstream_version": "2.21"
+      }
+    }
+  },
+  "metadata": {
+    "patches": [
+      {
+        "label": "//catalog/extensions/hll/patches:0001-2.21-hermetic-clang-toolchain.patch",
+        "spec": ">=2.21.0/*"
+      }
+    ],
+    "compatible_with": {
+      "postgres": {
+        "2.21.0": ">=16"
+      }
+    }
+  }
+}

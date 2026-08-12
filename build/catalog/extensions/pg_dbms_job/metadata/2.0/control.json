@@ -1,0 +1,9 @@
+{
+  "default_version": "2.0.0",
+  "comment": "Extension to add Oracle DBMS_JOB full compatibility to PostgreSQL",
+  "module_pathname": "$libdir/pg_dbms_job",
+  "superuser": true,
+  "trusted": false,
+  "relocatable": false,
+  "schema": "dbms_job"
+}

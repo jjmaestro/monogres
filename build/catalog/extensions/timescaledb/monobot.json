@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "name": "timescaledb",
+  "url": "https://github.com/timescale/timescaledb",
+  "sources": {
+    "gh": {
+      "tag": "{version}",
+      "gh_org": "timescale",
+      "name": "timescaledb",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/timescale/timescaledb/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": ["2.28.3"]
+  },
+  "metadata": {
+    "build_system": "cmake",
+    "build_args": ["-DPG_CONFIG={pg_config}", "-DREGRESS_CHECKS=OFF"],
+    "compatible_with": {
+      "postgres": {
+        "2.28.3": ">=16"
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "extensions": ["timescaledb"],
+        "preload": ["timescaledb"]
+      }
+    }
+  }
+}

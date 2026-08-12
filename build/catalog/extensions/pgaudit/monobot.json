@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "name": "pgaudit",
+  "url": "https://github.com/pgaudit/pgaudit",
+  "sources": {
+    "gh": {
+      "tag": "{version}",
+      "gh_org": "pgaudit",
+      "name": "pgaudit",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/pgaudit/pgaudit/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": ["18.0", "17.1", "16.1"]
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "18.0": ">=18",
+        "17.1": ">=17, <18",
+        "16.1": ">=16, <17"
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "extensions": ["pgaudit"],
+        "preload": ["pgaudit"]
+      },
+      "test": {
+        "*": {
+          "regress": {
+            "kind": "regress",
+            "tests": ["pgaudit"],
+            "temp_config": "pgaudit.conf"
+          }
+        }
+      }
+    }
+  }
+}

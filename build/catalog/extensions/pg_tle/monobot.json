@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "name": "pg_tle",
+  "url": "https://github.com/aws/pg_tle",
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "aws",
+      "name": "pg_tle",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": ["1.5.2"]
+  },
+  "metadata": {
+    "patches": [
+      {
+        "label": "//catalog/extensions/pg_tle/patches:0001-1.5.2-regress-reload-propagation.patch",
+        "spec": ">=1.5.2/*"
+      }
+    ],
+    "compatible_with": {
+      "postgres": {
+        "1.5.2": ">=16"
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "preload": ["pg_tle"]
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "default_version": "0.3",
+  "comment": "Audit data changes and provide flashback ability",
+  "requires": ["hstore"],
+  "superuser": true,
+  "trusted": false,
+  "relocatable": false,
+  "schema": "auditor"
+}

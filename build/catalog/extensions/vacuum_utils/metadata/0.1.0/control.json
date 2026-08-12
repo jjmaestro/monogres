@@ -1,0 +1,7 @@
+{
+  "default_version": "0.1.0",
+  "comment": "to get information and execute statement about VACUUM and ANALYZE on tables",
+  "superuser": false,
+  "trusted": false,
+  "relocatable": true
+}

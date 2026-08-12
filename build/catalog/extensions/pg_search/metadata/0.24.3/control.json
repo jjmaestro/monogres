@@ -1,0 +1,9 @@
+{
+  "default_version": "@CARGO_VERSION@",
+  "comment": "pg_search: Full text search for PostgreSQL using BM25",
+  "module_pathname": "$libdir/pg_search",
+  "superuser": false,
+  "trusted": false,
+  "relocatable": false,
+  "schema": "paradedb"
+}

@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "name": "pg_qualstats",
+  "url": "https://github.com/powa-team/pg_qualstats",
+  "sources": {
+    "gh": {
+      "tag": "{version}",
+      "gh_org": "powa-team",
+      "name": "pg_qualstats",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/powa-team/pg_qualstats/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": ["2.1.4"]
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "2.1.4": ">=16"
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "extensions": ["pg_qualstats"],
+        "preload": ["pg_stat_statements", "pg_qualstats"]
+      },
+      "test": {
+        "*": {
+          "regress": {
+            "kind": "regress",
+            "inputdir": "test",
+            "expecteddir": ".",
+            "preload": ["pg_stat_statements", "pg_qualstats"],
+            "tests": ["00_setup", "01_basic", "02_advisor", "03_joinqual"]
+          }
+        }
+      }
+    }
+  }
+}

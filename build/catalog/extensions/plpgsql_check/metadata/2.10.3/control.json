@@ -1,0 +1,9 @@
+{
+  "default_version": "2.10",
+  "comment": "extended check for plpgsql functions",
+  "module_pathname": "$libdir/plpgsql_check",
+  "requires": ["plpgsql"],
+  "superuser": true,
+  "trusted": false,
+  "relocatable": false
+}

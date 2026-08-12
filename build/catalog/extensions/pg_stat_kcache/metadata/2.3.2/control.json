@@ -1,0 +1,9 @@
+{
+  "default_version": "2.3.2",
+  "comment": "Kernel statistics gathering",
+  "module_pathname": "$libdir/pg_stat_kcache",
+  "requires": ["pg_stat_statements"],
+  "superuser": true,
+  "trusted": false,
+  "relocatable": true
+}

@@ -1,0 +1,8 @@
+{
+  "default_version": "0.2.0",
+  "comment": "JSON Web Token API for Postgresql",
+  "requires": ["pgcrypto"],
+  "superuser": false,
+  "trusted": false,
+  "relocatable": false
+}

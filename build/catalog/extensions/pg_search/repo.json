@@ -20,7 +20,9 @@
     "crate_dir": "pg_search",
     "build_args": ["--features", "deferred_wal"],
     "build_data": {
-      "env": { "LINDERA_CACHE": "." },
+      "env": {
+        "LINDERA_CACHE": "."
+      },
       "files": {
         "1.5.1/CC-CEDICT-MeCab-0.1.0-20200409.tar.gz": {
           "url": "https://lindera.dev/CC-CEDICT-MeCab-0.1.0-20200409.tar.gz",

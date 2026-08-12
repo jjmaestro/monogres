@@ -32,35 +32,23 @@
         "encoding": "UTF8"
       },
       "pgrowlocks": {
-        "load_extension": [
-          "pgrowlocks"
-        ]
+        "load_extension": ["pgrowlocks"]
       },
       "tcn": {
-        "load_extension": [
-          "tcn"
-        ]
+        "load_extension": ["tcn"]
       },
       "pltcl": {
-        "load_extension": [
-          "pltcl"
-        ]
+        "load_extension": ["pltcl"]
       },
       "hstore_plpython": {
-        "load_extension": [
-          "hstore"
-        ]
+        "load_extension": ["hstore"]
       },
       "ltree_plpython": {
-        "load_extension": [
-          "ltree"
-        ]
+        "load_extension": ["ltree"]
       },
       "postgres_fdw": {
         "isolation": {
-          "load_extension": [
-            "postgres_fdw"
-          ]
+          "load_extension": ["postgres_fdw"]
         }
       },
       "sepgsql": {
@@ -77,13 +65,7 @@
       "*": {
         "babelfishpg_money": {
           "kind": "regress",
-          "tests": [
-            "aggregate",
-            "cast",
-            "comparison",
-            "overflow",
-            "index"
-          ]
+          "tests": ["aggregate", "cast", "comparison", "overflow", "index"]
         }
       }
     },
@@ -249,14 +231,10 @@
       "test": {
         "debian": {
           "12": {
-            "*": [
-              "libipc-run-perl"
-            ]
+            "*": ["libipc-run-perl"]
           },
           "13": {
-            "*": [
-              "libipc-run-perl"
-            ]
+            "*": ["libipc-run-perl"]
           }
         }
       }

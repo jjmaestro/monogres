@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "name": "http",
+  "url": "https://github.com/pramsey/pgsql-http",
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "pramsey",
+      "name": "pgsql-http",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": [
+      "1.7.2"
+    ]
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "1.7.2": ">=16"
+      }
+    },
+    "deps": {
+      "buildtime": {
+        "debian": {
+          "12": {
+            "*": [
+              "libcurl4-openssl-dev"
+            ]
+          },
+          "13": {
+            "*": [
+              "libcurl4-openssl-dev"
+            ]
+          }
+        }
+      },
+      "runtime": {
+        "debian": {
+          "12": {
+            "*": [
+              "libcurl4"
+            ]
+          },
+          "13": {
+            "*": [
+              "libcurl4t64"
+            ]
+          }
+        }
+      }
+    },
+    "test_ext": {
+      "test_overrides": {
+        "regress": {
+          "exclude": true
+        }
+      }
+    }
+  }
+}

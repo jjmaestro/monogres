@@ -1,3 +1,11 @@
 package(default_visibility = ["//visibility:public"])
 
-exports_files(["repo.json"])
+exports_files([
+    "monobot.json",
+    "repo.json",
+] + glob(
+    ["metadata/*/*.json"],
+    # Empty: a flavor's archives ship no .control, so no version has metadata
+    # written beside it, and the workspace disallows an empty glob by default.
+    allow_empty = True,
+))

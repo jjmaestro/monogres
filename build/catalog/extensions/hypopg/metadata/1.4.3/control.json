@@ -1,0 +1,8 @@
+{
+  "default_version": "1.4.3",
+  "comment": "Hypothetical indexes for PostgreSQL",
+  "module_pathname": "$libdir/hypopg",
+  "superuser": true,
+  "trusted": false,
+  "relocatable": true
+}

@@ -1,0 +1,9 @@
+{
+  "default_version": "1.6",
+  "comment": "Job scheduler for PostgreSQL",
+  "module_pathname": "$libdir/pg_cron",
+  "superuser": true,
+  "trusted": false,
+  "relocatable": false,
+  "schema": "pg_catalog"
+}

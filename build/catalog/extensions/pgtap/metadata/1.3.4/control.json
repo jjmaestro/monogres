@@ -1,0 +1,9 @@
+{
+  "default_version": "1.3.4",
+  "comment": "Unit testing for PostgreSQL",
+  "module_pathname": "pgtap",
+  "requires": ["plpgsql"],
+  "superuser": false,
+  "trusted": false,
+  "relocatable": true
+}

@@ -1,0 +1,9 @@
+{
+  "default_version": "@CARGO_VERSION@",
+  "comment": "pg_graphql: GraphQL support",
+  "module_pathname": "$libdir/pg_graphql",
+  "superuser": true,
+  "trusted": false,
+  "relocatable": false,
+  "schema": "graphql"
+}

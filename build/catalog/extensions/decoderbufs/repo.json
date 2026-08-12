@@ -35,14 +35,22 @@
     "deps": {
       "buildtime": {
         "debian": {
-          "12": {"*": ["libprotobuf-c-dev", "protobuf-c-compiler", "pkgconf"]},
-          "13": {"*": ["libprotobuf-c-dev", "protobuf-c-compiler", "pkgconf"]}
+          "12": {
+            "*": ["libprotobuf-c-dev", "protobuf-c-compiler", "pkgconf"]
+          },
+          "13": {
+            "*": ["libprotobuf-c-dev", "protobuf-c-compiler", "pkgconf"]
+          }
         }
       },
       "runtime": {
         "debian": {
-          "12": {"*": ["libprotobuf-c1"]},
-          "13": {"*": ["libprotobuf-c1"]}
+          "12": {
+            "*": ["libprotobuf-c1"]
+          },
+          "13": {
+            "*": ["libprotobuf-c1"]
+          }
         }
       }
     },

@@ -1,0 +1,8 @@
+{
+  "default_version": "1.3",
+  "comment": "RUM index access method",
+  "module_pathname": "$libdir/rum",
+  "superuser": true,
+  "trusted": false,
+  "relocatable": true
+}

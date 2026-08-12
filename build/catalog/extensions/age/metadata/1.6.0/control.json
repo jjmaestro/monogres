@@ -1,0 +1,9 @@
+{
+  "default_version": "1.6.0",
+  "comment": "AGE database extension",
+  "module_pathname": "$libdir/age",
+  "superuser": true,
+  "trusted": false,
+  "relocatable": false,
+  "schema": "ag_catalog"
+}

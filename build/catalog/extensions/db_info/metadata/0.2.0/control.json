@@ -1,0 +1,7 @@
+{
+  "default_version": "0.2.0",
+  "comment": "Extension to get information about the database: size, owner, name,tablespces, ext,  obj count,etc ",
+  "superuser": false,
+  "trusted": false,
+  "relocatable": true
+}

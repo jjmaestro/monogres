@@ -64,49 +64,136 @@
         "exclude": true,
         "note": "PL/iSQL is IvorySQL's oracle PL; its tests need an oracle-mode cluster (the plisql language is created by initdb -m oracle, and the suite uses oracle PL/SQL syntax). Deferred (option C); see build/catalog/ivorysql/ORACLE_TESTING.md."
       },
-      "brin": {"exclude": true, "note": "src/test/modules suites are deferred: a pre-existing ivory test-variant staging-prefix gap stages module artifacts to bare lib/ + share/extension/ instead of ivory's lib/postgresql + share/postgresql/extension, so CREATE EXTENSION cannot find them. All test/modules excluded for a green lane. See build/catalog/ivorysql/MODULES_TESTING.md."},
-      "commit_ts": {"exclude": true},
-      "delay_execution": {"exclude": true},
-      "dummy_index_am": {"exclude": true},
-      "dummy_seclabel": {"exclude": true},
-      "gin": {"exclude": true},
-      "injection_points": {"exclude": true},
-      "ldap_password_func": {"exclude": true},
-      "libpq_pipeline": {"exclude": true},
-      "oauth_validator": {"exclude": true},
-      "plsample": {"exclude": true},
-      "spgist_name_ops": {"exclude": true},
-      "ssl_passphrase_callback": {"exclude": true},
-      "test_aio": {"exclude": true},
-      "test_bloomfilter": {"exclude": true},
-      "test_copy_callbacks": {"exclude": true},
-      "test_custom_rmgrs": {"exclude": true},
-      "test_ddl_deparse": {"exclude": true},
-      "test_dsa": {"exclude": true},
-      "test_dsm_registry": {"exclude": true},
-      "test_escape": {"exclude": true},
-      "test_extensions": {"exclude": true},
-      "test_ginpostinglist": {"exclude": true},
-      "test_integerset": {"exclude": true},
-      "test_json_parser": {"exclude": true},
-      "test_lfind": {"exclude": true},
-      "test_misc": {"exclude": true},
-      "test_oat_hooks": {"exclude": true},
-      "test_parser": {"exclude": true},
-      "test_pg_dump": {"exclude": true},
-      "test_predtest": {"exclude": true},
-      "test_radixtree": {"exclude": true},
-      "test_rbtree": {"exclude": true},
-      "test_regex": {"exclude": true},
-      "test_resowner": {"exclude": true},
-      "test_rls_hooks": {"exclude": true},
-      "test_shm_mq": {"exclude": true},
-      "test_slru": {"exclude": true},
-      "test_tidstore": {"exclude": true},
-      "typcache": {"exclude": true},
-      "unsafe_tests": {"exclude": true},
-      "worker_spi": {"exclude": true},
-      "xid_wraparound": {"exclude": true}
+      "brin": {
+        "exclude": true,
+        "note": "src/test/modules suites are deferred: a pre-existing ivory test-variant staging-prefix gap stages module artifacts to bare lib/ + share/extension/ instead of ivory's lib/postgresql + share/postgresql/extension, so CREATE EXTENSION cannot find them. All test/modules excluded for a green lane. See build/catalog/ivorysql/MODULES_TESTING.md."
+      },
+      "commit_ts": {
+        "exclude": true
+      },
+      "delay_execution": {
+        "exclude": true
+      },
+      "dummy_index_am": {
+        "exclude": true
+      },
+      "dummy_seclabel": {
+        "exclude": true
+      },
+      "gin": {
+        "exclude": true
+      },
+      "injection_points": {
+        "exclude": true
+      },
+      "ldap_password_func": {
+        "exclude": true
+      },
+      "libpq_pipeline": {
+        "exclude": true
+      },
+      "oauth_validator": {
+        "exclude": true
+      },
+      "plsample": {
+        "exclude": true
+      },
+      "spgist_name_ops": {
+        "exclude": true
+      },
+      "ssl_passphrase_callback": {
+        "exclude": true
+      },
+      "test_aio": {
+        "exclude": true
+      },
+      "test_bloomfilter": {
+        "exclude": true
+      },
+      "test_copy_callbacks": {
+        "exclude": true
+      },
+      "test_custom_rmgrs": {
+        "exclude": true
+      },
+      "test_ddl_deparse": {
+        "exclude": true
+      },
+      "test_dsa": {
+        "exclude": true
+      },
+      "test_dsm_registry": {
+        "exclude": true
+      },
+      "test_escape": {
+        "exclude": true
+      },
+      "test_extensions": {
+        "exclude": true
+      },
+      "test_ginpostinglist": {
+        "exclude": true
+      },
+      "test_integerset": {
+        "exclude": true
+      },
+      "test_json_parser": {
+        "exclude": true
+      },
+      "test_lfind": {
+        "exclude": true
+      },
+      "test_misc": {
+        "exclude": true
+      },
+      "test_oat_hooks": {
+        "exclude": true
+      },
+      "test_parser": {
+        "exclude": true
+      },
+      "test_pg_dump": {
+        "exclude": true
+      },
+      "test_predtest": {
+        "exclude": true
+      },
+      "test_radixtree": {
+        "exclude": true
+      },
+      "test_rbtree": {
+        "exclude": true
+      },
+      "test_regex": {
+        "exclude": true
+      },
+      "test_resowner": {
+        "exclude": true
+      },
+      "test_rls_hooks": {
+        "exclude": true
+      },
+      "test_shm_mq": {
+        "exclude": true
+      },
+      "test_slru": {
+        "exclude": true
+      },
+      "test_tidstore": {
+        "exclude": true
+      },
+      "typcache": {
+        "exclude": true
+      },
+      "unsafe_tests": {
+        "exclude": true
+      },
+      "worker_spi": {
+        "exclude": true
+      },
+      "xid_wraparound": {
+        "exclude": true
+      }
     },
     "build_options": {
       "injection_points": {
@@ -325,14 +412,10 @@
       "test": {
         "debian": {
           "12": {
-            "*": [
-              "libipc-run-perl"
-            ]
+            "*": ["libipc-run-perl"]
           },
           "13": {
-            "*": [
-              "libipc-run-perl"
-            ]
+            "*": ["libipc-run-perl"]
           }
         }
       }

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "name": "vectors",
+  "url": "https://github.com/tensorchord/pgvecto.rs",
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "tensorchord",
+      "name": "pgvecto.rs",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": ["0.4.0"]
+  },
+  "metadata": {
+    "build_system": "pgrx",
+    "sql_source": "sql/install/vectors--{version}.sql",
+    "patches": [
+      {
+        "label": "//catalog/extensions/vectors/patches:0001-0.4.0-stable-rust.patch",
+        "spec": ">=0.4.0/*"
+      },
+      {
+        "label": "//catalog/extensions/vectors/patches:0002-0.4.0-implicit-autoref.patch",
+        "spec": ">=0.4.0/*"
+      }
+    ],
+    "compatible_with": {
+      "postgres": {
+        "0.4.0": ">=14, <18"
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "extensions": ["vectors"],
+        "preload": ["vectors"]
+      }
+    }
+  }
+}

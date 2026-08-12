@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "name": "hypopg",
+  "url": "https://github.com/hypopg/hypopg",
+  "sources": {
+    "gh": {
+      "tag": "{version}",
+      "gh_org": "hypopg",
+      "name": "hypopg",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/hypopg/hypopg/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": ["1.4.3"]
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "1.4.3": ">=16"
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "extensions": ["hypopg"]
+      },
+      "test": {
+        "*": {
+          "regress": {
+            "kind": "regress",
+            "inputdir": "test",
+            "expecteddir": ".",
+            "tests": [
+              "hypopg",
+              "hypo_brin",
+              "hypo_index_part",
+              "hypo_include",
+              "hypo_hash",
+              "hypo_hide_index"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

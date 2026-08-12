@@ -50,9 +50,7 @@
         }
       },
       "isolation": {
-        "exclude_tests": [
-          "timeouts"
-        ],
+        "exclude_tests": ["timeouts"],
         "note": "openHalo's lock_timeout/statement_timeout do not fire on a blocked LOCK TABLE, so the upstream `timeouts` spec (which expects 'canceling statement due to lock timeout') instead has isolationtester cancel each blocked step after its built-in 300s ('canceling statement due to user request'). That fails the spec AND makes the suite take ~620s, which also starves co-scheduled suites into false timeouts. postgres passes this spec in the same harness, so it is openHalo-behavioral, not hermetic. The harness filters `timeouts` out of isolation_schedule at run time (the other ~103 specs still run and pass); revisit if openHalo fixes timeout firing."
       },
       "pg_stat_statements": {
@@ -74,14 +72,10 @@
         "exclude": "see plpython: Python-2-shaped raw sql/ + Python-2-only plpythonu transform; needs the build-tree python3 mangle, out of installed-tree harness scope"
       },
       "pgrowlocks": {
-        "load_extension": [
-          "pgrowlocks"
-        ]
+        "load_extension": ["pgrowlocks"]
       },
       "tcn": {
-        "load_extension": [
-          "tcn"
-        ]
+        "load_extension": ["tcn"]
       },
       "postgres_fdw": {
         "regress": {
@@ -89,9 +83,7 @@
           "note": "openHalo's EXPLAIN renders the QUERY PLAN column at a slightly different width than upstream, so postgres_fdw.out diffs ONLY in psql table rendering (header trailing spaces + separator dash count) with no data-row differences. Accepted as a cosmetic golden diff via the harness --golden-cosmetic re-check, which still fails on any real content diff."
         },
         "isolation": {
-          "load_extension": [
-            "postgres_fdw"
-          ]
+          "load_extension": ["postgres_fdw"]
         }
       },
       "tablefunc": {
@@ -514,24 +506,15 @@
         },
         "adminpack": {
           "kind": "regress",
-          "tests": [
-            "adminpack"
-          ]
+          "tests": ["adminpack"]
         },
         "amcheck": {
           "kind": "regress",
-          "tests": [
-            "check",
-            "check_btree",
-            "check_heap"
-          ]
+          "tests": ["check", "check_btree", "check_heap"]
         },
         "bool_plperl": {
           "kind": "regress",
-          "tests": [
-            "bool_plperl",
-            "bool_plperlu"
-          ]
+          "tests": ["bool_plperl", "bool_plperlu"]
         },
         "btree_gin": {
           "kind": "regress",
@@ -603,118 +586,75 @@
         },
         "citext": {
           "kind": "regress",
-          "tests": [
-            "create_index_acl",
-            "citext"
-          ]
+          "tests": ["create_index_acl", "citext"]
         },
         "cube": {
           "kind": "regress",
-          "tests": [
-            "cube",
-            "cube_sci"
-          ]
+          "tests": ["cube", "cube_sci"]
         },
         "dblink": {
           "kind": "regress",
-          "tests": [
-            "paths",
-            "dblink"
-          ]
+          "tests": ["paths", "dblink"]
         },
         "dict_int": {
           "kind": "regress",
-          "tests": [
-            "dict_int"
-          ]
+          "tests": ["dict_int"]
         },
         "dict_xsyn": {
           "kind": "regress",
-          "tests": [
-            "dict_xsyn"
-          ]
+          "tests": ["dict_xsyn"]
         },
         "earthdistance": {
           "kind": "regress",
-          "tests": [
-            "earthdistance"
-          ]
+          "tests": ["earthdistance"]
         },
         "file_fdw": {
           "kind": "regress",
-          "tests": [
-            "file_fdw"
-          ]
+          "tests": ["file_fdw"]
         },
         "fuzzystrmatch": {
           "kind": "regress",
-          "tests": [
-            "fuzzystrmatch"
-          ]
+          "tests": ["fuzzystrmatch"]
         },
         "hstore": {
           "kind": "regress",
-          "tests": [
-            "hstore",
-            "hstore_utf8"
-          ]
+          "tests": ["hstore", "hstore_utf8"]
         },
         "hstore_plperl": {
           "kind": "regress",
-          "tests": [
-            "hstore_plperl",
-            "hstore_plperlu",
-            "create_transform"
-          ]
+          "tests": ["hstore_plperl", "hstore_plperlu", "create_transform"]
         },
         "hstore_plpython": {
           "kind": "regress",
-          "tests": [
-            "hstore_plpython"
-          ]
+          "tests": ["hstore_plpython"]
         },
         "intarray": {
           "kind": "regress",
-          "tests": [
-            "_int"
-          ]
+          "tests": ["_int"]
         },
         "isn": {
           "kind": "regress",
-          "tests": [
-            "isn"
-          ]
+          "tests": ["isn"]
         },
         "jsonb_plperl": {
           "kind": "regress",
-          "tests": [
-            "jsonb_plperl",
-            "jsonb_plperlu"
-          ]
+          "tests": ["jsonb_plperl", "jsonb_plperlu"]
         },
         "jsonb_plpython": {
           "kind": "regress",
-          "tests": [
-            "jsonb_plpython"
-          ]
+          "tests": ["jsonb_plpython"]
         },
         "lo": {
           "kind": "regress",
-          "tests": [
-            "lo"
-          ]
+          "tests": ["lo"]
         },
         "ltree": {
           "kind": "regress",
-          "tests": [
-            "ltree"
-          ]
+          "tests": ["ltree"]
         },
         "ltree_plpython": {
           "kind": "regress",
-          "tests": [
-            "ltree_plpython"
-          ]
+          "tests": ["ltree_plpython"]
         },
         "pageinspect": {
           "kind": "regress",
@@ -731,35 +671,23 @@
         },
         "passwordcheck": {
           "kind": "regress",
-          "tests": [
-            "passwordcheck"
-          ]
+          "tests": ["passwordcheck"]
         },
         "pg_stat_statements": {
           "kind": "regress",
-          "tests": [
-            "pg_stat_statements"
-          ]
+          "tests": ["pg_stat_statements"]
         },
         "pg_surgery": {
           "kind": "regress",
-          "tests": [
-            "heap_surgery"
-          ]
+          "tests": ["heap_surgery"]
         },
         "pg_trgm": {
           "kind": "regress",
-          "tests": [
-            "pg_trgm",
-            "pg_word_trgm",
-            "pg_strict_word_trgm"
-          ]
+          "tests": ["pg_trgm", "pg_word_trgm", "pg_strict_word_trgm"]
         },
         "pg_visibility": {
           "kind": "regress",
-          "tests": [
-            "pg_visibility"
-          ]
+          "tests": ["pg_visibility"]
         },
         "pgcrypto": {
           "kind": "regress",
@@ -786,28 +714,19 @@
         },
         "pgstattuple": {
           "kind": "regress",
-          "tests": [
-            "pgstattuple"
-          ]
+          "tests": ["pgstattuple"]
         },
         "postgres_fdw": {
           "kind": "regress",
-          "tests": [
-            "postgres_fdw"
-          ]
+          "tests": ["postgres_fdw"]
         },
         "seg": {
           "kind": "regress",
-          "tests": [
-            "security",
-            "seg"
-          ]
+          "tests": ["security", "seg"]
         },
         "tablefunc": {
           "kind": "regress",
-          "tests": [
-            "tablefunc"
-          ]
+          "tests": ["tablefunc"]
         },
         "test_decoding": [
           {
@@ -853,33 +772,23 @@
         ],
         "tsm_system_rows": {
           "kind": "regress",
-          "tests": [
-            "tsm_system_rows"
-          ]
+          "tests": ["tsm_system_rows"]
         },
         "tsm_system_time": {
           "kind": "regress",
-          "tests": [
-            "tsm_system_time"
-          ]
+          "tests": ["tsm_system_time"]
         },
         "unaccent": {
           "kind": "regress",
-          "tests": [
-            "unaccent"
-          ]
+          "tests": ["unaccent"]
         },
         "uuid-ossp": {
           "kind": "regress",
-          "tests": [
-            "uuid_ossp"
-          ]
+          "tests": ["uuid_ossp"]
         },
         "xml2": {
           "kind": "regress",
-          "tests": [
-            "xml2"
-          ]
+          "tests": ["xml2"]
         }
       }
     },
@@ -1023,14 +932,10 @@
       "test": {
         "debian": {
           "12": {
-            "*": [
-              "libipc-run-perl"
-            ]
+            "*": ["libipc-run-perl"]
           },
           "13": {
-            "*": [
-              "libipc-run-perl"
-            ]
+            "*": ["libipc-run-perl"]
           }
         }
       }

@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "name": "pg_stat_monitor",
+  "url": "https://github.com/percona/pg_stat_monitor",
+  "sources": {
+    "gh": {
+      "tag": "{version}",
+      "gh_org": "percona",
+      "name": "pg_stat_monitor",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/percona/pg_stat_monitor/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": ["2.3.2"]
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "2.3.2": ">=16"
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "preload": ["pg_stat_monitor"]
+      },
+      "test_overrides": {
+        "regress": {
+          "temp_config": "pg_stat_monitor.conf"
+        },
+        "tap": {
+          "locale": "C.UTF-8",
+          "exclusive": [
+            "007_settings_pgsm_query_shared_buffer",
+            "030_histogram"
+          ]
+        }
+      }
+    }
+  }
+}

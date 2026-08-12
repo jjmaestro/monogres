@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "name": "vector",
+  "url": "https://github.com/pgvector/pgvector",
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "pgvector",
+      "name": "pgvector",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/pgvector/pgvector/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": [
+      "0.8.2"
+    ]
+  },
+  "metadata": {
+    "patches": [
+      {
+        "label": "//catalog/extensions/pgvector/patches:0001-0.8.2-portable-optflags.patch",
+        "spec": ">=0.8.2/*"
+      }
+    ],
+    "compatible_with": {
+      "postgres": {
+        "0.8.2": ">=13"
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "extensions": [
+          "vector"
+        ]
+      },
+      "test": {
+        "*": {
+          "regress": {
+            "kind": "regress",
+            "inputdir": "test",
+            "load_extensions": [
+              "vector"
+            ],
+            "tests": [
+              "bit",
+              "btree",
+              "cast",
+              "copy",
+              "halfvec",
+              "hnsw_bit",
+              "hnsw_halfvec",
+              "hnsw_sparsevec",
+              "hnsw_vector",
+              "ivfflat_bit",
+              "ivfflat_halfvec",
+              "ivfflat_vector",
+              "sparsevec",
+              "vector_type"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

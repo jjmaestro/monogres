@@ -1,0 +1,947 @@
+{
+  "version": 1,
+  "name": "openhalo",
+  "url": "https://github.com/HaloTech-Co-Ltd/openHalo",
+  "sources": {
+    "gh": {
+      "owner": "HaloTech-Co-Ltd",
+      "repo": "openHalo",
+      "filename": "{tag}",
+      "url": "https://github.com/{owner}/{repo}/archive/refs/tags/{filename}.tar.gz",
+      "strip_prefix": "{repo}-{dirname}"
+    }
+  },
+  "versions": {
+    "pin": {
+      "1beta1": {
+        "tag": "v1.0-beta1",
+        "dirname": "1.0-beta1"
+      }
+    }
+  },
+  "metadata": {
+    "flavor": "openhalo",
+    "patches": [
+      {
+        "label": "//catalog/openhalo/patches:0001-1beta1-tap-adapt-postgresnode-for-openhalo.patch",
+        "spec": "*"
+      }
+    ],
+    "test_overrides": {
+      "unaccent": {
+        "encoding": "UTF8"
+      },
+      "pgbench": {
+        "tap_skip": {
+          "002_pgbench_no_server": "openHalo rebrands the pgbench --help/--version banner to Halo, so the upstream output regex (which matches the pgbench PostgreSQL banner) diverges. Genuine fork divergence (postgres passes in the same harness); revisit if openHalo keeps the upstream banner or its expected output is accepted. Reason text avoids the apostrophe that Bazel args shell-tokenization rejects."
+        }
+      },
+      "pg_dump": {
+        "tap_skip": {
+          "002_pg_dump": "create-postgres shim collateral: the TAP-adapt patch recreates the stock postgres db (the openHalo admin db is halo0root), but openHalo pg_dumpall excludes halo0root rather than postgres, so the recreated postgres db is dumped and the cluster-wide dump diffs from the upstream expectation. Skipped pending an openHalo-faithful shim.",
+          "010_dump_connstr": "same create-postgres shim collateral as 002_pg_dump: openHalo pg_dumpall excludes halo0root (not postgres), so the recreated postgres db is dumped and the connstr dump diverges from upstream."
+        }
+      },
+      "pg_ctl": {
+        "tap_skip": {
+          "004_logrotate": "csvlog-collector domain: openHalo defaults log_destination to csvlog with logging_collector on, so logrotate cycles the haloserver csv collector files while the upstream test greps the stderr logfile rotation. Fork logging-default divergence, out of hermetic-harness scope."
+        }
+      },
+      "pg_rewind": {
+        "tap_skip": {
+          "002_databases": "openHalo behavioural divergence: the per-database rewind expectations diverge from upstream (postgres passes this in the same harness). Skipped pending openHalo-domain investigation."
+        }
+      },
+      "isolation": {
+        "exclude_tests": ["timeouts"],
+        "note": "openHalo's lock_timeout/statement_timeout do not fire on a blocked LOCK TABLE, so the upstream `timeouts` spec (which expects 'canceling statement due to lock timeout') instead has isolationtester cancel each blocked step after its built-in 300s ('canceling statement due to user request'). That fails the spec AND makes the suite take ~620s, which also starves co-scheduled suites into false timeouts. postgres passes this spec in the same harness, so it is openHalo-behavioral, not hermetic. The harness filters `timeouts` out of isolation_schedule at run time (the other ~103 specs still run and pass); revisit if openHalo fixes timeout firing."
+      },
+      "pg_stat_statements": {
+        "known_failure": "openHalo ships a fork-specific pg_stat_statements.untrack_dbnames feature; its expected output (db 'halo0root') does not reproduce against the hermetic temp instance, so this suite FAILS. Left enabled and failing on purpose (NOT excluded) pending openHalo-domain investigation; treat as an expected failure until then."
+      },
+      "pltcl": {
+        "load_extension": ["pltcl"]
+      },
+      "plpython": {
+        "exclude": "PG14 plpython core suite needs the build-tree python3 mangle (sql/python3/ rewrite + _3/_5 alternate goldens); only plpython3u is installed (plpythonu is Python-2-only) and the raw sql/ is Python-2 shaped, so it is not reproducible against the installed tree"
+      },
+      "hstore_plpython": {
+        "exclude": "see plpython: Python-2-shaped raw sql/ + Python-2-only plpythonu transform; needs the build-tree python3 mangle, out of installed-tree harness scope"
+      },
+      "ltree_plpython": {
+        "exclude": "see plpython: Python-2-shaped raw sql/ + Python-2-only plpythonu transform; needs the build-tree python3 mangle, out of installed-tree harness scope"
+      },
+      "jsonb_plpython": {
+        "exclude": "see plpython: Python-2-shaped raw sql/ + Python-2-only plpythonu transform; needs the build-tree python3 mangle, out of installed-tree harness scope"
+      },
+      "pgrowlocks": {
+        "load_extension": ["pgrowlocks"]
+      },
+      "tcn": {
+        "load_extension": ["tcn"]
+      },
+      "postgres_fdw": {
+        "regress": {
+          "golden_cosmetic": true,
+          "note": "openHalo's EXPLAIN renders the QUERY PLAN column at a slightly different width than upstream, so postgres_fdw.out diffs ONLY in psql table rendering (header trailing spaces + separator dash count) with no data-row differences. Accepted as a cosmetic golden diff via the harness --golden-cosmetic re-check, which still fails on any real content diff."
+        },
+        "isolation": {
+          "load_extension": ["postgres_fdw"]
+        }
+      },
+      "tablefunc": {
+        "exclude": "openHalo's connectby() parses the start value as a column reference instead of a literal (connectby(..., 'row2', ...) -> ERROR: column \"row2\" does not exist), so the upstream tablefunc expected output diverges. Behavioral fork divergence (postgres passes in the same harness); excluded to revisit when openHalo's connectby is fixed or its golden output is accepted."
+      },
+      "sepgsql": {
+        "exclude": "SELinux shell harness; impractical in the hermetic sandbox"
+      }
+    },
+    "test": {
+      "*": {
+        "regress": {
+          "kind": "regress",
+          "schedule": "parallel_schedule",
+          "max_conc": 20,
+          "tests": [
+            "tablespace",
+            "boolean",
+            "char",
+            "name",
+            "varchar",
+            "text",
+            "int2",
+            "int4",
+            "int8",
+            "oid",
+            "float4",
+            "float8",
+            "bit",
+            "numeric",
+            "txid",
+            "uuid",
+            "enum",
+            "money",
+            "rangetypes",
+            "pg_lsn",
+            "regproc",
+            "strings",
+            "numerology",
+            "point",
+            "lseg",
+            "line",
+            "box",
+            "path",
+            "polygon",
+            "circle",
+            "date",
+            "time",
+            "timetz",
+            "timestamp",
+            "timestamptz",
+            "interval",
+            "inet",
+            "macaddr",
+            "macaddr8",
+            "multirangetypes",
+            "create_function_0",
+            "geometry",
+            "horology",
+            "tstypes",
+            "regex",
+            "type_sanity",
+            "opr_sanity",
+            "misc_sanity",
+            "comments",
+            "expressions",
+            "unicode",
+            "xid",
+            "mvcc",
+            "database",
+            "create_function_1",
+            "create_type",
+            "create_table",
+            "create_function_2",
+            "copy",
+            "copyselect",
+            "copydml",
+            "insert",
+            "insert_conflict",
+            "create_misc",
+            "create_operator",
+            "create_procedure",
+            "create_schema",
+            "create_index",
+            "create_index_spgist",
+            "create_view",
+            "index_including",
+            "index_including_gist",
+            "create_aggregate",
+            "create_function_3",
+            "create_cast",
+            "constraints",
+            "triggers",
+            "select",
+            "inherit",
+            "typed_table",
+            "vacuum",
+            "drop_if_exists",
+            "updatable_views",
+            "roleattributes",
+            "create_am",
+            "hash_func",
+            "errors",
+            "infinite_recurse",
+            "sanity_check",
+            "select_into",
+            "select_distinct",
+            "select_distinct_on",
+            "select_implicit",
+            "select_having",
+            "subselect",
+            "union",
+            "case",
+            "join",
+            "aggregates",
+            "transactions",
+            "random",
+            "portals",
+            "arrays",
+            "btree_index",
+            "hash_index",
+            "update",
+            "delete",
+            "namespace",
+            "prepared_xacts",
+            "brin",
+            "gin",
+            "gist",
+            "spgist",
+            "privileges",
+            "init_privs",
+            "security_label",
+            "collate",
+            "matview",
+            "lock",
+            "replica_identity",
+            "rowsecurity",
+            "object_address",
+            "tablesample",
+            "groupingsets",
+            "drop_operator",
+            "password",
+            "identity",
+            "generated",
+            "join_hash",
+            "brin_bloom",
+            "brin_multi",
+            "create_table_like",
+            "alter_generic",
+            "alter_operator",
+            "misc",
+            "async",
+            "dbsize",
+            "misc_functions",
+            "sysviews",
+            "tsrf",
+            "tid",
+            "tidscan",
+            "tidrangescan",
+            "collate.icu.utf8",
+            "incremental_sort",
+            "rules",
+            "psql",
+            "psql_crosstab",
+            "amutils",
+            "stats_ext",
+            "collate.linux.utf8",
+            "select_parallel",
+            "write_parallel",
+            "vacuum_parallel",
+            "maintain_every",
+            "publication",
+            "subscription",
+            "select_views",
+            "portals_p2",
+            "foreign_key",
+            "cluster",
+            "dependency",
+            "guc",
+            "bitmapops",
+            "combocid",
+            "tsearch",
+            "tsdicts",
+            "foreign_data",
+            "window",
+            "xmlmap",
+            "functional_deps",
+            "advisory_lock",
+            "indirect_toast",
+            "equivclass",
+            "json",
+            "jsonb",
+            "json_encoding",
+            "jsonpath",
+            "jsonpath_encoding",
+            "jsonb_jsonpath",
+            "plancache",
+            "limit",
+            "plpgsql",
+            "copy2",
+            "temp",
+            "domain",
+            "rangefuncs",
+            "prepare",
+            "conversion",
+            "truncate",
+            "alter_table",
+            "sequence",
+            "polymorphism",
+            "rowtypes",
+            "returning",
+            "largeobject",
+            "with",
+            "xml",
+            "partition_join",
+            "partition_prune",
+            "reloptions",
+            "hash_part",
+            "indexing",
+            "partition_aggregate",
+            "partition_info",
+            "tuplesort",
+            "explain",
+            "compression",
+            "memoize",
+            "event_trigger",
+            "oidjoins",
+            "fast_default",
+            "stats"
+          ]
+        },
+        "isolation": {
+          "kind": "isolation",
+          "schedule": "isolation_schedule",
+          "tests": [
+            "read-only-anomaly",
+            "read-only-anomaly-2",
+            "read-only-anomaly-3",
+            "read-write-unique",
+            "read-write-unique-2",
+            "read-write-unique-3",
+            "read-write-unique-4",
+            "simple-write-skew",
+            "receipt-report",
+            "temporal-range-integrity",
+            "project-manager",
+            "classroom-scheduling",
+            "total-cash",
+            "referential-integrity",
+            "ri-trigger",
+            "partial-index",
+            "two-ids",
+            "multiple-row-versions",
+            "index-only-scan",
+            "predicate-lock-hot-tuple",
+            "update-conflict-out",
+            "deadlock-simple",
+            "deadlock-hard",
+            "deadlock-soft",
+            "deadlock-soft-2",
+            "deadlock-parallel",
+            "detach-partition-concurrently-1",
+            "detach-partition-concurrently-2",
+            "detach-partition-concurrently-3",
+            "detach-partition-concurrently-4",
+            "fk-contention",
+            "fk-deadlock",
+            "fk-deadlock2",
+            "fk-partitioned-1",
+            "fk-partitioned-2",
+            "eval-plan-qual",
+            "eval-plan-qual-trigger",
+            "inplace-inval",
+            "intra-grant-inplace",
+            "intra-grant-inplace-db",
+            "lock-update-delete",
+            "lock-update-traversal",
+            "inherit-temp",
+            "temp-schema-cleanup",
+            "insert-conflict-do-nothing",
+            "insert-conflict-do-nothing-2",
+            "insert-conflict-do-update",
+            "insert-conflict-do-update-2",
+            "insert-conflict-do-update-3",
+            "insert-conflict-specconflict",
+            "delete-abort-savept",
+            "delete-abort-savept-2",
+            "aborted-keyrevoke",
+            "multixact-no-deadlock",
+            "multixact-no-forget",
+            "lock-committed-update",
+            "lock-committed-keyupdate",
+            "update-locked-tuple",
+            "reindex-concurrently",
+            "reindex-concurrently-toast",
+            "reindex-schema",
+            "propagate-lock-delete",
+            "tuplelock-conflict",
+            "tuplelock-update",
+            "tuplelock-upgrade-no-deadlock",
+            "tuplelock-partition",
+            "freeze-the-dead",
+            "nowait",
+            "nowait-2",
+            "nowait-3",
+            "nowait-4",
+            "nowait-5",
+            "skip-locked",
+            "skip-locked-2",
+            "skip-locked-3",
+            "skip-locked-4",
+            "drop-index-concurrently-1",
+            "multiple-cic",
+            "alter-table-1",
+            "alter-table-2",
+            "alter-table-3",
+            "alter-table-4",
+            "create-trigger",
+            "sequence-ddl",
+            "async-notify",
+            "vacuum-reltuples",
+            "timeouts",
+            "vacuum-concurrent-drop",
+            "vacuum-conflict",
+            "vacuum-skip-locked",
+            "horizons",
+            "predicate-hash",
+            "predicate-gist",
+            "predicate-gin",
+            "partition-concurrent-attach",
+            "partition-drop-index-locking",
+            "partition-key-update-1",
+            "partition-key-update-2",
+            "partition-key-update-3",
+            "partition-key-update-4",
+            "plpgsql-toast",
+            "truncate-conflict",
+            "serializable-parallel",
+            "serializable-parallel-2",
+            "serializable-parallel-3"
+          ]
+        },
+        "plpgsql": {
+          "kind": "regress",
+          "tests": [
+            "plpgsql_array",
+            "plpgsql_cache",
+            "plpgsql_call",
+            "plpgsql_control",
+            "plpgsql_copy",
+            "plpgsql_domain",
+            "plpgsql_misc",
+            "plpgsql_record",
+            "plpgsql_simple",
+            "plpgsql_transaction",
+            "plpgsql_trap",
+            "plpgsql_trigger",
+            "plpgsql_varprops"
+          ]
+        },
+        "plperl": {
+          "kind": "regress",
+          "tests": [
+            "plperl_setup",
+            "plperl",
+            "plperl_lc",
+            "plperl_trigger",
+            "plperl_shared",
+            "plperl_elog",
+            "plperl_util",
+            "plperl_init",
+            "plperlu",
+            "plperl_array",
+            "plperl_call",
+            "plperl_transaction",
+            "plperl_env",
+            "plperl_plperlu"
+          ]
+        },
+        "plpython": {
+          "kind": "regress",
+          "tests": [
+            "plpython_schema",
+            "plpython_populate",
+            "plpython_test",
+            "plpython_do",
+            "plpython_global",
+            "plpython_import",
+            "plpython_spi",
+            "plpython_newline",
+            "plpython_void",
+            "plpython_call",
+            "plpython_params",
+            "plpython_setof",
+            "plpython_record",
+            "plpython_trigger",
+            "plpython_types",
+            "plpython_error",
+            "plpython_ereport",
+            "plpython_unicode",
+            "plpython_quote",
+            "plpython_composite",
+            "plpython_subtransaction",
+            "plpython_transaction",
+            "plpython_drop"
+          ]
+        },
+        "pltcl": {
+          "kind": "regress",
+          "tests": [
+            "pltcl_setup",
+            "pltcl_queries",
+            "pltcl_trigger",
+            "pltcl_call",
+            "pltcl_start_proc",
+            "pltcl_subxact",
+            "pltcl_unicode",
+            "pltcl_transaction"
+          ]
+        },
+        "adminpack": {
+          "kind": "regress",
+          "tests": ["adminpack"]
+        },
+        "amcheck": {
+          "kind": "regress",
+          "tests": ["check", "check_btree", "check_heap"]
+        },
+        "bool_plperl": {
+          "kind": "regress",
+          "tests": ["bool_plperl", "bool_plperlu"]
+        },
+        "btree_gin": {
+          "kind": "regress",
+          "tests": [
+            "install_btree_gin",
+            "int2",
+            "int4",
+            "int8",
+            "float4",
+            "float8",
+            "money",
+            "oid",
+            "timestamp",
+            "timestamptz",
+            "time",
+            "timetz",
+            "date",
+            "interval",
+            "macaddr",
+            "macaddr8",
+            "inet",
+            "cidr",
+            "text",
+            "varchar",
+            "char",
+            "bytea",
+            "bit",
+            "varbit",
+            "numeric",
+            "enum",
+            "uuid",
+            "name",
+            "bool",
+            "bpchar"
+          ]
+        },
+        "btree_gist": {
+          "kind": "regress",
+          "tests": [
+            "init",
+            "int2",
+            "int4",
+            "int8",
+            "float4",
+            "float8",
+            "cash",
+            "oid",
+            "timestamp",
+            "timestamptz",
+            "time",
+            "timetz",
+            "date",
+            "interval",
+            "macaddr",
+            "macaddr8",
+            "inet",
+            "cidr",
+            "text",
+            "varchar",
+            "char",
+            "bytea",
+            "bit",
+            "varbit",
+            "numeric",
+            "uuid",
+            "not_equal",
+            "enum"
+          ]
+        },
+        "citext": {
+          "kind": "regress",
+          "tests": ["create_index_acl", "citext"]
+        },
+        "cube": {
+          "kind": "regress",
+          "tests": ["cube", "cube_sci"]
+        },
+        "dblink": {
+          "kind": "regress",
+          "tests": ["paths", "dblink"]
+        },
+        "dict_int": {
+          "kind": "regress",
+          "tests": ["dict_int"]
+        },
+        "dict_xsyn": {
+          "kind": "regress",
+          "tests": ["dict_xsyn"]
+        },
+        "earthdistance": {
+          "kind": "regress",
+          "tests": ["earthdistance"]
+        },
+        "file_fdw": {
+          "kind": "regress",
+          "tests": ["file_fdw"]
+        },
+        "fuzzystrmatch": {
+          "kind": "regress",
+          "tests": ["fuzzystrmatch"]
+        },
+        "hstore": {
+          "kind": "regress",
+          "tests": ["hstore", "hstore_utf8"]
+        },
+        "hstore_plperl": {
+          "kind": "regress",
+          "tests": ["hstore_plperl", "hstore_plperlu", "create_transform"]
+        },
+        "hstore_plpython": {
+          "kind": "regress",
+          "tests": ["hstore_plpython"]
+        },
+        "intarray": {
+          "kind": "regress",
+          "tests": ["_int"]
+        },
+        "isn": {
+          "kind": "regress",
+          "tests": ["isn"]
+        },
+        "jsonb_plperl": {
+          "kind": "regress",
+          "tests": ["jsonb_plperl", "jsonb_plperlu"]
+        },
+        "jsonb_plpython": {
+          "kind": "regress",
+          "tests": ["jsonb_plpython"]
+        },
+        "lo": {
+          "kind": "regress",
+          "tests": ["lo"]
+        },
+        "ltree": {
+          "kind": "regress",
+          "tests": ["ltree"]
+        },
+        "ltree_plpython": {
+          "kind": "regress",
+          "tests": ["ltree_plpython"]
+        },
+        "pageinspect": {
+          "kind": "regress",
+          "tests": [
+            "page",
+            "btree",
+            "brin",
+            "gin",
+            "gist",
+            "hash",
+            "checksum",
+            "oldextversions"
+          ]
+        },
+        "passwordcheck": {
+          "kind": "regress",
+          "tests": ["passwordcheck"]
+        },
+        "pg_stat_statements": {
+          "kind": "regress",
+          "tests": ["pg_stat_statements"]
+        },
+        "pg_surgery": {
+          "kind": "regress",
+          "tests": ["heap_surgery"]
+        },
+        "pg_trgm": {
+          "kind": "regress",
+          "tests": ["pg_trgm", "pg_word_trgm", "pg_strict_word_trgm"]
+        },
+        "pg_visibility": {
+          "kind": "regress",
+          "tests": ["pg_visibility"]
+        },
+        "pgcrypto": {
+          "kind": "regress",
+          "tests": [
+            "init",
+            "md5",
+            "sha1",
+            "hmac-md5",
+            "hmac-sha1",
+            "blowfish",
+            "rijndael",
+            "crypt-des",
+            "crypt-md5",
+            "crypt-blowfish",
+            "crypt-xdes",
+            "pgp-armor",
+            "pgp-decrypt",
+            "pgp-encrypt",
+            "pgp-compression",
+            "pgp-pubkey-decrypt",
+            "pgp-pubkey-encrypt",
+            "pgp-info"
+          ]
+        },
+        "pgstattuple": {
+          "kind": "regress",
+          "tests": ["pgstattuple"]
+        },
+        "postgres_fdw": {
+          "kind": "regress",
+          "tests": ["postgres_fdw"]
+        },
+        "seg": {
+          "kind": "regress",
+          "tests": ["security", "seg"]
+        },
+        "tablefunc": {
+          "kind": "regress",
+          "tests": ["tablefunc"]
+        },
+        "test_decoding": [
+          {
+            "kind": "regress",
+            "tests": [
+              "ddl",
+              "xact",
+              "rewrite",
+              "toast",
+              "permissions",
+              "decoding_in_xact",
+              "decoding_into_rel",
+              "binary",
+              "prepared",
+              "replorigin",
+              "time",
+              "messages",
+              "spill",
+              "slot",
+              "truncate",
+              "stream",
+              "stats",
+              "twophase",
+              "twophase_stream"
+            ]
+          },
+          {
+            "kind": "isolation",
+            "tests": [
+              "mxact",
+              "delayed_startup",
+              "ondisk_startup",
+              "concurrent_ddl_dml",
+              "oldest_xmin",
+              "snapshot_transfer",
+              "subxact_without_top",
+              "concurrent_stream",
+              "twophase_snapshot",
+              "catalog_change_snapshot",
+              "invalidation_distribution"
+            ]
+          }
+        ],
+        "tsm_system_rows": {
+          "kind": "regress",
+          "tests": ["tsm_system_rows"]
+        },
+        "tsm_system_time": {
+          "kind": "regress",
+          "tests": ["tsm_system_time"]
+        },
+        "unaccent": {
+          "kind": "regress",
+          "tests": ["unaccent"]
+        },
+        "uuid-ossp": {
+          "kind": "regress",
+          "tests": ["uuid_ossp"]
+        },
+        "xml2": {
+          "kind": "regress",
+          "tests": ["xml2"]
+        }
+      }
+    },
+    "introspect": {
+      "1beta1": {
+        "barebones": "//catalog/openhalo/introspect:openhalo~1beta1~barebones.json",
+        "minimal": "//catalog/openhalo/introspect:openhalo~1beta1~minimal.json",
+        "regular": "//catalog/openhalo/introspect:openhalo~1beta1~regular.json",
+        "full": "//catalog/openhalo/introspect:openhalo~1beta1~full.json"
+      }
+    },
+    "deps": {
+      "buildtime": {
+        "debian": {
+          "12": {
+            "*": [
+              "bison",
+              "clang-14",
+              "flex",
+              "gettext",
+              "libavahi-compat-libdnssd-dev",
+              "libcurl4-openssl-dev",
+              "libedit-dev",
+              "libeditreadline-dev",
+              "libicu-dev",
+              "libkrb5-dev",
+              "libldap-dev",
+              "liblz4-dev",
+              "libossp-uuid-dev",
+              "libpam0g-dev",
+              "libperl-dev",
+              "libpython3-dev",
+              "libselinux1-dev",
+              "libssl-dev",
+              "libsystemd-dev",
+              "libxml2-dev",
+              "libxslt1-dev",
+              "llvm-14-dev",
+              "m4",
+              "make",
+              "tcl-dev",
+              "uuid-dev",
+              "zlib1g-dev"
+            ]
+          },
+          "13": {
+            "*": [
+              "bison",
+              "clang-19",
+              "flex",
+              "gettext",
+              "libavahi-compat-libdnssd-dev",
+              "libcurl4-openssl-dev",
+              "libedit-dev",
+              "libeditreadline-dev",
+              "libicu-dev",
+              "libkrb5-dev",
+              "libldap-dev",
+              "liblz4-dev",
+              "libossp-uuid-dev",
+              "libpam0g-dev",
+              "libperl-dev",
+              "libpython3-dev",
+              "libselinux1-dev",
+              "libssl-dev",
+              "libsystemd-dev",
+              "libxml2-dev",
+              "libxslt1-dev",
+              "llvm-19-dev",
+              "m4",
+              "make",
+              "tcl-dev",
+              "uuid-dev",
+              "zlib1g-dev"
+            ]
+          }
+        }
+      },
+      "runtime": {
+        "debian": {
+          "12": {
+            "*": [
+              "gettext",
+              "libavahi-compat-libdnssd1",
+              "libc-bin",
+              "libedit2",
+              "libgssapi-krb5-2",
+              "libicu72",
+              "libkrb5-3",
+              "libldap-2.5-0",
+              "libllvm14",
+              "liblz4-1",
+              "libossp-uuid16",
+              "libpam0g",
+              "libperl5.36",
+              "libpython3.11",
+              "libselinux1",
+              "libssl3",
+              "libsystemd0",
+              "libuuid1",
+              "libxml2",
+              "libxslt1.1",
+              "llvm-14-runtime",
+              "ncurses-term",
+              "tcl",
+              "tzdata",
+              "zlib1g"
+            ]
+          },
+          "13": {
+            "*": [
+              "gettext",
+              "libavahi-compat-libdnssd1",
+              "libc-bin",
+              "libedit2",
+              "libgssapi-krb5-2",
+              "libicu76",
+              "libkrb5-3",
+              "libldap2",
+              "libllvm19",
+              "liblz4-1",
+              "libossp-uuid16",
+              "libpam0g",
+              "libperl5.40",
+              "libpython3.13",
+              "libselinux1",
+              "libssl3",
+              "libsystemd0",
+              "libuuid1",
+              "libxml2",
+              "libxslt1.1",
+              "llvm-19-runtime",
+              "ncurses-term",
+              "tcl",
+              "tzdata",
+              "zlib1g"
+            ]
+          }
+        }
+      },
+      "test": {
+        "debian": {
+          "12": {
+            "*": ["libipc-run-perl"]
+          },
+          "13": {
+            "*": ["libipc-run-perl"]
+          }
+        }
+      }
+    }
+  }
+}

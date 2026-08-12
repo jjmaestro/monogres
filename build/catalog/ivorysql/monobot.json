@@ -1,0 +1,425 @@
+{
+  "version": 1,
+  "name": "ivorysql",
+  "url": "https://github.com/IvorySQL/IvorySQL",
+  "sources": {
+    "gh": {
+      "owner": "IvorySQL",
+      "repo": "IvorySQL",
+      "filename": "{tag}",
+      "url": "https://github.com/{owner}/{repo}/archive/refs/tags/{filename}.tar.gz",
+      "strip_prefix": "{repo}-{tag}"
+    }
+  },
+  "versions": {
+    "pin": {
+      "5.0": {
+        "tag": "IvorySQL_5.0"
+      },
+      "4.0": {
+        "tag": "IvorySQL_4.0"
+      },
+      "3.0": {
+        "tag": "IvorySQL_3.0"
+      }
+    }
+  },
+  "metadata": {
+    "flavor": "ivorysql",
+    "introspect": {
+      "5.0": {
+        "barebones": "//catalog/ivorysql/introspect:ivorysql~5.0~barebones.json",
+        "full": "//catalog/ivorysql/introspect:ivorysql~5.0~full.json",
+        "minimal": "//catalog/ivorysql/introspect:ivorysql~5.0~minimal.json",
+        "regular": "//catalog/ivorysql/introspect:ivorysql~5.0~regular.json"
+      },
+      "4.0": {
+        "barebones": "//catalog/ivorysql/introspect:ivorysql~4.0~barebones.json",
+        "full": "//catalog/ivorysql/introspect:ivorysql~4.0~full.json",
+        "minimal": "//catalog/ivorysql/introspect:ivorysql~4.0~minimal.json",
+        "regular": "//catalog/ivorysql/introspect:ivorysql~4.0~regular.json"
+      },
+      "3.0": {
+        "barebones": "//catalog/ivorysql/introspect:ivorysql~3.0~barebones.json",
+        "full": "//catalog/ivorysql/introspect:ivorysql~3.0~full.json",
+        "minimal": "//catalog/ivorysql/introspect:ivorysql~3.0~minimal.json",
+        "regular": "//catalog/ivorysql/introspect:ivorysql~3.0~regular.json"
+      }
+    },
+    "test_overrides": {
+      "regress": {
+        "exclude_tests": ["numa"],
+        "note": "The numa test is excluded: IvorySQL 5.0's backport of PG18's pg_shmem_allocations_numa raises 'invalid NUMA node id outside of allowed range [0, 0]: -2' in a non-NUMA sandbox, where upstream PostgreSQL 18 tolerates NUMA_NO_NODE and passes the identical test in the same sandbox. An IvorySQL-specific divergence in the NUMA backport, not a hermeticity gap; --exclude-tests numa is a no-op on versions without the test."
+      },
+      "ivorysql_ora": {
+        "exclude": true,
+        "note": "Oracle-mode contrib suite, deferred (option C). See build/catalog/ivorysql/ORACLE_TESTING.md. Needs an initdb -m oracle cluster plus the oracle parser (oracle listener port); not run in the PG-mode lane."
+      },
+      "ora_btree_gin": {
+        "exclude": true
+      },
+      "ora_btree_gist": {
+        "exclude": true
+      },
+      "plisql": {
+        "exclude": true,
+        "note": "PL/iSQL is IvorySQL's oracle PL; its tests need an oracle-mode cluster (the plisql language is created by initdb -m oracle, and the suite uses oracle PL/SQL syntax). Deferred (option C); see build/catalog/ivorysql/ORACLE_TESTING.md."
+      },
+      "brin": {
+        "exclude": true,
+        "note": "src/test/modules suites are deferred: a pre-existing ivory test-variant staging-prefix gap stages module artifacts to bare lib/ + share/extension/ instead of ivory's lib/postgresql + share/postgresql/extension, so CREATE EXTENSION cannot find them. All test/modules excluded for a green lane. See build/catalog/ivorysql/MODULES_TESTING.md."
+      },
+      "commit_ts": {
+        "exclude": true
+      },
+      "delay_execution": {
+        "exclude": true
+      },
+      "dummy_index_am": {
+        "exclude": true
+      },
+      "dummy_seclabel": {
+        "exclude": true
+      },
+      "gin": {
+        "exclude": true
+      },
+      "injection_points": {
+        "exclude": true
+      },
+      "ldap_password_func": {
+        "exclude": true
+      },
+      "libpq_pipeline": {
+        "exclude": true
+      },
+      "oauth_validator": {
+        "exclude": true
+      },
+      "plsample": {
+        "exclude": true
+      },
+      "spgist_name_ops": {
+        "exclude": true
+      },
+      "ssl_passphrase_callback": {
+        "exclude": true
+      },
+      "test_aio": {
+        "exclude": true
+      },
+      "test_bloomfilter": {
+        "exclude": true
+      },
+      "test_copy_callbacks": {
+        "exclude": true
+      },
+      "test_custom_rmgrs": {
+        "exclude": true
+      },
+      "test_ddl_deparse": {
+        "exclude": true
+      },
+      "test_dsa": {
+        "exclude": true
+      },
+      "test_dsm_registry": {
+        "exclude": true
+      },
+      "test_escape": {
+        "exclude": true
+      },
+      "test_extensions": {
+        "exclude": true
+      },
+      "test_ginpostinglist": {
+        "exclude": true
+      },
+      "test_integerset": {
+        "exclude": true
+      },
+      "test_json_parser": {
+        "exclude": true
+      },
+      "test_lfind": {
+        "exclude": true
+      },
+      "test_misc": {
+        "exclude": true
+      },
+      "test_oat_hooks": {
+        "exclude": true
+      },
+      "test_parser": {
+        "exclude": true
+      },
+      "test_pg_dump": {
+        "exclude": true
+      },
+      "test_predtest": {
+        "exclude": true
+      },
+      "test_radixtree": {
+        "exclude": true
+      },
+      "test_rbtree": {
+        "exclude": true
+      },
+      "test_regex": {
+        "exclude": true
+      },
+      "test_resowner": {
+        "exclude": true
+      },
+      "test_rls_hooks": {
+        "exclude": true
+      },
+      "test_shm_mq": {
+        "exclude": true
+      },
+      "test_slru": {
+        "exclude": true
+      },
+      "test_tidstore": {
+        "exclude": true
+      },
+      "typcache": {
+        "exclude": true
+      },
+      "unsafe_tests": {
+        "exclude": true
+      },
+      "worker_spi": {
+        "exclude": true
+      },
+      "xid_wraparound": {
+        "exclude": true
+      }
+    },
+    "build_options": {
+      "injection_points": {
+        "compatible": ">=4.0"
+      },
+      "atomics": {
+        "compatible": "<5.0"
+      },
+      "spinlocks": {
+        "compatible": "<5.0"
+      }
+    },
+    "patches": [
+      {
+        "label": "//catalog/ivorysql/patches:0001-3.0-fix-pgflex-propagate-environment-to-flex-subprocess.patch",
+        "spec": "*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0002-3.0-fix-pgflex-suppress-line-directives.patch",
+        "spec": "*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0003-3.0-fix-pgflex-flex-2.6.4-noline-bugs.patch",
+        "spec": "<4.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0004-3.0-feat-prefix_distro-option.patch",
+        "spec": "<5.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0004-5.0-feat-prefix_distro-option.patch",
+        "spec": ">=5.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0005-3.0-hack-remove-execroot-from-CC.patch",
+        "spec": "3.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0005-4.0-hack-remove-execroot-from-CC.patch",
+        "spec": ">=4.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0006-3.0-feat-add-build-option-to-disable-contrib-builds.patch",
+        "spec": "3.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0006-4.0-feat-add-build-option-to-disable-contrib-builds.patch",
+        "spec": "4.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0006-5.0-feat-add-build-option-to-disable-contrib-builds.patch",
+        "spec": ">=5.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0007-3.0-fix-port-identifier_alpha_transfor-drop-postgres-h-include.patch",
+        "spec": "*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0008-3.0-fix-fe_utils-add-include_directories-for-ora_kwlist_d-h.patch",
+        "spec": "<5.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0009-5.0-fix-contrib-gb18030_2022-use-files-for-gensql-pl-path.patch",
+        "spec": ">=5.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0010-3.0-fix-contrib-ivorysql_ora-use-files-for-gensql-pl-path.patch",
+        "spec": "*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0011-3.0-fix-contrib-ivorysql_ora-gensql-pl-resolve-paths-relative-to-script.patch",
+        "spec": "3.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0011-4.0-fix-contrib-ivorysql_ora-gensql-pl-resolve-paths-relative-to-script.patch",
+        "spec": ">=4.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0012-3.0-fix-test-ssl-guard-openssl-path-behind-found.patch",
+        "spec": "3.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0013-5.0-fix-conversion_procs-add-gb18030_and_gbk-meson.patch",
+        "spec": "5.0/*"
+      },
+      {
+        "label": "//catalog/ivorysql/patches:0014-4.0-fix-test-jsonb_jsonpath-pin-time_tz-utc-offset.patch",
+        "spec": "4.0/*"
+      }
+    ],
+    "deps": {
+      "buildtime": {
+        "debian": {
+          "12": {
+            "*": [
+              "gettext",
+              "libavahi-compat-libdnssd-dev",
+              "libcurl4-openssl-dev",
+              "libedit-dev",
+              "libeditreadline-dev",
+              "libicu-dev",
+              "libkrb5-dev",
+              "libldap-dev",
+              "liblz4-dev",
+              "libnuma-dev",
+              "libossp-uuid-dev",
+              "libpam0g-dev",
+              "libperl-dev",
+              "libpython3-dev",
+              "libselinux1-dev",
+              "libssl-dev",
+              "libsystemd-dev",
+              "liburing-dev",
+              "libxml2-dev",
+              "libxslt1-dev",
+              "libzstd-dev",
+              "llvm-14-dev",
+              "tcl-dev",
+              "uuid-dev",
+              "zlib1g-dev"
+            ]
+          },
+          "13": {
+            "*": [
+              "gettext",
+              "libavahi-compat-libdnssd-dev",
+              "libcurl4-openssl-dev",
+              "libedit-dev",
+              "libeditreadline-dev",
+              "libicu-dev",
+              "libkrb5-dev",
+              "libldap-dev",
+              "liblz4-dev",
+              "libnuma-dev",
+              "libossp-uuid-dev",
+              "libpam0g-dev",
+              "libperl-dev",
+              "libpython3-dev",
+              "libselinux1-dev",
+              "libssl-dev",
+              "libsystemd-dev",
+              "liburing-dev",
+              "libxml2-dev",
+              "libxslt1-dev",
+              "libzstd-dev",
+              "llvm-19-dev",
+              "tcl-dev",
+              "uuid-dev",
+              "zlib1g-dev"
+            ]
+          }
+        }
+      },
+      "runtime": {
+        "debian": {
+          "12": {
+            "*": [
+              "gettext",
+              "libavahi-compat-libdnssd1",
+              "libc-bin",
+              "libedit2",
+              "libicu72",
+              "libkrb5-3",
+              "libldap-2.5-0",
+              "liblz4-1",
+              "libnuma1",
+              "libossp-uuid16",
+              "libpam0g",
+              "libperl5.36",
+              "libpython3.11",
+              "libselinux1",
+              "libssl3",
+              "libsystemd0",
+              "liburing2",
+              "libuuid1",
+              "libxml2",
+              "libxslt1.1",
+              "libzstd1",
+              "llvm-14-runtime",
+              "ncurses-term",
+              "tcl",
+              "zlib1g"
+            ]
+          },
+          "13": {
+            "*": [
+              "gettext",
+              "libavahi-compat-libdnssd1",
+              "libc-bin",
+              "libedit2",
+              "libicu76",
+              "libkrb5-3",
+              "libldap2",
+              "liblz4-1",
+              "libnuma1",
+              "libossp-uuid16",
+              "libpam0g",
+              "libperl5.40",
+              "libpython3.13",
+              "libselinux1",
+              "libssl3",
+              "libsystemd0",
+              "liburing2",
+              "libuuid1",
+              "libxml2",
+              "libxslt1.1",
+              "libzstd1",
+              "llvm-19-runtime",
+              "ncurses-term",
+              "tcl",
+              "zlib1g"
+            ]
+          }
+        }
+      },
+      "test": {
+        "debian": {
+          "12": {
+            "*": ["libipc-run-perl"]
+          },
+          "13": {
+            "*": ["libipc-run-perl"]
+          }
+        }
+      }
+    }
+  }
+}

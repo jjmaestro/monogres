@@ -1,0 +1,8 @@
+{
+  "default_version": "18.0",
+  "comment": "provides auditing functionality",
+  "module_pathname": "$libdir/pgaudit",
+  "superuser": true,
+  "trusted": false,
+  "relocatable": true
+}

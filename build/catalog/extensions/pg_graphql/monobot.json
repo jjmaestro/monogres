@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "name": "pg_graphql",
+  "url": "https://github.com/supabase/pg_graphql",
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "supabase",
+      "name": "pg_graphql",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": ["1.6.1"]
+  },
+  "metadata": {
+    "build_system": "pgrx",
+    "patches": [
+      {
+        "label": "//catalog/extensions/pg_graphql/patches:0001-1.6.1-pgrx-0.18.patch",
+        "spec": ">=1.6.1/*"
+      },
+      {
+        "label": "//catalog/extensions/pg_graphql/patches:0002-1.6.1-regress-fixtures.patch",
+        "spec": ">=1.6.1/*"
+      }
+    ],
+    "compatible_with": {
+      "postgres": {
+        "1.6.1": ">=16"
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "extensions": ["pg_graphql"]
+      },
+      "test": {
+        "*": {
+          "regress": {
+            "kind": "regress",
+            "inputdir": "test",
+            "tests": [
+              "fixtures",
+              "aggregate",
+              "aggregate_directive",
+              "aliases",
+              "allow_camel_names",
+              "array_args_and_return_types",
+              "bigint_is_string",
+              "builtin_directives",
+              "comment_directive",
+              "comment_directive_description",
+              "compound_filters",
+              "empty_mutations",
+              "enum_mappings",
+              "extend_type_with_function",
+              "extend_type_with_function_relation",
+              "extend_type_with_generated_column",
+              "filter_by_node_id",
+              "fragment_on_mutation",
+              "fragment_on_query",
+              "function_calls",
+              "function_calls_default_args",
+              "function_calls_unsupported",
+              "function_return_row_is_selectable",
+              "function_return_view_has_pkey",
+              "inflection_fields",
+              "inflection_function",
+              "inflection_relationships",
+              "inflection_types",
+              "introspection",
+              "issue_163",
+              "issue_170",
+              "issue_225",
+              "issue_237_field_merging",
+              "issue_237_field_merging_mismatched",
+              "issue_300",
+              "issue_306",
+              "issue_312",
+              "issue_334_ambiguous_function",
+              "issue_337",
+              "issue_339_function_return_json",
+              "issue_339_function_return_table",
+              "issue_353_too_many_fields",
+              "issue_370_citext_as_string",
+              "issue_373",
+              "issue_377_enum_search_path",
+              "issue_409_fkey_rls_nullability",
+              "issue_444",
+              "issue_463",
+              "issue_511",
+              "issue_533",
+              "issue_542_partial_unique",
+              "issue_551_too_many_fields",
+              "issue_557_1_to_1_nullability",
+              "issue_581_missing_desc_on_schema",
+              "issue_fragment_spread_cycles",
+              "json_is_stringified",
+              "max_page_size",
+              "max_rows_directive",
+              "multi_column_primary_key",
+              "multiple_mutations",
+              "multiple_queries",
+              "mutation_delete",
+              "mutation_delete_variable",
+              "mutation_insert",
+              "mutation_update",
+              "null_argument",
+              "omit_exotic_types",
+              "omit_weird_names",
+              "operation_name",
+              "override_enum_name",
+              "override_field_name",
+              "override_func_field_name",
+              "override_relationship_field_name",
+              "override_type_name",
+              "page_info",
+              "permissions_connection_column",
+              "permissions_functions",
+              "permissions_node_column",
+              "permissions_table_level",
+              "permissions_types",
+              "primary_key_is_required",
+              "primary_key_queries",
+              "relationship_one_to_one",
+              "resolve___schema",
+              "resolve___type",
+              "resolve___typename",
+              "resolve_array_type",
+              "resolve_connection_filter",
+              "resolve_connection_named",
+              "resolve_connection_order_by",
+              "resolve_connection_pagination_args",
+              "resolve_connection_to_conn",
+              "resolve_connection_to_node",
+              "resolve_error_connection_edge_no_field",
+              "resolve_error_connection_edge_node_no_field",
+              "resolve_error_connection_no_field",
+              "resolve_error_from_parser",
+              "resolve_error_mutation_no_field",
+              "resolve_error_node_no_field",
+              "resolve_error_query_no_field",
+              "resolve_fragment",
+              "resolve_graphiql_schema",
+              "resolve_one",
+              "roundtrip_types",
+              "row_level_security",
+              "sqli_connection",
+              "string_filters",
+              "test_error_anon_and_named_operations",
+              "test_error_invalid_offset",
+              "test_error_multiple_anon_operations",
+              "test_error_mutation_transpilation",
+              "test_error_operation_name_not_found",
+              "test_error_operation_names_not_unique",
+              "test_error_query_transpilation",
+              "test_error_subscription",
+              "test_query__type",
+              "total_count",
+              "type_bigfloat",
+              "type_modifier_max_length",
+              "type_opaque",
+              "variable_default",
+              "views_integration"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

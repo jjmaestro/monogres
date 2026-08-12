@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "name": "vchord",
+  "url": "https://github.com/tensorchord/VectorChord",
+  "sources": {
+    "gh": {
+      "tag": "{version}",
+      "gh_org": "tensorchord",
+      "name": "VectorChord",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": ["1.1.1"]
+  },
+  "metadata": {
+    "build_system": "pgrx",
+    "sql_source": "sql/install/vchord--{version}.sql",
+    "compatible_with": {
+      "postgres": {
+        "1.1.1": ">=14"
+      }
+    },
+    "test_ext": {
+      "requires": ["pgvector"],
+      "smoke": {
+        "extensions": ["vchord"],
+        "preload": ["vchord"],
+        "cascade": true
+      }
+    }
+  }
+}

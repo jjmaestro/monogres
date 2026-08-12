@@ -1,0 +1,9 @@
+{
+  "default_version": "@CARGO_VERSION@",
+  "comment": "vectors: Vector database plugin for Postgres, written in Rust, specifically designed for LLM",
+  "module_pathname": "$libdir/vectors",
+  "superuser": true,
+  "trusted": false,
+  "relocatable": false,
+  "schema": "vectors"
+}

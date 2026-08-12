@@ -1,0 +1,8 @@
+{
+  "default_version": "1.10",
+  "comment": "track plan statistics of all SQL statements executed",
+  "module_pathname": "$libdir/pg_store_plans",
+  "superuser": true,
+  "trusted": false,
+  "relocatable": true
+}

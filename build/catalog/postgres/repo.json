@@ -569,16 +569,10 @@
       "test": {
         "debian": {
           "12": {
-            "*": [
-              "libipc-run-perl",
-              "libtext-trim-perl"
-            ]
+            "*": ["libipc-run-perl", "libtext-trim-perl"]
           },
           "13": {
-            "*": [
-              "libipc-run-perl",
-              "libtext-trim-perl"
-            ]
+            "*": ["libipc-run-perl", "libtext-trim-perl"]
           }
         }
       }

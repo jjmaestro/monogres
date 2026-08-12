@@ -1,0 +1,8 @@
+{
+  "default_version": "@CARGO_VERSION@",
+  "comment": "Library of analytical hyperfunctions, time-series pipelining, and other SQL utilities",
+  "module_pathname": "$libdir/timescaledb_toolkit",
+  "superuser": true,
+  "trusted": true,
+  "relocatable": false
+}

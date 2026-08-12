@@ -17,10 +17,7 @@
   },
   "metadata": {
     "build_system": "cmake",
-    "build_args": [
-      "-DPG_CONFIG={pg_config}",
-      "-DREGRESS_CHECKS=OFF"
-    ],
+    "build_args": ["-DPG_CONFIG={pg_config}", "-DREGRESS_CHECKS=OFF"],
     "compatible_with": {
       "postgres": {
         "2.28.3": ">=16"

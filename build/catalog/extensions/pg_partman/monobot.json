@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "name": "pg_partman",
+  "url": "https://github.com/pgpartman/pg_partman",
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "pgpartman",
+      "name": "pg_partman",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": ["5.5.0"]
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "5.5.0": ">=16"
+      }
+    }
+  }
+}

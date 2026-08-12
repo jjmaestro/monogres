@@ -1,0 +1,9 @@
+{
+  "default_version": "0.2.0",
+  "comment": "Qdrant-like retrieval inside Postgres",
+  "module_pathname": "$libdir/pgcontext",
+  "superuser": true,
+  "trusted": false,
+  "relocatable": false,
+  "schema": "pgcontext"
+}

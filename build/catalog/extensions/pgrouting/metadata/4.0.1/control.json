@@ -1,0 +1,9 @@
+{
+  "default_version": "${PROJECT_VERSION}",
+  "comment": "pgRouting Extension",
+  "module_pathname": "${PROJECT_MODULE_PATHNAME}",
+  "requires": ["plpgsql", "postgis"],
+  "superuser": true,
+  "trusted": false,
+  "relocatable": true
+}

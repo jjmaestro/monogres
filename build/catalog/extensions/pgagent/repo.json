@@ -17,9 +17,7 @@
   },
   "metadata": {
     "build_system": "cmake",
-    "build_args": [
-      "-DBOOST_STATIC_BUILD=YES"
-    ],
+    "build_args": ["-DBOOST_STATIC_BUILD=YES"],
     "compatible_with": {
       "postgres": {
         "4.2.3": ">=16"

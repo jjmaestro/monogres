@@ -1,0 +1,8 @@
+{
+  "default_version": "4.2.0",
+  "comment": "similar to SET ROLE but with added logging",
+  "module_pathname": "$libdir/set_user",
+  "superuser": true,
+  "trusted": false,
+  "relocatable": false
+}

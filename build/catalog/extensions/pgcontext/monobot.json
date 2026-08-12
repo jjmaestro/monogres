@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "name": "pgcontext",
+  "url": "https://github.com/Evokoa/pgContext",
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "Evokoa",
+      "name": "pgContext",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": ["0.2.0"]
+  },
+  "metadata": {
+    "build_system": "pgrx",
+    "crate_dir": "crates/context-pg",
+    "compatible_with": {
+      "postgres": {
+        "0.2.0": ">=17"
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "extensions": ["pgcontext"]
+      }
+    }
+  }
+}

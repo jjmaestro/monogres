@@ -1,0 +1,562 @@
+{
+  "version": 1,
+  "name": "postgres",
+  "url": "https://github.com/postgres/postgres",
+  "sources": {
+    "gh": {
+      "owner": "postgres",
+      "repo": "postgres",
+      "filename": "{tag}",
+      "url": "https://github.com/{owner}/{repo}/archive/refs/tags/{filename}.tar.gz",
+      "strip_prefix": "{repo}-{tag}"
+    }
+  },
+  "versions": {
+    "pin": {
+      "18.1": {
+        "tag": "REL_18_1"
+      },
+      "18.0": {
+        "tag": "REL_18_0"
+      },
+      "17.7": {
+        "tag": "REL_17_7"
+      },
+      "17.6": {
+        "tag": "REL_17_6"
+      },
+      "17.5": {
+        "tag": "REL_17_5"
+      },
+      "17.4": {
+        "tag": "REL_17_4"
+      },
+      "17.3": {
+        "tag": "REL_17_3"
+      },
+      "17.2": {
+        "tag": "REL_17_2"
+      },
+      "17.1": {
+        "tag": "REL_17_1"
+      },
+      "17.0": {
+        "tag": "REL_17_0"
+      },
+      "16.11": {
+        "tag": "REL_16_11"
+      },
+      "16.10": {
+        "tag": "REL_16_10"
+      },
+      "16.9": {
+        "tag": "REL_16_9"
+      },
+      "16.8": {
+        "tag": "REL_16_8"
+      },
+      "16.7": {
+        "tag": "REL_16_7"
+      },
+      "16.6": {
+        "tag": "REL_16_6"
+      },
+      "16.5": {
+        "tag": "REL_16_5"
+      },
+      "16.4": {
+        "tag": "REL_16_4"
+      },
+      "16.3": {
+        "tag": "REL_16_3"
+      },
+      "16.2": {
+        "tag": "REL_16_2"
+      },
+      "16.1": {
+        "tag": "REL_16_1"
+      },
+      "16.0": {
+        "tag": "REL_16_0"
+      },
+      "15.0": {
+        "tag": "REL_15_0"
+      }
+    }
+  },
+  "metadata": {
+    "build_options": {
+      "injection_points": {
+        "compatible": ">=17.0"
+      },
+      "atomics": {
+        "compatible": "<18.0"
+      },
+      "spinlocks": {
+        "compatible": "<18.0"
+      }
+    },
+    "test_overrides": {
+      "unaccent": {
+        "encoding": "UTF8"
+      },
+      "pgrowlocks": {
+        "load_extension": ["pgrowlocks"]
+      },
+      "tcn": {
+        "load_extension": ["tcn"]
+      },
+      "pltcl": {
+        "load_extension": ["pltcl"]
+      },
+      "hstore_plpython": {
+        "load_extension": ["hstore"]
+      },
+      "ltree_plpython": {
+        "load_extension": ["ltree"]
+      },
+      "postgres_fdw": {
+        "isolation": {
+          "load_extension": ["postgres_fdw"]
+        }
+      },
+      "sepgsql": {
+        "exclude": "SELinux shell harness; impractical in the hermetic sandbox"
+      }
+    },
+    "introspect": {
+      "18.1": {
+        "barebones": "//catalog/postgres/introspect:postgres~18.1~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~18.1~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~18.1~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~18.1~full.json"
+      },
+      "18.0": {
+        "barebones": "//catalog/postgres/introspect:postgres~18.0~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~18.0~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~18.0~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~18.0~full.json"
+      },
+      "17.7": {
+        "barebones": "//catalog/postgres/introspect:postgres~17.7~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~17.7~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~17.7~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~17.7~full.json"
+      },
+      "17.6": {
+        "barebones": "//catalog/postgres/introspect:postgres~17.6~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~17.6~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~17.6~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~17.6~full.json"
+      },
+      "17.5": {
+        "barebones": "//catalog/postgres/introspect:postgres~17.5~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~17.5~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~17.5~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~17.5~full.json"
+      },
+      "17.4": {
+        "barebones": "//catalog/postgres/introspect:postgres~17.4~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~17.4~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~17.4~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~17.4~full.json"
+      },
+      "17.3": {
+        "barebones": "//catalog/postgres/introspect:postgres~17.3~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~17.3~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~17.3~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~17.3~full.json"
+      },
+      "17.2": {
+        "barebones": "//catalog/postgres/introspect:postgres~17.2~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~17.2~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~17.2~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~17.2~full.json"
+      },
+      "17.1": {
+        "barebones": "//catalog/postgres/introspect:postgres~17.1~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~17.1~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~17.1~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~17.1~full.json"
+      },
+      "17.0": {
+        "barebones": "//catalog/postgres/introspect:postgres~17.0~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~17.0~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~17.0~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~17.0~full.json"
+      },
+      "16.11": {
+        "barebones": "//catalog/postgres/introspect:postgres~16.11~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~16.11~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~16.11~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~16.11~full.json"
+      },
+      "16.10": {
+        "barebones": "//catalog/postgres/introspect:postgres~16.10~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~16.10~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~16.10~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~16.10~full.json"
+      },
+      "16.9": {
+        "barebones": "//catalog/postgres/introspect:postgres~16.9~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~16.9~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~16.9~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~16.9~full.json"
+      },
+      "16.8": {
+        "barebones": "//catalog/postgres/introspect:postgres~16.8~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~16.8~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~16.8~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~16.8~full.json"
+      },
+      "16.7": {
+        "barebones": "//catalog/postgres/introspect:postgres~16.7~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~16.7~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~16.7~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~16.7~full.json"
+      },
+      "16.6": {
+        "barebones": "//catalog/postgres/introspect:postgres~16.6~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~16.6~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~16.6~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~16.6~full.json"
+      },
+      "16.5": {
+        "barebones": "//catalog/postgres/introspect:postgres~16.5~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~16.5~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~16.5~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~16.5~full.json"
+      },
+      "16.4": {
+        "barebones": "//catalog/postgres/introspect:postgres~16.4~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~16.4~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~16.4~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~16.4~full.json"
+      },
+      "16.3": {
+        "barebones": "//catalog/postgres/introspect:postgres~16.3~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~16.3~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~16.3~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~16.3~full.json"
+      },
+      "16.2": {
+        "barebones": "//catalog/postgres/introspect:postgres~16.2~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~16.2~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~16.2~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~16.2~full.json"
+      },
+      "16.1": {
+        "barebones": "//catalog/postgres/introspect:postgres~16.1~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~16.1~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~16.1~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~16.1~full.json"
+      },
+      "16.0": {
+        "barebones": "//catalog/postgres/introspect:postgres~16.0~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~16.0~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~16.0~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~16.0~full.json"
+      },
+      "15.0": {
+        "barebones": "//catalog/postgres/introspect:postgres~15.0~barebones.json",
+        "minimal": "//catalog/postgres/introspect:postgres~15.0~minimal.json",
+        "regular": "//catalog/postgres/introspect:postgres~15.0~regular.json",
+        "full": "//catalog/postgres/introspect:postgres~15.0~full.json"
+      }
+    },
+    "patches": [
+      {
+        "label": "//catalog/postgres/patches:0001-16.0-backport-meson-plpython-honor-python-build-option.patch",
+        "spec": "16.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0001-16.1-backport-meson-plpython-honor-python-build-option.patch",
+        "spec": "16.1/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0002-16.0-fix-pgflex-propagate-environment-to-flex-subprocess.patch",
+        "spec": ">=16.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0003-16.0-fix-pgflex-suppress-line-directives.patch",
+        "spec": ">=16.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0004-16.0-fix-pgflex-flex-2.6.4-noline-bugs.patch",
+        "spec": ">=16.0,<17.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0005-16.0-feat-prefix_distro-option.patch",
+        "spec": ">=16.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0006-16.0-hack-remove-execroot-from-CC.patch",
+        "spec": "16.*/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0006-17.0-hack-remove-execroot-from-CC.patch",
+        "spec": ">=17.*/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0007-16.0-feat-add-build-option-to-disable-contrib-builds.patch",
+        "spec": ">=16.0,<16.7/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0007-16.7-feat-add-build-option-to-disable-contrib-builds.patch",
+        "spec": ">=16.7,<17.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0007-17.0-feat-add-build-option-to-disable-contrib-builds.patch",
+        "spec": ">=17.0,<17.3/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0007-17.3-feat-add-build-option-to-disable-contrib-builds.patch",
+        "spec": ">=17.3,<18.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0007-18.0-feat-add-build-option-to-disable-contrib-builds.patch",
+        "spec": ">=18.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0008-16.0-fix-guard-openssl-path-when-not-found.patch",
+        "spec": ">=16.0,<16.2/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0009-15.0-backport-track-llvm-15-changes.patch",
+        "spec": "15.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0010-15.0-backport-fix-typos-in-comments-code-and-documentation.patch",
+        "spec": "15.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0011-15.0-backport-fix-leak-of-llvm-fatal-on-oom-section-counter.patch",
+        "spec": "15.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0012-15.0-backport-jit-support-opaque-pointers-in-llvm-16.patch",
+        "spec": "15.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0012-16.0-backport-jit-support-opaque-pointers-in-llvm-16.patch",
+        "spec": "16.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0013-15.0-backport-jit-supply-llvmglobalgetvaluetype-for-llvm-8.patch",
+        "spec": "15.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0013-16.0-backport-jit-supply-llvmglobalgetvaluetype-for-llvm-8.patch",
+        "spec": "16.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0014-15.0-backport-jit-changes-for-llvm-17.patch",
+        "spec": "15.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0014-16.0-backport-jit-changes-for-llvm-17.patch",
+        "spec": "16.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0015-15.0-backport-llvmjit-use-explicit-llvmcontextref-for-inlining.patch",
+        "spec": "15.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0015-16.0-backport-llvmjit-use-explicit-llvmcontextref-for-inlining.patch",
+        "spec": ">=16.0,<16.2/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0016-15.0-backport-track-llvm-18-changes.patch",
+        "spec": "15.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0016-16.0-backport-track-llvm-18-changes.patch",
+        "spec": ">=16.0,<16.2/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0017-15.0-backport-fix-illegal-attribute-propagation-in-llvm-jit.patch",
+        "spec": "15.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0017-16.0-backport-fix-illegal-attribute-propagation-in-llvm-jit.patch",
+        "spec": ">=16.0,<16.3/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0018-15.0-backport-monkey-patch-llvm-code-to-fix-arm-relocation-bug.patch",
+        "spec": "15.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0018-16.0-backport-monkey-patch-llvm-code-to-fix-arm-relocation-bug.patch",
+        "spec": ">=16.0,<16.5/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0018-17.0-backport-monkey-patch-llvm-code-to-fix-arm-relocation-bug.patch",
+        "spec": "17.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0019-16.0-backport-bitcode-cflags-c_args.patch",
+        "spec": ">=16.0,<17.0/*"
+      },
+      {
+        "label": "//catalog/postgres/patches:0020-17.0-fix-test-jsonb_jsonpath-pin-time_tz-utc-offset.patch",
+        "spec": "17.0/*"
+      }
+    ],
+    "deps": {
+      "buildtime": {
+        "debian": {
+          "12": {
+            "*": [
+              "bison",
+              "clang-14",
+              "flex",
+              "gettext",
+              "libavahi-compat-libdnssd-dev",
+              "libcurl4-openssl-dev",
+              "libedit-dev",
+              "libeditreadline-dev",
+              "libicu-dev",
+              "libkrb5-dev",
+              "libldap-dev",
+              "liblz4-dev",
+              "libnuma-dev",
+              "libossp-uuid-dev",
+              "libpam0g-dev",
+              "libperl-dev",
+              "libpython3-dev",
+              "libselinux1-dev",
+              "libssl-dev",
+              "libsystemd-dev",
+              "liburing-dev",
+              "libxml2-dev",
+              "libxslt1-dev",
+              "libzstd-dev",
+              "llvm-14-dev",
+              "m4",
+              "make",
+              "tcl-dev",
+              "uuid-dev",
+              "zlib1g-dev"
+            ]
+          },
+          "13": {
+            "*": [
+              "bison",
+              "clang-19",
+              "flex",
+              "gettext",
+              "libavahi-compat-libdnssd-dev",
+              "libcurl4-openssl-dev",
+              "libedit-dev",
+              "libeditreadline-dev",
+              "libicu-dev",
+              "libkrb5-dev",
+              "libldap-dev",
+              "liblz4-dev",
+              "libnuma-dev",
+              "libossp-uuid-dev",
+              "libpam0g-dev",
+              "libperl-dev",
+              "libpython3-dev",
+              "libselinux1-dev",
+              "libssl-dev",
+              "libsystemd-dev",
+              "liburing-dev",
+              "libxml2-dev",
+              "libxslt1-dev",
+              "libzstd-dev",
+              "llvm-19-dev",
+              "m4",
+              "make",
+              "tcl-dev",
+              "uuid-dev",
+              "zlib1g-dev"
+            ]
+          }
+        }
+      },
+      "runtime": {
+        "debian": {
+          "12": {
+            "*": [
+              "gettext",
+              "libavahi-compat-libdnssd1",
+              "libc-bin",
+              "libcurl4",
+              "libedit2",
+              "libgssapi-krb5-2",
+              "libicu72",
+              "libkrb5-3",
+              "libldap-2.5-0",
+              "libllvm14",
+              "liblz4-1",
+              "libnuma1",
+              "libossp-uuid16",
+              "libpam0g",
+              "libperl5.36",
+              "libpython3.11",
+              "libselinux1",
+              "libssl3",
+              "libsystemd0",
+              "liburing2",
+              "libuuid1",
+              "libxml2",
+              "libxslt1.1",
+              "libzstd1",
+              "llvm-14-runtime",
+              "ncurses-term",
+              "tcl",
+              "tcl8.6",
+              "tzdata",
+              "zlib1g"
+            ]
+          },
+          "13": {
+            "*": [
+              "gettext",
+              "libavahi-compat-libdnssd1",
+              "libc-bin",
+              "libcurl4",
+              "libedit2",
+              "libgssapi-krb5-2",
+              "libicu76",
+              "libkrb5-3",
+              "libldap2",
+              "libllvm19",
+              "liblz4-1",
+              "libnuma1",
+              "libossp-uuid16",
+              "libpam0g",
+              "libperl5.40",
+              "libpython3.13",
+              "libselinux1",
+              "libssl3",
+              "libsystemd0",
+              "liburing2",
+              "libuuid1",
+              "libxml2",
+              "libxslt1.1",
+              "libzstd1",
+              "llvm-19-runtime",
+              "ncurses-term",
+              "tcl",
+              "tcl8.6",
+              "tzdata",
+              "zlib1g"
+            ]
+          }
+        }
+      },
+      "test": {
+        "debian": {
+          "12": {
+            "*": ["libipc-run-perl", "libtext-trim-perl"]
+          },
+          "13": {
+            "*": ["libipc-run-perl", "libtext-trim-perl"]
+          }
+        }
+      }
+    }
+  }
+}

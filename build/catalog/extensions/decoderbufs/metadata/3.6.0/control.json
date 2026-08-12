@@ -1,0 +1,7 @@
+{
+  "default_version": "0.1.0",
+  "comment": "Logical decoding plugin that delivers WAL stream changes using a Protocol Buffer format",
+  "superuser": true,
+  "trusted": false,
+  "relocatable": true
+}

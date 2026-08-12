@@ -1,0 +1,8 @@
+{
+  "default_version": "5.5.0",
+  "comment": "Extension to manage partitioned tables by time or ID",
+  "requires": ["plpgsql"],
+  "superuser": false,
+  "trusted": false,
+  "relocatable": false
+}

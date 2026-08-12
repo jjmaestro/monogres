@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "name": "pg_search",
+  "url": "https://github.com/paradedb/paradedb",
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "paradedb",
+      "name": "paradedb",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": ["0.24.3"]
+  },
+  "metadata": {
+    "build_system": "pgrx",
+    "crate_dir": "pg_search",
+    "build_args": ["--features", "deferred_wal"],
+    "build_data": {
+      "env": {
+        "LINDERA_CACHE": "."
+      },
+      "files": {
+        "1.5.1/CC-CEDICT-MeCab-0.1.0-20200409.tar.gz": {
+          "url": "https://lindera.dev/CC-CEDICT-MeCab-0.1.0-20200409.tar.gz",
+          "sha256": "ed3cf9e3ec8a80647f0ec783dc09dad43b8ccad2e994f5eab6ff13a41d0916c8"
+        },
+        "1.5.1/mecab-ipadic-2.7.0-20250920.tar.gz": {
+          "url": "https://lindera.dev/mecab-ipadic-2.7.0-20250920.tar.gz",
+          "sha256": "a7ba9f645ffe7094e56ae1c4a81d100df8fbb1e28bbe1792622e9728e162db3d"
+        },
+        "1.5.1/mecab-ko-dic-2.1.1-20180720.tar.gz": {
+          "url": "https://lindera.dev/mecab-ko-dic-2.1.1-20180720.tar.gz",
+          "sha256": "702ced21c6167e9d9aebc674ab5ee54af58d4443975f2940d37d0567c020591a"
+        }
+      }
+    },
+    "compatible_with": {
+      "postgres": {
+        "0.24.3": ">=15"
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "extensions": ["pg_search"],
+        "preload": ["pg_search"]
+      }
+    }
+  }
+}

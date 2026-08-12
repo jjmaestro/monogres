@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "name": "pg_net",
+  "url": "https://github.com/supabase/pg_net",
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "supabase",
+      "name": "pg_net",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": ["0.20.5"]
+  },
+  "metadata": {
+    "patches": [
+      {
+        "label": "//catalog/extensions/pg_net/patches:0001-0.20-hermetic-clang-c11-strict-ansi.patch",
+        "spec": ">=0.20.5/*"
+      }
+    ],
+    "compatible_with": {
+      "postgres": {
+        "0.20.5": ">=16"
+      }
+    },
+    "deps": {
+      "buildtime": {
+        "debian": {
+          "12": {
+            "*": ["libcurl4-openssl-dev"]
+          },
+          "13": {
+            "*": ["libcurl4-openssl-dev"]
+          }
+        }
+      },
+      "runtime": {
+        "debian": {
+          "12": {
+            "*": ["libcurl4"]
+          },
+          "13": {
+            "*": ["libcurl4t64"]
+          }
+        }
+      }
+    },
+    "test_ext": {
+      "smoke": {
+        "preload": ["pg_net"]
+      }
+    }
+  }
+}

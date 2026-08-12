@@ -1,0 +1,7 @@
+{
+  "default_version": "0.1",
+  "comment": "Extension to work with json type",
+  "superuser": false,
+  "trusted": false,
+  "relocatable": true
+}

@@ -30,14 +30,22 @@
     "deps": {
       "buildtime": {
         "debian": {
-          "12": {"*": ["libcurl4-openssl-dev"]},
-          "13": {"*": ["libcurl4-openssl-dev"]}
+          "12": {
+            "*": ["libcurl4-openssl-dev"]
+          },
+          "13": {
+            "*": ["libcurl4-openssl-dev"]
+          }
         }
       },
       "runtime": {
         "debian": {
-          "12": {"*": ["libcurl4"]},
-          "13": {"*": ["libcurl4t64"]}
+          "12": {
+            "*": ["libcurl4"]
+          },
+          "13": {
+            "*": ["libcurl4t64"]
+          }
         }
       }
     },

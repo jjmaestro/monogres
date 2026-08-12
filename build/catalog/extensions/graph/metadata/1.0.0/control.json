@@ -1,0 +1,8 @@
+{
+  "default_version": "@CARGO_VERSION@",
+  "comment": "graph: Sub-millisecond graph traversal for PostgreSQL",
+  "module_pathname": "graph",
+  "superuser": true,
+  "trusted": false,
+  "relocatable": false
+}

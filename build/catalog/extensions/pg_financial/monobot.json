@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "financial",
+  "url": "https://github.com/intgr/pg_financial",
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "intgr",
+      "name": "pg_financial",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/intgr/pg_financial/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "pin": [
+      "1.0.1"
+    ]
+  },
+  "metadata": {
+    "compatible_with": {
+      "postgres": {
+        "1.0.1": ">=16"
+      }
+    }
+  }
+}

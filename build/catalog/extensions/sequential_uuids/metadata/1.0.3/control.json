@@ -1,0 +1,8 @@
+{
+  "default_version": "1.0.3",
+  "comment": "generator of sequential UUIDs",
+  "module_pathname": "$libdir/sequential_uuids",
+  "superuser": true,
+  "trusted": false,
+  "relocatable": true
+}
