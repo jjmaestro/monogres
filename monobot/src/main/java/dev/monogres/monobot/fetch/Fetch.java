@@ -2,6 +2,7 @@ package dev.monogres.monobot.fetch;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.monogres.monobot.catalog.SourceTemplate;
+import dev.monogres.monobot.config.Mode;
 import dev.monogres.monobot.config.input.MonobotConfig;
 import dev.monogres.monobot.config.input.MonobotConfigFile;
 import dev.monogres.monobot.config.output.RepoConfig;
@@ -22,6 +23,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -40,15 +42,14 @@ import org.jboss.logging.Logger;
 public class Fetch {
   private static final Logger LOG = Logger.getLogger(Fetch.class);
 
-  private static final String DIR_BUILD = "build";
   private static final String DIR_METADATA = "metadata";
   private static final String FILENAME_REPO_JSON = "repo.json";
 
-  @ConfigProperty(name = "configDir")
-  String configDir;
+  @ConfigProperty(name = "catalogDir")
+  String catalogDir;
 
-  @ConfigProperty(name = "monogresRepo")
-  String monogresRepo;
+  @ConfigProperty(name = "mode")
+  Mode mode;
 
   @Inject Vertx vertx;
 
@@ -70,13 +71,14 @@ public class Fetch {
 
   private record Downloaded(Candidate candidate, String sha256, Path archivePath) {}
 
-  /// What one entry has to answer for once the rest of its versions are catalogued. Both are
-  /// survivable per version and neither is survivable per entry: a run that met either and said so
-  /// only in the log would exit 0 alongside a catalog that is missing a version or holding one
-  /// whose archive is not the archive it was written from.
-  private record Unanswered(int refused, int disagreed) {
+  /// What one entry has to answer for once the rest of its versions are catalogued. Each is
+  /// survivable per version and none is survivable per entry: a run that met one and said so only
+  /// in the log would exit 0 alongside a catalog that is missing a version, or holding one whose
+  /// archive is not the archive it was written from, or committed as something other than what the
+  /// inputs now say.
+  private record Unanswered(int refused, int disagreed, int differed) {
     boolean isEmpty() {
-      return refused == 0 && disagreed == 0;
+      return refused == 0 && disagreed == 0 && differed == 0;
     }
 
     String describe() {
@@ -87,6 +89,9 @@ public class Fetch {
       }
       if (disagreed > 0) {
         reasons.add(disagreed + " digests disagree with what is catalogued");
+      }
+      if (differed > 0) {
+        reasons.add(differed + " documents differ from what is committed");
       }
 
       return String.join(", ", reasons);
@@ -330,48 +335,80 @@ public class Fetch {
     return false;
   }
 
-  /// What the catalog records about one version. The archive is read first so a version it cannot
-  /// answer for is left out altogether rather than recorded against an archive nothing could open.
+  /// What the catalog records about one version, and the parsed copy of what its archive carried.
   ///
-  /// What the archive carried is written twice over: as it stands, into the cache beside the
-  /// archive itself, and parsed, into the catalog beside the entry. The cache keeps the bytes a
-  /// question about the parsing has to be settled against; the catalog keeps what a build reads.
+  /// The cache already holds those bytes as the archive spelled them; this is the reading of them
+  /// a build consumes, which is why both are kept.
   private void catalogue(
       MonobotConfig monobotConfig,
       Downloaded result,
       ArchiveContents contents,
       Versions versions,
-      Path outputDir) {
+      Path entryDir,
+      AtomicInteger differed) {
     versions.put(
         result.candidate().version(),
         new VersionContext(result.candidate().context(), result.sha256()));
-    archiveCache.storeExtracted(
-        result.archivePath().getParent(), monobotConfig.controlStem().orElse(null), contents);
-    writeExtracted(monobotConfig, result.candidate().version(), contents, outputDir);
+    emitExtracted(monobotConfig, result.candidate().version(), contents, entryDir, differed);
   }
 
-  /// The control file and the PGXN metadata the archive carried, written beside the entry rather
-  /// than into it. `repo.json` has no place for either: it is an index of archives, and the Bazel
+  /// The control file and the PGXN metadata the archive carried, kept beside the entry rather than
+  /// inside `repo.json`, which has no place for either: it is an index of archives, and the Bazel
   /// build reads its `metadata` block for decisions monobot does not make.
   ///
   /// One directory per version, so the file a question is about is the file at that path.
-  private void writeExtracted(
-      MonobotConfig monobotConfig, Version version, ArchiveContents contents, Path outputDir) {
-    var into = outputDir.resolve(DIR_METADATA).resolve(version.version());
+  private void emitExtracted(
+      MonobotConfig monobotConfig,
+      Version version,
+      ArchiveContents contents,
+      Path entryDir,
+      AtomicInteger differed) {
+    var into = entryDir.resolve(DIR_METADATA).resolve(version.version());
 
     if (contents.control() != null) {
-      documentWriter.write(
-          into, "control.json", archiveMetadataExtractor.controlOf(contents.control()));
+      emit(into, "control.json", archiveMetadataExtractor.controlOf(contents.control()), differed);
     }
     if (contents.metaJson() != null) {
-      documentWriter.write(
-          into, "META.json", archiveMetadataExtractor.metaJsonOf(contents.metaJson()));
+      emit(into, "META.json", archiveMetadataExtractor.metaJsonOf(contents.metaJson()), differed);
     }
     if (contents.control() == null && monobotConfig.controlStem().isPresent()) {
       LOG.warnv(
           "[{0}]: {1} carries no {0}.control, so nothing is written for it",
           monobotConfig.label(), version);
     }
+  }
+
+  /// One document the run produced, put where the mode says it goes.
+  ///
+  /// `check` is `generate` that stops short of the write, so the document it compares is built by
+  /// the same code and printed by the same printer. Anything else and the gate would be checking
+  /// its own second opinion.
+  private void emit(Path directory, String filename, Object document, AtomicInteger differed) {
+    if (mode.writes()) {
+      documentWriter.write(directory, filename, document);
+
+      return;
+    }
+
+    var target = directory.resolve(filename);
+    var produced = documentWriter.render(document);
+    String committed;
+    try {
+      committed = Files.exists(target) ? Files.readString(target) : null;
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+
+    if (produced.equals(committed)) {
+      return;
+    }
+
+    differed.incrementAndGet();
+    LOG.errorv(
+        committed == null
+            ? "{0} is not committed, and this run produces it"
+            : "{0} differs from what this run produces",
+        target);
   }
 
   public Future<Void> fetch(MonobotConfigFile monobotConfigFile) {
@@ -383,15 +420,18 @@ public class Fetch {
       return Future.succeededFuture();
     }
 
-    var monobotConfigDir = monobotConfigFile.configFile().getParent();
-    var relPath = Path.of(configDir).relativize(monobotConfigDir);
-    var outputDir = Path.of(monogresRepo, DIR_BUILD).resolve(relPath);
-    var storedRepo = readOrCreateRepoConfig(outputDir.resolve(FILENAME_REPO_JSON).toFile());
+    // `monobot.json` and `repo.json` are siblings, so the entry's directory is both where the
+    // inputs are read and where the outputs go, and the path below the catalog root is what the
+    // cache is keyed on.
+    var entryDir = monobotConfigFile.configFile().getParent();
+    var relPath = Path.of(catalogDir).relativize(entryDir);
+    var storedRepo = readOrCreateRepoConfig(entryDir.resolve(FILENAME_REPO_JSON).toFile());
     var stored = storedRepo.getVersions() == null ? new Versions() : storedRepo.getVersions();
 
     var template = monobotConfig.sources().templates().getFirst();
     var refused = new AtomicInteger();
     var disagreed = new AtomicInteger();
+    var differed = new AtomicInteger();
 
     return candidates(monobotConfig, template, List.copyOf(stored.keySet()))
         .compose(candidates -> download(monobotConfig, relPath, candidates, refused))
@@ -400,6 +440,7 @@ public class Fetch {
                 vertx.executeBlocking(
                     () -> {
                       var kept = downloaded.stream().flatMap(Optional::stream).toList();
+                      var stem = monobotConfig.controlStem().orElse(null);
                       var newest =
                           Stream.concat(
                                   kept.stream().map(Downloaded::candidate).map(Candidate::version),
@@ -409,19 +450,24 @@ public class Fetch {
 
                       for (var result : kept) {
                         try {
-                          // One read per archive, answering both the cutoff and what the archive
-                          // carries. Gunzipping and walking a whole tarball is the most expensive
-                          // thing this program does per version, and this block is ordered, so
-                          // every one of them serialises behind the last.
-                          var contents =
-                              archiveMetadataExtractor.read(
-                                  monobotConfig.controlStem().orElse(null), result.archivePath());
+                          // One read per archive, answering the cutoff, what the cache keeps and
+                          // what the catalog records. Gunzipping and walking a whole tarball is the
+                          // most expensive thing this program does per version, and this block is
+                          // ordered, so every one of them serialises behind the last.
+                          var contents = archiveMetadataExtractor.read(stem, result.archivePath());
+                          archiveCache.storeExtracted(
+                              result.archivePath().getParent(), stem, contents);
+
+                          if (!mode.catalogues()) {
+                            continue;
+                          }
                           if (!agreesWithTheCatalogue(monobotConfig, result, stored)) {
                             disagreed.incrementAndGet();
                             summary.versionSkipped(RunSummary.Skipped.DIGEST_DISAGREES);
                           } else if (isRecentEnough(
                               monobotConfig, result, newest, contents.lastModified())) {
-                            catalogue(monobotConfig, result, contents, versions, outputDir);
+                            catalogue(
+                                monobotConfig, result, contents, versions, entryDir, differed);
                             summary.versionAdded();
                           } else {
                             summary.versionSkipped(RunSummary.Skipped.BEFORE_CUTOFF);
@@ -436,9 +482,11 @@ public class Fetch {
                         }
                       }
 
-                      writeRepoConfig(monobotConfig, versions, stored, outputDir);
+                      if (mode.catalogues()) {
+                        emitRepoConfig(monobotConfig, versions, stored, entryDir, differed);
+                      }
 
-                      return new Unanswered(refused.get(), disagreed.get());
+                      return new Unanswered(refused.get(), disagreed.get(), differed.get());
                     }))
         // Reported after the catalogue has been written rather than instead of writing it: the
         // versions that came through are as good as they would have been on their own, and the
@@ -461,8 +509,12 @@ public class Fetch {
   /// A version whose archive was not downloaded this run keeps the digest already stored for it,
   /// so a forge that refuses one archive does not cost the catalog every other version in the
   /// entry.
-  private void writeRepoConfig(
-      MonobotConfig monobotConfig, Versions versions, Versions stored, Path outputDir) {
+  private void emitRepoConfig(
+      MonobotConfig monobotConfig,
+      Versions versions,
+      Versions stored,
+      Path entryDir,
+      AtomicInteger differed) {
     var merged = new Versions();
     var pins = monobotConfig.versionsSpec().pin().keySet();
 
@@ -494,10 +546,11 @@ public class Fetch {
       return;
     }
 
-    documentWriter.write(
-        outputDir,
+    emit(
+        entryDir,
         FILENAME_REPO_JSON,
-        new RepoConfig(monobotConfig.sources(), merged, monobotConfig.metadata()));
+        new RepoConfig(monobotConfig.sources(), merged, monobotConfig.metadata()),
+        differed);
     summary.catalogWritten();
   }
 

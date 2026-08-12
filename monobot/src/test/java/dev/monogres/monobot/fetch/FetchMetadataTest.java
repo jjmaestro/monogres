@@ -201,4 +201,18 @@ class FetchMetadataTest {
     assertEquals(
         List.of("plpgsql", "hstore"), List.of(requires.get(0).asText(), requires.get(1).asText()));
   }
+
+  /// The catalog gets what the parsers made of these files and the cache gets the files, so a
+  /// question about the parsing has something to be settled against. The control file goes in
+  /// under the stem it was found by, which is the extension's own name.
+  @Test
+  void theCacheKeepsBothFilesAsTheArchiveSpelledThem() throws Exception {
+    serve(entries("META.json", META_JSON, "fixture.control", CONTROL));
+
+    run();
+
+    var cached = PipelineFixture.cached(EXTENSION_DIR, "1.0.0");
+    assertEquals(CONTROL, Files.readString(cached.resolve("fixture.control")));
+    assertEquals(META_JSON, Files.readString(cached.resolve("META.json")));
+  }
 }

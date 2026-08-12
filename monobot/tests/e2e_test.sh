@@ -8,6 +8,7 @@ APP=
 GOLDEN=
 EXPECT=
 EXPECT_STATUS=0
+MODE=generate
 CONFIG_FILES=()
 
 while [[ $# -gt 0 ]]; do
@@ -16,6 +17,7 @@ while [[ $# -gt 0 ]]; do
     --golden) GOLDEN="$2"; shift 2 ;;
     --expect) EXPECT="$2"; shift 2 ;;
     --expect-status) EXPECT_STATUS="$2"; shift 2 ;;
+    --mode) MODE="$2"; shift 2 ;;
     # Named only so the gate is built before this runs; nothing reads it.
     --gate) shift 2 ;;
     --config-files) shift; CONFIG_FILES=("$@"); break ;;
@@ -25,18 +27,25 @@ done
 
 [[ "${#CONFIG_FILES[@]}" -gt 0 ]] || { echo "no config files given" >&2; exit 2; }
 
-# configDir holds extensions/, so climb out of extensions/<name>/monobot.json.
+# The catalog root holds extensions/, so climb out of
+# extensions/<name>/monobot.json.
 CONFIG="$(realpath "${CONFIG_FILES[0]}")"
-CONFIG_DIR="${CONFIG%/*/*/*}"
+SOURCE_DIR="${CONFIG%/*/*/*}"
 APP="$(realpath "${APP}")"
 
 CACHE="$(mktemp -d)"
-REPO="$(mktemp -d)"
+CATALOG="$(mktemp -d)"
 LOG="${TEST_TMPDIR:-/tmp}/monobot.log"
-trap 'rm -rf "${CACHE}" "${REPO}"' EXIT
+trap 'rm -rf "${CACHE}" "${CATALOG}"' EXIT
+
+# monobot writes repo.json beside the monobot.json it read, and what it read is
+# a runfiles tree of symlinks into the source. Copied, so the run has somewhere
+# to write and the golden is compared against a tree only this test touched.
+cp -RL "${SOURCE_DIR}/." "${CATALOG}/"
+chmod -R u+w "${CATALOG}"
 
 status=0
-env configDir="${CONFIG_DIR}" cacheDir="${CACHE}" monogresRepo="${REPO}" \
+env catalogDir="${CATALOG}" cacheDir="${CACHE}" mode="${MODE}" \
   "${APP}" > "${LOG}" 2>&1 || status=$?
 
 fail() {
@@ -75,7 +84,7 @@ grep -q 'Scanned .* extensions' "${LOG}" || fail "the run printed no summary"
 
 [[ -n "${GOLDEN}" ]] || exit 0
 
-produced="$(find "${REPO}" -name repo.json -print -quit)"
+produced="$(find "${CATALOG}" -name repo.json -print -quit)"
 [[ -n "${produced}" ]] || fail "the scan wrote no repo.json"
 
 # Compared with the shell rather than diff, which a test sandbox need not have.

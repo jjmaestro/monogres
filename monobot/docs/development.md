@@ -28,9 +28,8 @@ nix develop
 ## Dev mode
 
 ```sh
-configDir=/path/to/config \
+catalogDir=/path/to/monogres/build/catalog \
 cacheDir=/tmp/monobot \
-monogresRepo=/path/to/monogres \
   bazel run //:monobot_dev
 ```
 

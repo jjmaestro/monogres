@@ -29,9 +29,8 @@ import org.eclipse.jgit.lib.ObjectId;
 /// and gzip records one in its header, so every one of them is pinned here.
 final class PipelineFixture {
   static final Path ROOT = PipelineTestProfile.ROOT;
-  static final Path CONFIG_DIR = PipelineTestProfile.CONFIG_DIR;
+  static final Path CATALOG_DIR = PipelineTestProfile.CATALOG_DIR;
   static final Path CACHE_DIR = PipelineTestProfile.CACHE_DIR;
-  static final Path MONOGRES_REPO = PipelineTestProfile.MONOGRES_REPO;
 
   private static final int TAR_MODE_RW_R_R = 420;
 
@@ -131,7 +130,7 @@ final class PipelineFixture {
   static void resetTree() throws IOException {
     deleteRecursively(ROOT);
     Files.createDirectories(CACHE_DIR);
-    Files.createDirectories(MONOGRES_REPO);
+    Files.createDirectories(CATALOG_DIR);
   }
 
   /// Where the cache keeps one version of one entry, which is the directory the archive, its record
@@ -141,7 +140,7 @@ final class PipelineFixture {
   }
 
   static void writeConfig(String relativeDir, String json) throws IOException {
-    var dir = CONFIG_DIR.resolve(relativeDir);
+    var dir = CATALOG_DIR.resolve(relativeDir);
     Files.createDirectories(dir);
     Files.writeString(dir.resolve("monobot.json"), json);
   }
@@ -161,7 +160,7 @@ final class PipelineFixture {
   }
 
   static Path repoJson(String relativeDir) {
-    return MONOGRES_REPO.resolve("build").resolve(relativeDir).resolve("repo.json");
+    return CATALOG_DIR.resolve(relativeDir).resolve("repo.json");
   }
 
   static void deleteRecursively(Path path) throws IOException {

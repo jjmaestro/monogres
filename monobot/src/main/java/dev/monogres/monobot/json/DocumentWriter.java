@@ -24,9 +24,15 @@ public class DocumentWriter {
     void writeTo(Path written) throws IOException;
   }
 
+  /// A JSON document as the catalog spells it, which is what a run compares against a committed
+  /// file as much as what it writes to one.
+  public String render(Object document) {
+    return CatalogPrinter.print(objectMapper.valueToTree(document));
+  }
+
   /// A JSON document, laid out the way the catalog is written.
   public void write(Path directory, String filename, Object document) {
-    var printed = CatalogPrinter.print(objectMapper.valueToTree(document));
+    var printed = render(document);
 
     put(directory, filename, written -> Files.writeString(written, printed));
   }

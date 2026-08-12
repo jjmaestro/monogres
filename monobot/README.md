@@ -49,9 +49,9 @@ are optional have defaults in `src/main/resources/application.properties`:
 
 | Property | Required | Description |
 | --- | --- | --- |
-| `configDir` | yes | Root directory containing the `monobot.json` files (typically `config/` subfolder within the project) |
+| `catalogDir` | yes | Root of the catalog. Every `monobot.json` under it is an entry, and its `repo.json` is written beside it |
 | `cacheDir` | yes | Root of the archive cache, one directory per entry per version |
-| `monogresRepo` | yes | Path to the monogres repository (output goes to `{monogresRepo}/build/`), typically a monogres git checkout |
+| `mode` | no | What the run does: `generate` writes the catalog, `check` compares against it and writes nothing, `fetch` only fills the cache. Defaults to `generate`. |
 | `maxConcurrentDownloads` | no | How many archive downloads may be in flight at once, across the whole scan rather than per extension. Defaults to `4`. |
 | `downloadTimeout` | no | How long one download may take, as an ISO8601 duration. Defaults to `PT5M`. |
 | `tagListTimeout` | no | How long one tag listing may take, as an ISO8601 duration, applied as both the connect and the read timeout. Defaults to `PT30S`. Counted in whole seconds, and anything under a second is raised to one. |
@@ -88,7 +88,7 @@ reported in the summary rather than in the exit status.
 ### Input: `monobot.json`
 
 Each extension has a `monobot.json` file under
-`configDir/extensions/{extensionName}`. Minimal example:
+`catalogDir/extensions/{extensionName}`. Minimal example:
 
 ```json
 {
@@ -166,11 +166,11 @@ tags names one. Tags are ordered by semantic version precedence, and
 
 ### Output: `repo.json`
 
-Written to `{monogresRepo}/build/{relpath}/repo.json`, where `{relpath}`
-mirrors the directory structure under `configDir`. Example:
+Written beside the `monobot.json` it was generated from, so an entry is one
+directory holding both:
 
 ```text
-configDir/extensions/envvar/monobot.json  -->  monogresRepo/build/extensions/envvar/repo.json
+catalogDir/extensions/envvar/monobot.json  -->  catalogDir/extensions/envvar/repo.json
 ```
 
 Each `repo.json` contains (among potentially other fields; for example, if
@@ -243,9 +243,8 @@ source archive:
 From this directory:
 
 ```sh
-configDir=/path/to/config \
+catalogDir=/path/to/monogres/build/catalog \
 cacheDir=/tmp/monobot \
-monogresRepo=/path/to/monogres \
   bazel run //:monobot
 ```
 

@@ -67,15 +67,19 @@ monobot_e2e_test(
     tags = ["block-network"],
 )
 
-# The golden pair. A real scan of one extension against the real forge, so it is
-# out of the default gate: `bazel test //tests:e2e_golden_native` runs it. noset
-# is the subject because it is small, three versions, and no longer released, so
-# the golden does not go stale behind us.
+# The golden pair. A real scan of one extension against the real source, so it
+# is out of the default gate: `bazel test //tests:e2e_golden_native` runs it.
+# noset is the subject because it is small, three versions, and no longer
+# released, so the golden does not go stale behind us.
+#
+# The golden is the entry's own repo.json rather than a copy kept elsewhere,
+# which is what makes config-noset a catalog entry of the shape build/catalog
+# holds: monobot.json and repo.json side by side, one generated from the other.
 monobot_e2e_test(
     name = "e2e_golden",
     app = "//:monobot",
     config = ":config_noset",
-    golden = "goldens/noset-repo.json",
+    golden = "config-noset/extensions/noset/repo.json",
     tags = [
         "external",
         "manual",
@@ -88,7 +92,23 @@ monobot_e2e_test(
     app = "//:monobot_native",
     config = ":config_noset",
     gate = ":jvm_gate",
-    golden = "goldens/noset-repo.json",
+    golden = "config-noset/extensions/noset/repo.json",
+    tags = [
+        "external",
+        "manual",
+        "requires-network",
+    ],
+)
+
+# The gate the whole catalog is run through, over one entry. It exits 0 only if
+# what a run would write is already there, byte for byte, so it fails on a
+# change in the layout, in a digest, or in what a monobot.json carries, and it
+# fails without touching the tree it read.
+monobot_e2e_test(
+    name = "e2e_check",
+    app = "//:monobot",
+    config = ":config_noset",
+    mode = "check",
     tags = [
         "external",
         "manual",

@@ -22,8 +22,8 @@ public class Scan {
 
   private static final String CONFIG_JSON = "monobot.json";
 
-  @ConfigProperty(name = "configDir")
-  String configDir;
+  @ConfigProperty(name = "catalogDir")
+  String catalogDir;
 
   @Inject ObjectMapper objectMapper;
 
@@ -66,7 +66,7 @@ public class Scan {
   }
 
   public Future<Void> run() throws IOException {
-    var path = Path.of(configDir);
+    var path = Path.of(catalogDir);
 
     var fetchFutures = scanConfigPaths(path).stream().map(this::scanConfig).toList();
 

@@ -21,6 +21,9 @@ Two shapes, because they answer different questions:
   - golden: a real scan of one small extension, compared byte for byte. It needs
     the network, so it is tagged out of the default gate; it is what catches a
     change in the serialized shape or in a digest.
+  - check: the same scan in the mode that writes nothing, over a tree that
+    already holds the answer. It has to exit 0, which is the gate the whole
+    catalog is run through and this is its rehearsal.
 """
 
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
@@ -33,15 +36,18 @@ def monobot_e2e_test(
         expect_status = None,
         golden = None,
         gate = None,
+        mode = None,
         **kwargs):
-    """Runs a built monobot against a config tree and checks what it produced.
+    """Runs a built monobot against a catalog tree and checks what it produced.
 
     Args:
         name: Target name.
         app: The application to run, `//:monobot` or `//:monobot_native`.
-        config: Filegroup holding a config tree, laid out as
-            `extensions/<name>/monobot.json`. `configDir` is derived from it, so
-            the tree's own directory names are what the run sees.
+        config: Filegroup holding a catalog tree, laid out as
+            `extensions/<name>/monobot.json`. `catalogDir` is derived from it,
+            so the tree's own directory names are what the run sees. The tree is
+            copied before the run, because monobot writes into the directory it
+            read and runfiles are symlinks into the source.
         expect: Optional string the output has to contain. Give it a value that
             only a deserialized config can produce, such as a URL that appears
             nowhere but inside the JSON.
@@ -53,6 +59,9 @@ def monobot_e2e_test(
             rather than what it wrote.
         gate: Optional target whose files have to build before this test can
             run. Used to put the JVM run ahead of the native one.
+        mode: Optional run mode, `generate` by default. `check` writes nothing
+            and exits non-zero when what it would write differs from what the
+            tree already holds.
         **kwargs: Passed to the underlying `sh_test` (`tags`, `size`, ...).
     """
     args = ["--app", "$(rootpath {})".format(app)]
@@ -63,6 +72,9 @@ def monobot_e2e_test(
 
     if expect:
         args += ["--expect", expect]
+
+    if mode:
+        args += ["--mode", mode]
 
     if golden:
         args += ["--golden", "$(rootpath {})".format(golden)]

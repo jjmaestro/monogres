@@ -26,21 +26,30 @@ class MonobotMainIT {
       """
       {
         "name": "unreachable",
-        "url": "https://github.com/ongres/monobot-no-such-repository"
+        "url": "https://github.com/ongres/monobot-no-such-repository",
+        "sources": {
+          "gh": {
+            "tag": "v{version}",
+            "gh_org": "ongres",
+            "name": "monobot-no-such-repository",
+            "strip_prefix": "{name}-{version}",
+            "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{tag}.tar.gz"
+          }
+        },
+        "versions": { "discover": { "replace": [["^v(.*)$", "$1"]] } }
       }
       """;
 
   @Test
   void readsItsConfigBeforeItReachesTheNetwork(QuarkusMainLauncher launcher) throws IOException {
-    var configDir = Files.createTempDirectory("monobot-it-config");
-    var extension = Files.createDirectories(configDir.resolve("extensions/unreachable"));
+    var catalogDir = Files.createTempDirectory("monobot-it-catalog");
+    var extension = Files.createDirectories(catalogDir.resolve("extensions/unreachable"));
     Files.writeString(extension.resolve("monobot.json"), CONFIG);
 
     var result =
         launcher.launch(
-            "-DconfigDir=" + configDir,
-            "-DcacheDir=" + Files.createTempDirectory("monobot-it-cache"),
-            "-DmonogresRepo=" + Files.createTempDirectory("monobot-it-repo"));
+            "-DcatalogDir=" + catalogDir,
+            "-DcacheDir=" + Files.createTempDirectory("monobot-it-cache"));
 
     var output = result.getOutput() + result.getErrorOutput();
 
