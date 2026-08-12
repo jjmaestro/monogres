@@ -44,8 +44,6 @@ public class Fetch {
   private static final String DIR_METADATA = "metadata";
   private static final String FILENAME_REPO_JSON = "repo.json";
 
-  private static final int NOTHING_REFUSED = 0;
-
   @ConfigProperty(name = "configDir")
   String configDir;
 
@@ -71,6 +69,29 @@ public class Fetch {
   private record Candidate(Version version, SequencedMap<String, String> context, URL url) {}
 
   private record Downloaded(Candidate candidate, String sha256, Path archivePath) {}
+
+  /// What one entry has to answer for once the rest of its versions are catalogued. Both are
+  /// survivable per version and neither is survivable per entry: a run that met either and said so
+  /// only in the log would exit 0 alongside a catalog that is missing a version or holding one
+  /// whose archive is not the archive it was written from.
+  private record Unanswered(int refused, int disagreed) {
+    boolean isEmpty() {
+      return refused == 0 && disagreed == 0;
+    }
+
+    String describe() {
+      var reasons = new ArrayList<String>();
+
+      if (refused > 0) {
+        reasons.add(refused + " archives could not be downloaded");
+      }
+      if (disagreed > 0) {
+        reasons.add(disagreed + " digests disagree with what is catalogued");
+      }
+
+      return String.join(", ", reasons);
+    }
+  }
 
   /// The archive one version names, built from the first source declared. The catalog gives every
   /// entry one source; where there were several they would be mirrors of one archive, and one
@@ -281,6 +302,34 @@ public class Fetch {
     return isRecentEnough;
   }
 
+  /// Whether what the archive digests to is what the catalog already records for this version.
+  ///
+  /// A version in the catalog names one archive, so its digest is settled. The same URL answering
+  /// with different bytes is the artifact changing under a pin, which is the one thing a catalog of
+  /// digests exists to notice, and recording the new digest would notice it silently. So the stored
+  /// digest stays and the entry fails, with both digests named: what to do about it is a decision
+  /// about the artifact, and nobody can take it from a `git diff` that has already been taken.
+  private boolean agreesWithTheCatalogue(
+      MonobotConfig monobotConfig, Downloaded result, Versions stored) {
+    var catalogued = stored.get(result.candidate().version());
+
+    if (catalogued == null
+        || catalogued.sha256() == null
+        || catalogued.sha256().equals(result.sha256())) {
+      return true;
+    }
+
+    LOG.errorv(
+        "[{0}]: {1} is catalogued as sha256 {2}, and {3} digests to {4}",
+        monobotConfig.label(),
+        result.candidate().version(),
+        catalogued.sha256(),
+        result.archivePath(),
+        result.sha256());
+
+    return false;
+  }
+
   /// What the catalog records about one version. The archive is read first so a version it cannot
   /// answer for is left out altogether rather than recorded against an archive nothing could open.
   ///
@@ -342,6 +391,7 @@ public class Fetch {
 
     var template = monobotConfig.sources().templates().getFirst();
     var refused = new AtomicInteger();
+    var disagreed = new AtomicInteger();
 
     return candidates(monobotConfig, template, List.copyOf(stored.keySet()))
         .compose(candidates -> download(monobotConfig, relPath, candidates, refused))
@@ -366,7 +416,10 @@ public class Fetch {
                           var contents =
                               archiveMetadataExtractor.read(
                                   monobotConfig.controlStem().orElse(null), result.archivePath());
-                          if (isRecentEnough(
+                          if (!agreesWithTheCatalogue(monobotConfig, result, stored)) {
+                            disagreed.incrementAndGet();
+                            summary.versionSkipped(RunSummary.Skipped.DIGEST_DISAGREES);
+                          } else if (isRecentEnough(
                               monobotConfig, result, newest, contents.lastModified())) {
                             catalogue(monobotConfig, result, contents, versions, outputDir);
                             summary.versionAdded();
@@ -385,25 +438,20 @@ public class Fetch {
 
                       writeRepoConfig(monobotConfig, versions, stored, outputDir);
 
-                      return refused.get();
+                      return new Unanswered(refused.get(), disagreed.get());
                     }))
         // Reported after the catalogue has been written rather than instead of writing it: the
-        // versions that did download are as good as they would have been on their own, and the
+        // versions that came through are as good as they would have been on their own, and the
         // ones that did not are what the run has to answer for.
         .compose(
-            count -> {
-              if (count == NOTHING_REFUSED) {
+            unanswered -> {
+              if (unanswered.isEmpty()) {
                 return Future.<Void>succeededFuture();
               }
               summary.extensionFailed();
 
               return Future.<Void>failedFuture(
-                  new IOException(
-                      "["
-                          + monobotConfig.label()
-                          + "]: "
-                          + count
-                          + " archives could not be downloaded"));
+                  new IOException("[" + monobotConfig.label() + "]: " + unanswered.describe()));
             });
   }
 

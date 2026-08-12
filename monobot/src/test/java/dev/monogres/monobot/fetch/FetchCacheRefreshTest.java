@@ -1,7 +1,7 @@
 package dev.monogres.monobot.fetch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -131,8 +132,11 @@ class FetchCacheRefreshTest {
     assertEquals(first, catalogued());
   }
 
+  /// Refreshing is how a changed archive is found, not how one is accepted. What the source now
+  /// serves reaches the cache, because that is the archive at that URL; what it does not reach is
+  /// the catalog, which holds the digest the version was added with.
   @Test
-  void anArchiveTheSourceServesAgainIsCataloguedAsWhatItNowIs() throws Exception {
+  void anArchiveTheSourceServesAgainIsHeldToWhatIsCatalogued() throws Exception {
     when(sourceArchive.refresh(any(), any(), any()))
         .thenAnswer(
             invocation -> {
@@ -152,8 +156,8 @@ class FetchCacheRefreshTest {
 
     run();
     var first = catalogued();
-    run();
 
-    assertNotEquals(first, catalogued(), "the replaced archive was catalogued as the old one");
+    assertThrows(ExecutionException.class, this::run);
+    assertEquals(first, catalogued(), "the replaced archive was catalogued over the old one");
   }
 }

@@ -31,7 +31,8 @@ public class RunSummary {
     ALREADY_STORED("already catalogued"),
     BEFORE_CUTOFF("before the cutoff"),
     UNREADABLE_ARCHIVE("unreadable archives"),
-    REFUSED_DOWNLOAD("refused downloads");
+    REFUSED_DOWNLOAD("refused downloads"),
+    DIGEST_DISAGREES("digests the catalog disagrees with");
 
     private final String description;
 
