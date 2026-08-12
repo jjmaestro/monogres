@@ -6,11 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import dev.monogres.monobot.digest.DigestUtils;
-import io.vertx.core.Vertx;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.HexFormat;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
@@ -32,48 +32,46 @@ import org.junit.jupiter.api.Test;
 /// rather than as the intended message.
 ///
 /// No Quarkus here: [SourceArchive]'s injection points are package-private fields, so a plain
-/// instance with a real Vert.x is enough, and the digest is reached without a network call.
+/// instance is enough, wired to [DownloadHarness] where a response is what the digest follows.
 class SourceArchiveDigestTest {
+  private static final Duration DOWNLOAD_TIMEOUT = Duration.ofSeconds(10);
   private static final String EVENT_LOOP_THREAD_PREFIX = "vert.x-eventloop";
 
   private static final int OVER_ONE_READ = 5 * 1024 * 1024;
   private static final long OVER_THE_MAPPING_CEILING = (1L << 31) + (1L << 20);
   private static final long RANDOM_SEED = 20260809L;
 
-  private Vertx vertx;
+  private DownloadHarness forge;
   private Path directory;
   private Path archive;
   private byte[] bytes;
 
   @BeforeEach
   void setUp() throws Exception {
-    vertx = Vertx.vertx();
+    forge = new DownloadHarness();
     directory = Files.createTempDirectory("monobot-digest");
     bytes = PipelineFixture.archive("fixture-aa1/fixture.control", "default_version = '1.0.0'", 0L);
     archive = directory.resolve("fixture.tar.gz");
-    Files.write(archive, bytes);
   }
 
   @AfterEach
   void tearDown() throws Exception {
+    forge.close();
     PipelineFixture.deleteRecursively(directory);
-    vertx.close().toCompletionStage().toCompletableFuture().get(30, TimeUnit.SECONDS);
   }
 
   /// Records the thread the digest actually ran on. Overriding rather than mocking keeps the real
   /// computation, so the returned value is still checked against the bytes on disk.
   private SourceArchive recordingSourceArchive(AtomicReference<String> thread) {
-    var sourceArchive =
+    return forge.wire(
         new SourceArchive() {
           @Override
           String sha256(Path path) {
             thread.set(Thread.currentThread().getName());
             return super.sha256(path);
           }
-        };
-    sourceArchive.vertx = vertx;
-
-    return sourceArchive;
+        },
+        DOWNLOAD_TIMEOUT);
   }
 
   @Test
@@ -83,20 +81,23 @@ class SourceArchiveDigestTest {
     var result = new AtomicReference<String>();
     var sourceArchive = recordingSourceArchive(digestThread);
     var done = new CountDownLatch(1);
+    forge.answerWith(bytes);
 
-    vertx.runOnContext(
-        v -> {
-          callerThread.set(Thread.currentThread().getName());
-          sourceArchive
-              .digest(archive)
-              .onComplete(
-                  outcome -> {
-                    result.set(outcome.result());
-                    done.countDown();
-                  });
-        });
+    forge
+        .vertx()
+        .runOnContext(
+            v -> {
+              callerThread.set(Thread.currentThread().getName());
+              sourceArchive
+                  .download(forge.url("/archive"), archive)
+                  .onComplete(
+                      outcome -> {
+                        result.set(outcome.result().sha256());
+                        done.countDown();
+                      });
+            });
 
-    assertTrue(done.await(30, TimeUnit.SECONDS), "the digest never completed");
+    assertTrue(done.await(30, TimeUnit.SECONDS), "the download never completed");
     assertEquals(DigestUtils.sha256sum(ByteBuffer.wrap(bytes)), result.get());
     assertTrue(
         callerThread.get().startsWith(EVENT_LOOP_THREAD_PREFIX),

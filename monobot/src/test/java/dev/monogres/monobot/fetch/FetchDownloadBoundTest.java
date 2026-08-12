@@ -6,7 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.monogres.monobot.digest.DigestUtils;
+import dev.monogres.monobot.fetch.SourceArchive.Download;
 import dev.monogres.monobot.git.GitTag;
 import dev.monogres.monobot.git.TagLister;
 import dev.monogres.monobot.scan.Scan;
@@ -15,7 +15,6 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 import io.vertx.core.Promise;
 import jakarta.inject.Inject;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -66,7 +65,7 @@ class FetchDownloadBoundTest {
   @Inject ObjectMapper objectMapper;
 
   private final List<Path> asked = Collections.synchronizedList(new ArrayList<>());
-  private final List<Promise<String>> pending = Collections.synchronizedList(new ArrayList<>());
+  private final List<Promise<Download>> pending = Collections.synchronizedList(new ArrayList<>());
 
   /// The scheduling pass runs on a worker, so how far it has got has to be waited for rather than
   /// read. Once the bound is reached the count stops moving on its own: nothing else is asked for
@@ -86,12 +85,12 @@ class FetchDownloadBoundTest {
     }
     when(tagLister.getTags(any())).thenReturn(tags.toArray(GitTag[]::new));
 
-    when(sourceArchive.sha256UrlFile(any(), any()))
+    when(sourceArchive.download(any(), any()))
         .thenAnswer(
             invocation -> {
               asked.add(invocation.getArgument(1));
               bound.countDown();
-              var promise = Promise.<String>promise();
+              var promise = Promise.<Download>promise();
               pending.add(promise);
               return promise.future();
             });
@@ -112,9 +111,7 @@ class FetchDownloadBoundTest {
     var bytes =
         PipelineFixture.controlArchive(
             "fixture", "fixture-" + version, PipelineFixture.control(version, version), 0L);
-    Files.createDirectories(target.getParent());
-    Files.write(target, bytes);
-    pending.get(index).complete(DigestUtils.sha256sum(ByteBuffer.wrap(bytes)));
+    pending.get(index).complete(PipelineFixture.served(target, bytes).result());
   }
 
   @Test

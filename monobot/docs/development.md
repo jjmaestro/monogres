@@ -29,7 +29,7 @@ nix develop
 
 ```sh
 configDir=/path/to/config \
-workdir=/tmp/monobot \
+cacheDir=/tmp/monobot \
 monogresRepo=/path/to/monogres \
   bazel run //:monobot_dev
 ```

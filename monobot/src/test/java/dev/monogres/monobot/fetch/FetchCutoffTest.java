@@ -7,17 +7,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.monogres.monobot.digest.DigestUtils;
 import dev.monogres.monobot.git.GitTag;
 import dev.monogres.monobot.git.TagLister;
 import dev.monogres.monobot.scan.Scan;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
-import io.vertx.core.Future;
 import jakarta.inject.Inject;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -140,7 +137,7 @@ class FetchCutoffTest {
     modifiedByVersion.clear();
     keepNewest(false);
 
-    when(sourceArchive.sha256UrlFile(any(), any()))
+    when(sourceArchive.download(any(), any()))
         .thenAnswer(
             invocation -> {
               Path target = invocation.getArgument(1);
@@ -152,9 +149,7 @@ class FetchCutoffTest {
                       "fixture-" + version,
                       PipelineFixture.control(version, version),
                       modifiedByVersion.get(version));
-              Files.createDirectories(target.getParent());
-              Files.write(target, bytes);
-              return Future.succeededFuture(DigestUtils.sha256sum(ByteBuffer.wrap(bytes)));
+              return PipelineFixture.served(target, bytes);
             });
   }
 

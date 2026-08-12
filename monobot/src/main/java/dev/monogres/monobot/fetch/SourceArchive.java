@@ -5,6 +5,8 @@ import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import io.vertx.core.file.AsyncFile;
 import io.vertx.core.file.OpenOptions;
+import io.vertx.ext.web.client.HttpRequest;
+import io.vertx.ext.web.client.HttpResponse;
 import io.vertx.ext.web.client.WebClient;
 import io.vertx.ext.web.client.predicate.ErrorConverter;
 import io.vertx.ext.web.client.predicate.ResponsePredicate;
@@ -14,25 +16,26 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.io.IOException;
 import java.net.URL;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
-import java.util.HexFormat;
+import java.util.Optional;
 import java.util.function.Supplier;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class SourceArchive {
-  private static final Logger LOG = Logger.getLogger(SourceArchive.class);
-
   private static final int HTTP_OK = 200;
   private static final int HTTP_MULTIPLE_CHOICES = 300;
+  private static final int HTTP_NOT_MODIFIED = 304;
 
-  private static final int DIGEST_BLOCK_BYTES = 1024 * 1024;
+  private static final String HEADER_ETAG = "ETag";
+  private static final String HEADER_IF_MODIFIED_SINCE = "If-Modified-Since";
+  private static final String HEADER_IF_NONE_MATCH = "If-None-Match";
+  private static final String HEADER_LAST_MODIFIED = "Last-Modified";
+
+  private static final String SUFFIX_PARTIAL = ".part";
 
   @ConfigProperty(name = "downloadTimeout")
   Duration downloadTimeout;
@@ -40,6 +43,15 @@ public class SourceArchive {
   @Inject Vertx vertx;
 
   @Inject WebClient webClient;
+
+  /// What a source answered with. `sha256` and `size` describe the file now on disk; `etag` and
+  /// `lastModified` are the validators to hand back on the next request, and are null when the
+  /// source offered neither.
+  public record Download(String sha256, long size, String etag, String lastModified) {}
+
+  /// The validators a source gave for an archive, as it spelled them. Opaque on purpose: their only
+  /// use is being repeated back, and a source that recognizes one answers 304.
+  public record Validators(String etag, String lastModified) {}
 
   private void createDownloadDir(Path path) {
     var downloadDir = path.getParent();
@@ -61,16 +73,27 @@ public class SourceArchive {
         .openBlocking(path.toString(), new OpenOptions().setCreate(true).setTruncateExisting(true));
   }
 
-  /// A response the forge did not mean as an archive. Without this the error page is what gets
+  /// Where the response is written while it is arriving. The body codec needs a file to pipe into
+  /// before the request is even sent, so writing straight to the archive path would truncate a
+  /// perfectly good cached archive on the way to being told it has not changed, and would leave
+  /// half of one there when a transfer is cut.
+  static Path partialPath(Path path) {
+    return path.resolveSibling(path.getFileName() + SUFFIX_PARTIAL);
+  }
+
+  /// A response the source did not mean as an archive. Without this the error page is what gets
   /// written, digested and catalogued, and the run only notices later, when a tar reader refuses
   /// it, by which time the status code that explains it is gone.
   ///
   /// The status and the URL are both named because 429 is the one an operator can act on: both
   /// forges rate limit anonymous callers, and monobot is always an anonymous caller.
-  private static ResponsePredicate archiveResponse(URL url) {
+  ///
+  /// 304 passes only when the request carried validators to earn it. Unasked for, it is a source
+  /// answering about bytes the caller never claimed to have.
+  private static ResponsePredicate archiveResponse(URL url, boolean conditional) {
     return ResponsePredicate.create(
         response ->
-            response.statusCode() >= HTTP_OK && response.statusCode() < HTTP_MULTIPLE_CHOICES
+            isArchive(response.statusCode()) || (conditional && isUnchanged(response.statusCode()))
                 ? ResponsePredicateResult.success()
                 : ResponsePredicateResult.failure(
                     url
@@ -81,17 +104,42 @@ public class SourceArchive {
         ErrorConverter.create(result -> new IOException(result.message())));
   }
 
-  private Future<Void> downloadFile(URL url, Path path) {
-    var writeStream = writableAsyncFile(path);
+  private static boolean isArchive(int statusCode) {
+    return statusCode >= HTTP_OK && statusCode < HTTP_MULTIPLE_CHOICES;
+  }
 
-    return webClient
-        // The whole URL, so the scheme decides TLS and the port is the one the URL names rather
-        // than the default for its scheme.
-        .getAbs(url.toString())
-        // A forge that accepts the connection and then stops answering would otherwise hold the
-        // download future open forever, and nothing above it settles on its own.
-        .timeout(downloadTimeout.toMillis())
-        .expect(archiveResponse(url))
+  private static boolean isUnchanged(int statusCode) {
+    return statusCode == HTTP_NOT_MODIFIED;
+  }
+
+  private static HttpRequest<?> conditionOn(HttpRequest<?> request, Validators validators) {
+    if (validators.etag() != null) {
+      request.putHeader(HEADER_IF_NONE_MATCH, validators.etag());
+    }
+    if (validators.lastModified() != null) {
+      request.putHeader(HEADER_IF_MODIFIED_SINCE, validators.lastModified());
+    }
+
+    return request;
+  }
+
+  private Future<HttpResponse<Void>> request(URL url, Path partial, Validators validators) {
+    var writeStream = writableAsyncFile(partial);
+    var request =
+        webClient
+            // The whole URL, so the scheme decides TLS and the port is the one the URL names rather
+            // than the default for its scheme.
+            .getAbs(url.toString())
+            // A source that accepts the connection and then stops answering would otherwise hold
+            // the download future open forever, and nothing above it settles on its own.
+            .timeout(downloadTimeout.toMillis())
+            .expect(archiveResponse(url, validators != null));
+
+    if (validators != null) {
+      conditionOn(request, validators);
+    }
+
+    return request
         // The codec is told not to close the file, so closing it is this method's job alone and
         // happens on every way out rather than only on the one where the body ended. A connect or
         // DNS failure does not even build a codec, and one descriptor per failed download, held
@@ -107,43 +155,64 @@ public class SourceArchive {
 
         // Cast because the deprecated Function overload is equally applicable to a method
         // reference.
-        .eventually((Supplier<Future<Void>>) writeStream::close)
-        .mapEmpty();
+        .eventually((Supplier<Future<Void>>) writeStream::close);
   }
 
-  /// Reads the archive a block at a time and digests it. Blocking, and for as long as the archive
-  /// is large.
-  ///
-  /// Read rather than mapped, because a mapping is addressed by an int and a file over 2 GiB is an
-  /// IllegalArgumentException naming Integer.MAX_VALUE. That is not an IOException, so the catch
-  /// below cannot see it and an undocumented ceiling on the one value a downstream build pins on
-  /// reports itself as a stack trace. A block at a time is also the whole archive out of the page
-  /// cache rather than in the address space.
+  /// Moves the response onto the archive path and reads back what the cache records about it. One
+  /// worker task for the move, the stat and the digest together, so the file is walked once.
+  private Future<Download> settle(Path partial, Path path, HttpResponse<Void> response) {
+    return vertx.executeBlocking(
+        () -> {
+          try {
+            Files.move(
+                partial, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+
+            return new Download(
+                sha256(path),
+                Files.size(path),
+                response.getHeader(HEADER_ETAG),
+                response.getHeader(HEADER_LAST_MODIFIED));
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
+        },
+        false);
+  }
+
+  private Future<Optional<Download>> fetch(URL url, Path path, Validators validators) {
+    var partial = partialPath(path);
+
+    return request(url, partial, validators)
+        .compose(
+            response ->
+                isUnchanged(response.statusCode())
+                    ? Future.succeededFuture(Optional.<Download>empty())
+                    : settle(partial, path, response).map(Optional::of))
+        // Whatever happened, the partial file has no reader: on the way out of a completed download
+        // it has already been moved, and on every other way out it holds a response nothing can
+        // use.
+        .eventually(
+            (Supplier<Future<Void>>)
+                () ->
+                    vertx
+                        .executeBlocking(() -> Files.deleteIfExists(partial), false)
+                        .<Void>mapEmpty());
+  }
+
+  /// The whole archive, written to `path` and digested.
+  public Future<Download> download(URL url, Path path) {
+    return fetch(url, path, null).map(Optional::orElseThrow);
+  }
+
+  /// The archive again, asked for with the validators the cache holds. Empty when the source
+  /// answered that what is already at `path` is current, which leaves that file untouched.
+  public Future<Optional<Download>> refresh(URL url, Path path, Validators validators) {
+    return fetch(url, path, validators);
+  }
+
+  /// Its own method so a test can say which thread the digest ran on. Digesting reads every byte
+  /// of the archive, and the response's continuation runs on the event loop that received it.
   String sha256(Path path) {
-    try (var channel = FileChannel.open(path, StandardOpenOption.READ)) {
-      var messageDigest = DigestUtils.getSha256MessageDigest();
-      var buffer = ByteBuffer.allocate(DIGEST_BLOCK_BYTES);
-
-      while (channel.read(buffer) != -1) {
-        buffer.flip();
-        messageDigest.update(buffer);
-        buffer.clear();
-      }
-
-      return HexFormat.of().formatHex(messageDigest.digest());
-    } catch (IOException e) {
-      LOG.warnv("I/O error while computing digest of {0}", path.toString());
-      throw new RuntimeException(e);
-    }
-  }
-
-  /// Unordered, because each archive's digest is independent and ordering them would serialize
-  /// every download's continuation behind the slowest one.
-  Future<String> digest(Path path) {
-    return vertx.executeBlocking(() -> sha256(path), false);
-  }
-
-  public Future<String> sha256UrlFile(URL url, Path downloadPath) {
-    return downloadFile(url, downloadPath).compose(v -> digest(downloadPath));
+    return DigestUtils.sha256sum(path);
   }
 }

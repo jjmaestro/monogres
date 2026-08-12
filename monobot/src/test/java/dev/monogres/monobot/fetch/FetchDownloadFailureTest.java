@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.monogres.monobot.digest.DigestUtils;
 import dev.monogres.monobot.git.GitTag;
 import dev.monogres.monobot.git.TagLister;
 import dev.monogres.monobot.scan.Scan;
@@ -18,7 +17,6 @@ import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import jakarta.inject.Inject;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -108,7 +106,7 @@ class FetchDownloadFailureTest {
     archivesByVersion.clear();
     refusedVersions.clear();
 
-    when(sourceArchive.sha256UrlFile(any(), any()))
+    when(sourceArchive.download(any(), any()))
         .thenAnswer(
             invocation -> {
               var target = invocation.<java.nio.file.Path>getArgument(1);
@@ -118,9 +116,7 @@ class FetchDownloadFailureTest {
               }
               var bytes = archivesByVersion.get(version);
               assertNotNull(bytes, "no archive registered for version " + version);
-              Files.createDirectories(target.getParent());
-              Files.write(target, bytes);
-              return Future.succeededFuture(DigestUtils.sha256sum(ByteBuffer.wrap(bytes)));
+              return PipelineFixture.served(target, bytes);
             });
   }
 

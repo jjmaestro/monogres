@@ -10,14 +10,14 @@ import java.util.Map;
 public class PipelineTestProfile implements QuarkusTestProfile {
   static final Path ROOT = Path.of(System.getProperty("java.io.tmpdir"), "monobot-pipeline-test");
   static final Path CONFIG_DIR = ROOT.resolve("config");
-  static final Path WORKDIR = ROOT.resolve("work");
+  static final Path CACHE_DIR = ROOT.resolve("cache");
   static final Path MONOGRES_REPO = ROOT.resolve("monogres");
 
   @Override
   public Map<String, String> getConfigOverrides() {
     return Map.of(
         "configDir", CONFIG_DIR.toString(),
-        "workdir", WORKDIR.toString(),
+        "cacheDir", CACHE_DIR.toString(),
         "monogresRepo", MONOGRES_REPO.toString());
   }
 }

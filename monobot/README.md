@@ -22,27 +22,42 @@ Monobot runs as a pipeline with two phases:
 Archive downloads run concurrently via Vert.x async futures, up to
 `maxConcurrentDownloads` of them at a time across the whole scan.
 
-An archive already in `{workdir}/archives/` is not fetched again: the spool is
-addressed by commit, so a file there is that commit's archive, and it is what
-records which commits a previous run already fetched.
+Every archive is kept under `cacheDir`, in a tree that mirrors the catalog and
+adds a level per version, beside a `fetch.json` recording the URL it came from,
+its digest, its length and whatever validators the source gave for it:
+
+```txt
+{cacheDir}/extensions/pgvector/0.8.2/pgvector-0.8.2.tar.gz
+{cacheDir}/extensions/pgvector/0.8.2/fetch.json
+{cacheDir}/extensions/pgvector/0.8.2/vector.control
+{cacheDir}/extensions/pgvector/0.8.2/META.json
+```
+
+A version whose archive the cache can answer for costs no request. `verifyCache`
+decides how much of the file is checked first, and `refreshCache` asks the source
+anyway, conditionally, so an unchanged archive costs a 304. Nothing is ever
+deleted from the cache: the archives are the raw data every value in `repo.json`
+is derived from.
 
 ## Configuration
 
 ### Runtime Properties
 
-Monobot reads seven properties, three of them required, provided as
-environment variables or command line properties (`-D...`). The four that
+Monobot reads nine properties, three of them required, provided as
+environment variables or command line properties (`-D...`). The six that
 are optional have defaults in `src/main/resources/application.properties`:
 
 | Property | Required | Description |
 | --- | --- | --- |
 | `configDir` | yes | Root directory containing the `monobot.json` files (typically `config/` subfolder within the project) |
-| `workdir` | yes | Working directory for downloaded archives |
+| `cacheDir` | yes | Root of the archive cache, one directory per entry per version |
 | `monogresRepo` | yes | Path to the monogres repository (output goes to `{monogresRepo}/build/`), typically a monogres git checkout |
 | `maxConcurrentDownloads` | no | How many archive downloads may be in flight at once, across the whole scan rather than per extension. Defaults to `4`. |
 | `downloadTimeout` | no | How long one download may take, as an ISO8601 duration. Defaults to `PT5M`. |
 | `tagListTimeout` | no | How long one tag listing may take, as an ISO8601 duration, applied as both the connect and the read timeout. Defaults to `PT30S`. Counted in whole seconds, and anything under a second is raised to one. |
 | `runTimeout` | no | How long the whole scan may take, as an ISO8601 duration. Defaults to `PT1H`. Reaching it exits non-zero. |
+| `verifyCache` | no | How much of a cached archive is checked before a run answers from it: `size` compares its length against the length recorded for it, `digest` compares its digest, `none` takes the record at its word. Defaults to `size`. |
+| `refreshCache` | no | Whether to ask the source about archives the cache can already answer for. The request carries the recorded validators, so an unchanged archive costs a 304. Defaults to `false`. |
 
 ### Exit status and the run summary
 
@@ -113,14 +128,13 @@ With rules for tags a version cannot be read from as they stand:
 
 Fields:
 
-- `name` (required) -- Extension name, and three things follow from it. It is
-  the stem of the control file looked for inside each archive
-  (`{name}.control`), the subdirectory of `{workdir}/archives/` the archives are
-  spooled under, and the prefix every log line about the extension carries. The
-  stem is the one that bites: it is the extension's own name and not the
-  repository's, and the two diverge routinely, so `pgvector` needs
-  `"name": "vector"`. A name that matches no control file produces no metadata,
-  which produces no `repo.json`, with one WARN line saying so.
+- `name` (required) -- Extension name, and two things follow from it. It is the
+  stem of the control file looked for inside each archive (`{name}.control`),
+  and the prefix every log line about the extension carries. The stem is the one
+  that bites: it is the extension's own name and not the repository's, and the
+  two diverge routinely, so `pgvector` needs `"name": "vector"`. A name that
+  matches no control file leaves the version with no control document, with one
+  WARN line saying so.
 - `url` (required) -- Git repository URL (GitHub or GitLab). A trailing slash
   and a `.git` suffix are both accepted and both ignored.
 - `versions` (optional) -- How tags become versions, and which are kept.
@@ -230,7 +244,7 @@ From this directory:
 
 ```sh
 configDir=/path/to/config \
-workdir=/tmp/monobot \
+cacheDir=/tmp/monobot \
 monogresRepo=/path/to/monogres \
   bazel run //:monobot
 ```

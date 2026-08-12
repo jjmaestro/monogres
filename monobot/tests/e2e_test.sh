@@ -30,13 +30,13 @@ CONFIG="$(realpath "${CONFIG_FILES[0]}")"
 CONFIG_DIR="${CONFIG%/*/*/*}"
 APP="$(realpath "${APP}")"
 
-WORK="$(mktemp -d)"
+CACHE="$(mktemp -d)"
 REPO="$(mktemp -d)"
 LOG="${TEST_TMPDIR:-/tmp}/monobot.log"
-trap 'rm -rf "${WORK}" "${REPO}"' EXIT
+trap 'rm -rf "${CACHE}" "${REPO}"' EXIT
 
 status=0
-env configDir="${CONFIG_DIR}" workdir="${WORK}" monogresRepo="${REPO}" \
+env configDir="${CONFIG_DIR}" cacheDir="${CACHE}" monogresRepo="${REPO}" \
   "${APP}" > "${LOG}" 2>&1 || status=$?
 
 fail() {

@@ -39,7 +39,7 @@ class MonobotMainIT {
     var result =
         launcher.launch(
             "-DconfigDir=" + configDir,
-            "-Dworkdir=" + Files.createTempDirectory("monobot-it-work"),
+            "-DcacheDir=" + Files.createTempDirectory("monobot-it-cache"),
             "-DmonogresRepo=" + Files.createTempDirectory("monobot-it-repo"));
 
     var output = result.getOutput() + result.getErrorOutput();

@@ -11,7 +11,7 @@ import dev.monogres.monobot.config.output.Versions;
 import dev.monogres.monobot.fetch.ArchiveMetadataExtractor.ArchiveContents;
 import dev.monogres.monobot.git.GitTag;
 import dev.monogres.monobot.git.TagLister;
-import dev.monogres.monobot.json.CatalogPrinter;
+import dev.monogres.monobot.json.DocumentWriter;
 import dev.monogres.monobot.report.RunSummary;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
@@ -22,9 +22,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -42,15 +40,11 @@ import org.jboss.logging.Logger;
 public class Fetch {
   private static final Logger LOG = Logger.getLogger(Fetch.class);
 
-  private static final String DIR_ARCHIVES = "archives";
   private static final String DIR_BUILD = "build";
   private static final String DIR_METADATA = "metadata";
   private static final String FILENAME_REPO_JSON = "repo.json";
 
   private static final int NOTHING_REFUSED = 0;
-
-  @ConfigProperty(name = "workdir")
-  String workdir;
 
   @ConfigProperty(name = "configDir")
   String configDir;
@@ -60,11 +54,11 @@ public class Fetch {
 
   @Inject Vertx vertx;
 
-  @Inject SourceArchive sourceArchive;
-
-  @Inject DownloadLimiter downloadLimiter;
+  @Inject ArchiveCache archiveCache;
 
   @Inject ObjectMapper objectMapper;
+
+  @Inject DocumentWriter documentWriter;
 
   @Inject ArchiveMetadataExtractor archiveMetadataExtractor;
 
@@ -207,66 +201,43 @@ public class Fetch {
             });
   }
 
-  /// The digest of this version's archive, fetching it only if the spool does not already hold it.
-  ///
-  /// The spool is addressed by the archive the templates name, so a file at that path is that
-  /// version's archive and nothing else, which makes it the record of what has already been
-  /// fetched. Without that record the only one is `repo.json`, and every run would ask the forge
-  /// for every archive again, at exit 0, against a client with no credentials and no retry budget.
-  private Future<String> archiveDigest(URL url, Path archivePath) {
-    if (Files.exists(archivePath)) {
-      return sourceArchive.digest(archivePath);
-    }
-
-    return downloadLimiter.withPermit(() -> sourceArchive.sha256UrlFile(url, archivePath));
-  }
-
-  private Path spoolPath(MonobotConfig monobotConfig, Candidate candidate) {
-    var file = candidate.url().getPath();
-    var name = file.substring(file.lastIndexOf('/') + 1);
-
-    return Path.of(
-        workdir, DIR_ARCHIVES, monobotConfig.label(), candidate.version().version(), name);
-  }
-
   /// How many of this entry's archives the source would not serve. Each download recovers into an
   /// empty result rather than failing, because one archive answers for one version: a composite
   /// that fails on the first refusal discards the versions that downloaded beside it, and does it
   /// while they are still in flight.
   private Future<List<Optional<Downloaded>>> download(
-      MonobotConfig monobotConfig, List<Candidate> candidates, AtomicInteger refused) {
+      MonobotConfig monobotConfig, Path entry, List<Candidate> candidates, AtomicInteger refused) {
     var downloads =
         candidates.stream()
             .map(
-                candidate -> {
-                  var archivePath = spoolPath(monobotConfig, candidate);
+                candidate ->
+                    archiveCache
+                        .archive(entry, candidate.version(), candidate.url())
+                        .map(
+                            cached -> {
+                              // Logged here rather than beside the request, which knows the URL and
+                              // not the entry it belongs to, so attributing a download meant
+                              // reversing the URL.
+                              LOG.infov(
+                                  "[{0}]: {1} is at {2}",
+                                  monobotConfig.label(), candidate.version(), cached.archive());
 
-                  return archiveDigest(candidate.url(), archivePath)
-                      .map(
-                          sha256 -> {
-                            // Logged here rather than beside the request, which knows the URL and
-                            // not the entry it belongs to, so attributing a download meant
-                            // reversing the URL.
-                            LOG.infov(
-                                "[{0}]: {1} is at {2}",
-                                monobotConfig.label(), candidate.version(), archivePath);
+                              return Optional.of(
+                                  new Downloaded(candidate, cached.sha256(), cached.archive()));
+                            })
+                        .recover(
+                            err -> {
+                              refused.incrementAndGet();
+                              summary.versionSkipped(RunSummary.Skipped.REFUSED_DOWNLOAD);
+                              LOG.errorv(
+                                  err,
+                                  "[{0}]: {1} could not be downloaded from {2}",
+                                  monobotConfig.label(),
+                                  candidate.version(),
+                                  candidate.url());
 
-                            return Optional.of(new Downloaded(candidate, sha256, archivePath));
-                          })
-                      .recover(
-                          err -> {
-                            refused.incrementAndGet();
-                            summary.versionSkipped(RunSummary.Skipped.REFUSED_DOWNLOAD);
-                            LOG.errorv(
-                                err,
-                                "[{0}]: {1} could not be downloaded from {2}",
-                                monobotConfig.label(),
-                                candidate.version(),
-                                candidate.url());
-
-                            return Future.succeededFuture(Optional.<Downloaded>empty());
-                          });
-                })
+                              return Future.succeededFuture(Optional.<Downloaded>empty());
+                            }))
             .toList();
 
     if (downloads.isEmpty()) {
@@ -312,6 +283,10 @@ public class Fetch {
 
   /// What the catalog records about one version. The archive is read first so a version it cannot
   /// answer for is left out altogether rather than recorded against an archive nothing could open.
+  ///
+  /// What the archive carried is written twice over: as it stands, into the cache beside the
+  /// archive itself, and parsed, into the catalog beside the entry. The cache keeps the bytes a
+  /// question about the parsing has to be settled against; the catalog keeps what a build reads.
   private void catalogue(
       MonobotConfig monobotConfig,
       Downloaded result,
@@ -321,6 +296,8 @@ public class Fetch {
     versions.put(
         result.candidate().version(),
         new VersionContext(result.candidate().context(), result.sha256()));
+    archiveCache.storeExtracted(
+        result.archivePath().getParent(), monobotConfig.controlStem().orElse(null), contents);
     writeExtracted(monobotConfig, result.candidate().version(), contents, outputDir);
   }
 
@@ -334,10 +311,12 @@ public class Fetch {
     var into = outputDir.resolve(DIR_METADATA).resolve(version.version());
 
     if (contents.control() != null) {
-      writeDocument(into, "control.json", archiveMetadataExtractor.controlOf(contents.control()));
+      documentWriter.write(
+          into, "control.json", archiveMetadataExtractor.controlOf(contents.control()));
     }
     if (contents.metaJson() != null) {
-      writeDocument(into, "META.json", archiveMetadataExtractor.metaJsonOf(contents.metaJson()));
+      documentWriter.write(
+          into, "META.json", archiveMetadataExtractor.metaJsonOf(contents.metaJson()));
     }
     if (contents.control() == null && monobotConfig.controlStem().isPresent()) {
       LOG.warnv(
@@ -365,7 +344,7 @@ public class Fetch {
     var refused = new AtomicInteger();
 
     return candidates(monobotConfig, template, List.copyOf(stored.keySet()))
-        .compose(candidates -> download(monobotConfig, candidates, refused))
+        .compose(candidates -> download(monobotConfig, relPath, candidates, refused))
         .compose(
             downloaded ->
                 vertx.executeBlocking(
@@ -467,33 +446,11 @@ public class Fetch {
       return;
     }
 
-    writeDocument(
+    documentWriter.write(
         outputDir,
         FILENAME_REPO_JSON,
         new RepoConfig(monobotConfig.sources(), merged, monobotConfig.metadata()));
     summary.catalogWritten();
-  }
-
-  /// Written beside the destination and then moved onto it, so what is there is either the whole
-  /// previous document or the whole new one. Written in place, a write that stops partway leaves a
-  /// document that is neither, and that stops the entry for good: reading it back is how the next
-  /// run starts, and deleting it by hand forfeits every sha256 it recorded.
-  ///
-  /// The temporary file is in the same directory because an atomic move is a rename, and a rename
-  /// does not cross filesystems.
-  void writeDocument(Path directory, String filename, Object document) {
-    try {
-      Files.createDirectories(directory);
-      var written = Files.createTempFile(directory, filename, ".tmp");
-      try {
-        Files.writeString(written, CatalogPrinter.print(objectMapper.valueToTree(document)));
-        Files.move(written, directory.resolve(filename), StandardCopyOption.ATOMIC_MOVE);
-      } finally {
-        Files.deleteIfExists(written);
-      }
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
   }
 
   private RepoConfig readOrCreateRepoConfig(File repoConfigFile) {

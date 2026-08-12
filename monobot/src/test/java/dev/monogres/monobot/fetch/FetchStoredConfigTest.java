@@ -8,7 +8,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.monogres.monobot.digest.DigestUtils;
 import dev.monogres.monobot.git.GitTag;
 import dev.monogres.monobot.git.TagLister;
 import dev.monogres.monobot.scan.Scan;
@@ -19,7 +18,6 @@ import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import jakarta.inject.Inject;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -109,16 +107,14 @@ class FetchStoredConfigTest {
                   : new GitTag[] {new GitTag("v2.0.0", PipelineFixture.objectId("b1"))};
             });
 
-    when(sourceArchive.sha256UrlFile(any(), any()))
+    when(sourceArchive.download(any(), any()))
         .thenAnswer(
             invocation -> {
               Path target = invocation.getArgument(1);
               var version = target.getParent().getFileName().toString();
               var bytes = archivesByVersion.get(version);
               assertNotNull(bytes, "no archive registered for version " + version);
-              Files.createDirectories(target.getParent());
-              Files.write(target, bytes);
-              return Future.succeededFuture(DigestUtils.sha256sum(ByteBuffer.wrap(bytes)));
+              return PipelineFixture.served(target, bytes);
             });
   }
 

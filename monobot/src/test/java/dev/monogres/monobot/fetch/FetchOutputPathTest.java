@@ -6,16 +6,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.monogres.monobot.digest.DigestUtils;
 import dev.monogres.monobot.git.GitTag;
 import dev.monogres.monobot.git.TagLister;
 import dev.monogres.monobot.scan.Scan;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
-import io.vertx.core.Future;
 import jakarta.inject.Inject;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
@@ -57,21 +54,24 @@ class FetchOutputPathTest {
   void setUp() throws Exception {
     PipelineFixture.resetTree();
 
-    when(sourceArchive.sha256UrlFile(any(), any()))
+    // Which archive to serve is read out of the URL rather than out of the path it is asked to be
+    // written to. Two configs can share the leaf of their path, which is the point of this test,
+    // and the URL is what tells the two of them apart.
+    when(sourceArchive.download(any(), any()))
         .thenAnswer(
             invocation -> {
+              var url = invocation.getArgument(0).toString();
               Path target = invocation.getArgument(1);
               var version = target.getParent().getFileName().toString();
-              var extension = target.getParent().getParent().getFileName().toString();
+              var extension = url.replaceFirst(".*/monogres/([^/]+)/archive/.*", "$1");
               var bytes =
                   PipelineFixture.controlArchive(
                       extension,
                       extension + "-" + version,
                       PipelineFixture.control("1.0.0", extension),
                       0L);
-              Files.createDirectories(target.getParent());
-              Files.write(target, bytes);
-              return Future.succeededFuture(DigestUtils.sha256sum(ByteBuffer.wrap(bytes)));
+
+              return PipelineFixture.served(target, bytes);
             });
   }
 

@@ -1,8 +1,13 @@
 package dev.monogres.monobot.fetch;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.monogres.monobot.digest.DigestUtils;
+import dev.monogres.monobot.fetch.SourceArchive.Download;
+import io.vertx.core.Future;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,7 +30,7 @@ import org.eclipse.jgit.lib.ObjectId;
 final class PipelineFixture {
   static final Path ROOT = PipelineTestProfile.ROOT;
   static final Path CONFIG_DIR = PipelineTestProfile.CONFIG_DIR;
-  static final Path WORKDIR = PipelineTestProfile.WORKDIR;
+  static final Path CACHE_DIR = PipelineTestProfile.CACHE_DIR;
   static final Path MONOGRES_REPO = PipelineTestProfile.MONOGRES_REPO;
 
   private static final int TAR_MODE_RW_R_R = 420;
@@ -113,16 +118,39 @@ final class PipelineFixture {
     return CONTROL_TEMPLATE.formatted(defaultVersion, comment);
   }
 
+  /// What a mocked [SourceArchive#download] answers with: the bytes onto disk, and everything the
+  /// cache records about them. Neither validator, which is what a source that offers none gives.
+  static Future<Download> served(Path target, byte[] bytes) throws IOException {
+    Files.createDirectories(target.getParent());
+    Files.write(target, bytes);
+
+    return Future.succeededFuture(
+        new Download(DigestUtils.sha256sum(ByteBuffer.wrap(bytes)), bytes.length, null, null));
+  }
+
   static void resetTree() throws IOException {
     deleteRecursively(ROOT);
-    Files.createDirectories(WORKDIR);
+    Files.createDirectories(CACHE_DIR);
     Files.createDirectories(MONOGRES_REPO);
+  }
+
+  /// Where the cache keeps one version of one entry, which is the directory the archive, its record
+  /// and whatever the archive carried all land in.
+  static Path cached(String relativeDir, String version) {
+    return CACHE_DIR.resolve(relativeDir).resolve(version);
   }
 
   static void writeConfig(String relativeDir, String json) throws IOException {
     var dir = CONFIG_DIR.resolve(relativeDir);
     Files.createDirectories(dir);
     Files.writeString(dir.resolve("monobot.json"), json);
+  }
+
+  /// Seeds what a previous run recorded about one cached archive, which is what the next run
+  /// decides from.
+  static void writeRecord(Path directory, ObjectMapper objectMapper, ArchiveRecord record)
+      throws IOException {
+    Files.writeString(directory.resolve("fetch.json"), objectMapper.writeValueAsString(record));
   }
 
   /// Seeds the output of a previous run, which the next one reads back and merges into.
