@@ -5,37 +5,53 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.SequencedMap;
 import java.util.stream.Collectors;
 
-/// The `versions` block of `monobot.json`: the rules that rewrite a tag name into the string a
-/// version is read from, and which of those versions the catalog keeps.
+/// The `versions.discover` block: how an entry that follows its upstream reads a tag, and which of
+/// the versions it reads are kept.
 ///
-/// `replace` is ordered and the first replacement rule whose regex matches the whole tag name is
-/// the one that applies, so the more specific replacement rules should go first. The tags that
-/// don't match any replacement rules pass through as-is.
+/// An entry without this block asks its forge nothing. Most of the catalog is a set of pins, so
+/// most of the catalog lists no tags at all.
+///
+/// `replace` is ordered and the first rule whose regex matches the whole tag name is the one that
+/// applies, so the more specific rules go first. A tag no rule matches is read as it stands.
+/// Whatever comes out is the key, so the rule spells the version rather than suggests it:
+/// `^v(\d+)\.(\d+)$` to `$1.$2.0` is what turns hll's `v2.21` into `2.21.0`.
+///
+/// `context` fills the placeholders the `sources` block owes, each from the tag by the same kind
+/// of rule: `upstream_version` for hll, `tag_dir` for age, `dirname` for openhalo.
 ///
 /// `satisfy` is a range over the version, `after` a cutoff on the datetime the archive was last
-/// modified. Only the archive answers the cutoff, so `after` narrows what is catalogued rather than
-/// what is downloaded. `keepNewest` exempts the newest version from that cutoff, so that an
-/// extension whose last release predates it still reaches the catalog.
+/// modified. Only the archive answers the cutoff, so `after` narrows what is catalogued rather
+/// than what is downloaded. `keepNewest` exempts the newest version from that cutoff, so an entry
+/// whose last release predates it still reaches the catalog.
 @RegisterForReflection
-public record VersionSpec(
-    TagReplacement[] replace, String satisfy, String after, boolean keepNewest) {
+public record DiscoverySpec(
+    TagReplacement[] replace,
+    Map<String, TagReplacement[]> context,
+    String satisfy,
+    String after,
+    boolean keepNewest) {
   private static final TagReplacement[] PASS_THROUGH = new TagReplacement[0];
 
-  public VersionSpec() {
-    this(null, null, null, false);
+  public DiscoverySpec() {
+    this(null, null, null, null, false);
   }
 
-  public VersionSpec {
-    // The spec of a config with no `versions` block: rewrites no tag.
+  public DiscoverySpec {
     if (replace == null) {
       replace = PASS_THROUGH;
     }
+    if (context == null) {
+      context = Map.of();
+    }
 
     requireDistinctRules(replace);
+    context.values().forEach(DiscoverySpec::requireDistinctRules);
 
     if (satisfy != null) {
       requireRange(satisfy);
@@ -84,14 +100,27 @@ public record VersionSpec(
     }
   }
 
-  /// The tag name with the first matching rule applied, unchanged when none matches.
-  /// `Version.find` decides whether the result is a version.
-  public String rewrite(String tagName) {
-    return Arrays.stream(replace)
+  private static String applied(TagReplacement[] rules, String tagName) {
+    return Arrays.stream(rules)
         .map(rule -> rule.appliedTo(tagName))
         .flatMap(Optional::stream)
         .findFirst()
         .orElse(tagName);
+  }
+
+  /// The tag name with the first matching rule applied, unchanged when none matches.
+  /// `Version.find` decides whether the result is a version.
+  public String rewrite(String tagName) {
+    return applied(replace, tagName);
+  }
+
+  /// The placeholders this tag supplies, which are whatever `context` names. Only the ones a
+  /// source block actually reads reach `repo.json`; deriving one nothing reads costs a regex.
+  public SequencedMap<String, String> context(String tagName) {
+    var derived = new LinkedHashMap<String, String>();
+    context.forEach((key, rules) -> derived.put(key, applied(rules, tagName)));
+
+    return derived;
   }
 
   /// Whether the range keeps this version. Every version, when there is no range.

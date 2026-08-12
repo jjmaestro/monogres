@@ -1,10 +1,27 @@
 {
   "name": "noset",
   "url": "https://gitlab.com/ongresinc/extensions/noset",
+  "sources": {
+    "gl": {
+      "tag": "v{version}",
+      "gl_org": "ongresinc",
+      "name": "noset",
+      "filename": "noset-{tag}",
+      "strip_prefix": "{filename}",
+      "url": "https://gitlab.com/{gl_org}/extensions/{name}/-/archive/v{version}/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "discover": {
+      "replace": [["^v(.*)$", "$1"]]
+    }
+  },
   "metadata": {
     "compatible_with": {
-      "0.3.0": ">=14",
-      "0.2.0": ">=12, <14"
+      "postgres": {
+        "0.3.0": ">=14",
+        "0.2.0": ">=12, <14"
+      }
     }
   }
 }

@@ -45,9 +45,19 @@ class FetchCutoffTest {
       {
         "name": "fixture",
         "url": "https://github.com/monogres/fixture",
+        "sources": {
+          "gh": {
+            "tag": "v{version}",
+            "name": "fixture",
+            "strip_prefix": "{name}-{version}",
+            "url": "https://github.com/monogres/{name}/archive/refs/tags/{tag}.tar.gz"
+          }
+        },
         "versions": {
-          "replace": [["^v(.*)$", "$1"]],
-          "after": "2020-01-01T00:00:00Z"%s
+          "discover": {
+            "replace": [["^v(.*)$", "$1"]],
+            "after": "2020-01-01T00:00:00Z"%s
+          }
         }
       }
       """;
@@ -57,22 +67,27 @@ class FetchCutoffTest {
   private static final String STORED_REPO =
       """
       {
-        "sources" : {
-          "github.com" : {
-            "url" : "https://api.github.com/repos/monogres/fixture/tarball/{commit}",
-            "type" : "tar.gz"
+        "version": 1,
+        "sources": {
+          "gh": {
+            "tag": "v{version}",
+            "name": "fixture",
+            "strip_prefix": "{name}-{version}",
+            "url": "https://github.com/monogres/{name}/archive/refs/tags/{tag}.tar.gz"
           }
         },
-        "versions" : {
-          "0.9.0" : {
-            "tag" : "v0.9.0",
-            "sha256" : "1111111111111111111111111111111111111111111111111111111111111111",
-            "strip_prefix" : "seeded",
-            "commit" : "%s"
+        "versions": {
+          "0.9.0": {
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
           }
         },
-        "metadata" : { "compatible_with" : { "0.9.0" : ">=12" } },
-        "version" : 1
+        "metadata": {
+          "compatible_with": {
+            "postgres": {
+              "0.9.0": ">=12"
+            }
+          }
+        }
       }
       """;
 
@@ -84,17 +99,13 @@ class FetchCutoffTest {
 
   @Inject ObjectMapper objectMapper;
 
-  private final List<String> downloadedCommits = new ArrayList<>();
+  private final List<String> downloadedVersions = new ArrayList<>();
 
-  /// Newest modification time inside each commit's archive, which is what the cutoff reads.
-  private final Map<String, Long> modifiedByCommit = new HashMap<>();
-
-  private static String commitOf(String version) {
-    return PipelineFixture.commitSha("aa" + version.charAt(2));
-  }
+  /// Newest modification time inside each version's archive, which is what the cutoff reads.
+  private final Map<String, Long> modifiedByVersion = new HashMap<>();
 
   private void archiveModifiedAt(String version, long modified) {
-    modifiedByCommit.put(commitOf(version), modified);
+    modifiedByVersion.put(version, modified);
   }
 
   private void listTags(String... versions) throws Exception {
@@ -125,23 +136,22 @@ class FetchCutoffTest {
   @BeforeEach
   void setUp() throws Exception {
     PipelineFixture.resetTree();
-    downloadedCommits.clear();
-    modifiedByCommit.clear();
+    downloadedVersions.clear();
+    modifiedByVersion.clear();
     keepNewest(false);
 
     when(sourceArchive.sha256UrlFile(any(), any()))
         .thenAnswer(
             invocation -> {
               Path target = invocation.getArgument(1);
-              var commit = target.getFileName().toString().replace(".tar.gz", "");
-              downloadedCommits.add(commit);
-              var version = "0." + commit.charAt(2) + ".0";
+              var version = target.getParent().getFileName().toString();
+              downloadedVersions.add(version);
               var bytes =
                   PipelineFixture.controlArchive(
                       "fixture",
-                      "fixture-" + commit,
+                      "fixture-" + version,
                       PipelineFixture.control(version, version),
-                      modifiedByCommit.get(commit));
+                      modifiedByVersion.get(version));
               Files.createDirectories(target.getParent());
               Files.write(target, bytes);
               return Future.succeededFuture(DigestUtils.sha256sum(ByteBuffer.wrap(bytes)));
@@ -179,9 +189,7 @@ class FetchCutoffTest {
     run();
 
     // Every one of them: the cutoff reads bytes that are already on disk.
-    assertEquals(
-        List.of(commitOf("0.1.0"), commitOf("0.3.0")),
-        downloadedCommits.stream().sorted().toList());
+    assertEquals(List.of("0.1.0", "0.3.0"), downloadedVersions.stream().sorted().toList());
   }
 
   @Test
@@ -200,8 +208,7 @@ class FetchCutoffTest {
   @Test
   void theSparedVersionIsTheNewestTheRunKnowsOf() throws Exception {
     keepNewest(true);
-    PipelineFixture.writeRepoJson(
-        EXTENSION_DIR, STORED_REPO.formatted(PipelineFixture.commitSha("aa9")));
+    PipelineFixture.writeRepoJson(EXTENSION_DIR, STORED_REPO);
     archiveModifiedAt("0.1.0", BEFORE_CUTOFF);
     archiveModifiedAt("0.3.0", BEFORE_CUTOFF);
     listTags("0.3.0", "0.1.0");

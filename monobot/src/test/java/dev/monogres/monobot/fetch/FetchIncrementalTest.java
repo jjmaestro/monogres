@@ -38,7 +38,15 @@ class FetchIncrementalTest {
       {
         "name": "fixture",
         "url": "https://github.com/monogres/fixture",
-        "versions": { "replace": [["^v(.*)$", "$1"]] }
+        "sources": {
+          "gh": {
+            "tag": "v{version}",
+            "name": "fixture",
+            "strip_prefix": "{name}-{version}",
+            "url": "https://github.com/monogres/{name}/archive/refs/tags/{tag}.tar.gz"
+          }
+        },
+        "versions": { "discover": { "replace": [["^v(.*)$", "$1"]] } }
       }
       """;
 
@@ -47,29 +55,29 @@ class FetchIncrementalTest {
 
   private static final String STORED_VERSION =
       """
-      "%s" : {
-        "tag" : "v%s",
-        "sha256" : "%s",
-        "strip_prefix" : "seeded-prefix-%s",
-        "commit" : "%s",
-        "short_commit" : "ignored"
-      }
+      "%s": { "sha256": "%s" }
       """;
 
   private static final String STORED_REPO =
       """
       {
-        "sources" : {
-          "github.com" : {
-            "url" : "https://api.github.com/repos/monogres/fixture/tarball/{commit}",
-            "type" : "tar.gz"
+        "version": 1,
+        "sources": {
+          "gh": {
+            "tag": "v{version}",
+            "name": "fixture",
+            "strip_prefix": "{name}-{version}",
+            "url": "https://github.com/monogres/{name}/archive/refs/tags/{tag}.tar.gz"
           }
         },
-        "versions" : { %s },
-        "metadata" : {
-          "compatible_with" : { "0.1.0" : ">=12" }
-        },
-        "version" : 1
+        "versions": { %s },
+        "metadata": {
+          "compatible_with": {
+            "postgres": {
+              "0.1.0": ">=12"
+            }
+          }
+        }
       }
       """;
 
@@ -81,11 +89,10 @@ class FetchIncrementalTest {
 
   @Inject ObjectMapper objectMapper;
 
-  private final List<String> downloadedCommits = new ArrayList<>();
+  private final List<String> downloadedVersions = new ArrayList<>();
 
   private static String storedVersion(String version) {
-    var commit = PipelineFixture.commitSha("aa" + version.charAt(2));
-    return STORED_VERSION.formatted(version, version, SEEDED_SHA256, version, commit);
+    return STORED_VERSION.formatted(version, SEEDED_SHA256);
   }
 
   private static void seed(String... versions) throws IOException {
@@ -118,7 +125,7 @@ class FetchIncrementalTest {
   @BeforeEach
   void setUp() throws Exception {
     PipelineFixture.resetTree();
-    downloadedCommits.clear();
+    downloadedVersions.clear();
     PipelineFixture.writeConfig(EXTENSION_DIR, CONFIG);
 
     when(tagLister.getTags(any()))
@@ -133,13 +140,12 @@ class FetchIncrementalTest {
         .thenAnswer(
             invocation -> {
               Path target = invocation.getArgument(1);
-              var commit = target.getFileName().toString().replace(".tar.gz", "");
-              downloadedCommits.add(commit);
-              var version = "0." + commit.charAt(2) + ".0";
+              var version = target.getParent().getFileName().toString();
+              downloadedVersions.add(version);
               var bytes =
                   PipelineFixture.controlArchive(
                       "fixture",
-                      "fixture-" + commit,
+                      "fixture-" + version,
                       PipelineFixture.control(version, "fetched " + version),
                       0L);
               Files.createDirectories(target.getParent());
@@ -174,9 +180,7 @@ class FetchIncrementalTest {
 
     assertEquals(List.of("0.3.0", "0.2.0", "0.1.0"), versionsWritten());
     assertEquals(
-        List.of(PipelineFixture.commitSha("aa2")),
-        downloadedCommits,
-        "only the missing version is worth downloading");
+        List.of("0.2.0"), downloadedVersions, "only the missing version is worth downloading");
   }
 
   @Test
@@ -185,29 +189,37 @@ class FetchIncrementalTest {
 
     run();
 
-    assertEquals(List.of(), downloadedCommits);
+    assertEquals(List.of(), downloadedVersions);
     assertEquals(List.of("0.3.0", "0.2.0", "0.1.0"), versionsWritten());
   }
 
+  /// A stored version is not fetched again, so what the run writes for it is what was recorded
+  /// for it. The digest is the whole of that record, and it is the one thing a re-run could not
+  /// recover without downloading the archive again.
   @Test
   void storedVersionsKeepWhatWasRecordedForThem() throws Exception {
     seed("0.1.0");
 
     run();
 
-    var stored = written().get("versions").get("0.1.0");
-    assertEquals(SEEDED_SHA256, stored.get("sha256").asText());
-    assertEquals("seeded-prefix-0.1.0", stored.get("strip_prefix").asText());
+    assertEquals(SEEDED_SHA256, written().get("versions").get("0.1.0").get("sha256").asText());
   }
 
+  /// `metadata` is carried from `monobot.json` rather than merged out of what was stored, so an
+  /// entry that declares none writes none however much a previous run left behind. What the
+  /// archives carried is beside the entry, one directory per version.
   @Test
-  void storedMetadataSurvivesAlongsideWhatTheRunExtracts() throws Exception {
+  void theDocumentCarriesTheMetadataTheConfigDeclares() throws Exception {
     seed("0.1.0");
 
     run();
 
-    var metadata = written().get("metadata");
-    assertEquals(">=12", metadata.get("compatible_with").get("0.1.0").asText());
-    assertEquals("fetched 0.3.0", metadata.get(".control").get("0.3.0").get("comment").asText());
+    assertTrue(written().get("metadata").isEmpty(), written().get("metadata").toString());
+    assertTrue(
+        Files.exists(
+            PipelineFixture.repoJson(EXTENSION_DIR)
+                .getParent()
+                .resolve("metadata/0.3.0/control.json")),
+        "the run wrote no control file for the version it fetched");
   }
 }

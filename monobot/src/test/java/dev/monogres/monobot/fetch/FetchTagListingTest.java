@@ -34,7 +34,15 @@ class FetchTagListingTest {
       {
         "name": "fixture",
         "url": "https://github.com/monogres/fixture",
-        "versions": { "replace": [["^v(.*)$", "$1"]] }
+        "sources": {
+          "gh": {
+            "tag": "v{version}",
+            "name": "fixture",
+            "strip_prefix": "{name}-{version}",
+            "url": "https://github.com/monogres/{name}/archive/refs/tags/{tag}.tar.gz"
+          }
+        },
+        "versions": { "discover": { "replace": [["^v(.*)$", "$1"]] } }
       }
       """;
 

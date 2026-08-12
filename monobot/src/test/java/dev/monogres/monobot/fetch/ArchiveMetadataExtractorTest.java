@@ -5,8 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.monogres.monobot.config.Metadata;
-import dev.monogres.monobot.config.output.Version;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -28,7 +26,6 @@ import org.junit.jupiter.api.Test;
 /// forge writes its entries in is the forge's decision, so the choice has to be made by a rule
 /// rather than by whichever entry the walk reached last.
 class ArchiveMetadataExtractorTest {
-  private static final Version VERSION = new Version("1.0.0");
 
   private static final int ONE_LARGE_ENTRY = 32 * 1024 * 1024;
   private static final int OVER_THE_BYTE_BOUND = 9;
@@ -62,12 +59,8 @@ class ArchiveMetadataExtractorTest {
   }
 
   private String commentIn(Path archive) {
-    var metadata = new Metadata();
-    extractor.addContents(VERSION, extractor.read("fixture", archive), metadata);
-
-    return metadata
-        .get(ArchiveMetadataExtractor.POSTGRES_CONTROL_FILE_EXTENSION)
-        .get(VERSION.version())
+    return extractor
+        .controlOf(extractor.read("fixture", archive).control())
         .get("comment")
         .asText();
   }
@@ -100,18 +93,10 @@ class ArchiveMetadataExtractorTest {
     var counting = new CountingExtractor();
     counting.objectMapper = new ObjectMapper();
     var contents = counting.read("fixture", archive);
-    var metadata = new Metadata();
-    counting.addContents(VERSION, contents, metadata);
 
     assertEquals(1, counting.opens.get(), "the archive was read more than once");
     assertEquals(Instant.EPOCH, contents.lastModified());
-    assertEquals(
-        "the real one",
-        metadata
-            .get(ArchiveMetadataExtractor.POSTGRES_CONTROL_FILE_EXTENSION)
-            .get(VERSION.version())
-            .get("comment")
-            .asText());
+    assertEquals("the real one", counting.controlOf(contents.control()).get("comment").asText());
   }
 
   /// Nothing between the socket and this walk caps anything, and the walk reads every entry, so a

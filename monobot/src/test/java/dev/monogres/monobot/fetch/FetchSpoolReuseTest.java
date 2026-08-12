@@ -1,7 +1,6 @@
 package dev.monogres.monobot.fetch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -41,7 +40,15 @@ class FetchSpoolReuseTest {
       {
         "name": "fixture",
         "url": "https://github.com/monogres/fixture",
-        "versions": { "replace": [["^v(.*)$", "$1"]] }
+        "sources": {
+          "gh": {
+            "tag": "v{version}",
+            "name": "fixture",
+            "strip_prefix": "{name}-{version}",
+            "url": "https://github.com/monogres/{name}/archive/refs/tags/{tag}.tar.gz"
+          }
+        },
+        "versions": { "discover": { "replace": [["^v(.*)$", "$1"]] } }
       }
       """;
 
@@ -97,9 +104,6 @@ class FetchSpoolReuseTest {
     run();
 
     assertEquals(2, downloads.get(), "the first run did not fetch both tags");
-    assertFalse(
-        Files.exists(PipelineFixture.repoJson(EXTENSION_DIR)),
-        "an extension no version carried metadata for is not catalogued");
 
     downloads.set(0);
     run();
@@ -107,7 +111,9 @@ class FetchSpoolReuseTest {
     assertEquals(0, downloads.get(), "the second run fetched archives it already had");
   }
 
-  /// The spool is what records that a commit has been fetched, so it has to hold both of them.
+  /// The spool is what records that a version has been fetched, so it has to hold both of them.
+  /// One directory per version, which is what makes the file at a path answer for that version and
+  /// nothing else.
   @Test
   void everyFetchedArchiveStaysInTheSpool() throws Exception {
     run();
@@ -115,9 +121,7 @@ class FetchSpoolReuseTest {
     var spool = PipelineFixture.WORKDIR.resolve("archives").resolve("fixture");
     try (var entries = Files.list(spool)) {
       assertEquals(
-          List.of(
-              PipelineFixture.commitSha("aa1") + ".tar.gz",
-              PipelineFixture.commitSha("aa2") + ".tar.gz"),
+          List.of("0.1.0", "0.2.0"),
           entries.map(path -> path.getFileName().toString()).sorted().toList());
     }
     assertTrue(Files.isDirectory(spool));

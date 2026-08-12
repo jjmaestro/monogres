@@ -14,17 +14,18 @@ import org.junit.jupiter.api.Test;
 
 /// How a tag name becomes the string a version is read from, which of the versions are kept, and
 /// which `versions` blocks are rejected rather than accepted and left doing nothing.
-class VersionSpecTest {
+class DiscoverySpecTest {
   private static final String CONFIG_TEMPLATE =
       """
       {
         "name": "fixture",
         "url": "https://github.com/monogres/fixture",
-        "versions": %s
+        "sources": { "gh": { "url": "https://x/{version}.tar.gz" } },
+        "versions": { "discover": %s }
       }
       """;
 
-  private static VersionSpec spec(String... regexAndReplacement) {
+  private static DiscoverySpec spec(String... regexAndReplacement) {
     var replace = new TagReplacement[regexAndReplacement.length / 2];
     for (var i = 0; i < replace.length; i++) {
       replace[i] =
@@ -32,11 +33,11 @@ class VersionSpecTest {
               Pattern.compile(regexAndReplacement[2 * i]), regexAndReplacement[2 * i + 1]);
     }
 
-    return new VersionSpec(replace, null, null, false);
+    return new DiscoverySpec(replace, null, null, null, false);
   }
 
-  private static VersionSpec satisfying(String range) {
-    return new VersionSpec(null, range, null, false);
+  private static DiscoverySpec satisfying(String range) {
+    return new DiscoverySpec(null, null, range, null, false);
   }
 
   private static MonobotConfig configWith(String versionsJson) throws Exception {
@@ -104,14 +105,14 @@ class VersionSpecTest {
 
   @Test
   void theSpecWithNoRulesRewritesNothing() {
-    assertEquals("v1.2.3", new VersionSpec().rewrite("v1.2.3"));
+    assertEquals("v1.2.3", new DiscoverySpec().rewrite("v1.2.3"));
   }
 
   // ---------------------------------------------------------------- selecting
 
   @Test
   void everyVersionIsKeptWhenThereIsNoRange() {
-    assertTrue(new VersionSpec().satisfiedBy(new Version("0.0.1")));
+    assertTrue(new DiscoverySpec().satisfiedBy(new Version("0.0.1")));
   }
 
   @Test
@@ -142,7 +143,7 @@ class VersionSpecTest {
 
   @Test
   void theCutoffIsReadAsAnInstant() {
-    var spec = new VersionSpec(null, null, "2020-01-01T00:00:00Z", true);
+    var spec = new DiscoverySpec(null, null, null, "2020-01-01T00:00:00Z", true);
 
     assertEquals(Instant.parse("2020-01-01T00:00:00Z"), spec.cutoff().orElseThrow());
     assertTrue(spec.keepNewest());
@@ -150,7 +151,7 @@ class VersionSpecTest {
 
   @Test
   void thereIsNoCutoffUnlessOneIsGiven() {
-    var spec = new VersionSpec();
+    var spec = new DiscoverySpec();
 
     assertTrue(spec.cutoff().isEmpty());
     assertFalse(spec.keepNewest());
@@ -185,13 +186,14 @@ class VersionSpecTest {
   @Test
   void cutoffThatIsNotAnInstantIsRejected() {
     assertThrows(
-        IllegalArgumentException.class, () -> new VersionSpec(null, null, "2020-01-01", false));
+        IllegalArgumentException.class,
+        () -> new DiscoverySpec(null, null, null, "2020-01-01", false));
   }
 
   @Test
   void keepNewestWithNothingToSpareItFromIsRejected() {
     assertThrows(
-        IllegalArgumentException.class, () -> new VersionSpec(null, ">=1.0.0", null, true));
+        IllegalArgumentException.class, () -> new DiscoverySpec(null, null, ">=1.0.0", null, true));
   }
 
   // ---------------------------------------------------------------- through Jackson
@@ -204,8 +206,8 @@ class VersionSpecTest {
             {"replace": [["REL_([0-9]+)_([0-9]+)_([0-9]+)", "$1.$2.$3"], ["REL_(.*)", "$1"]]}
             """);
 
-    assertEquals("1.2.3", monobotConfig.versionSpec().rewrite("REL_1_2_3"));
-    assertEquals("4.5.6", monobotConfig.versionSpec().rewrite("REL_4.5.6"));
+    assertEquals("1.2.3", monobotConfig.versionsSpec().discover().rewrite("REL_1_2_3"));
+    assertEquals("4.5.6", monobotConfig.versionsSpec().discover().rewrite("REL_4.5.6"));
   }
 
   @Test
@@ -215,7 +217,8 @@ class VersionSpecTest {
                 """
                 {"satisfy": ">=1.0.0 <2.0.0", "after": "2020-01-01T00:00:00Z", "keepNewest": true}
                 """)
-            .versionSpec();
+            .versionsSpec()
+            .discover();
 
     assertTrue(versionSpec.satisfiedBy(new Version("1.5.0")));
     assertFalse(versionSpec.satisfiedBy(new Version("2.0.0")));
@@ -225,7 +228,7 @@ class VersionSpecTest {
 
   @Test
   void theEmptyBlockRewritesNothingAndKeepsEverything() throws Exception {
-    var versionSpec = configWith("{}").versionSpec();
+    var versionSpec = configWith("{}").versionsSpec().discover();
 
     assertEquals("v1.2.3", versionSpec.rewrite("v1.2.3"));
     assertTrue(versionSpec.satisfiedBy(new Version("0.0.1")));
@@ -274,20 +277,21 @@ class VersionSpecTest {
         """);
   }
 
+  /// An entry with no `discover` block asks its forge nothing, which is what most of the catalog
+  /// does: it pins its versions, and there is no tag to read.
   @Test
-  void anAbsentBlockGivesTheSpecThatRewritesNothingAndKeepsEverything() throws Exception {
+  void anAbsentBlockMeansNoDiscoveryAtAll() throws Exception {
     var json =
         """
         {
           "name": "fixture",
-          "url": "https://github.com/monogres/fixture"
+          "sources": { "gh": { "url": "https://x/{version}.tar.gz" } },
+          "versions": { "pin": ["1.0.0"] }
         }
         """;
 
-    var versionSpec = new ObjectMapper().readValue(json, MonobotConfig.class).versionSpec();
+    var versionsSpec = new ObjectMapper().readValue(json, MonobotConfig.class).versionsSpec();
 
-    assertEquals("v1.2.3", versionSpec.rewrite("v1.2.3"));
-    assertTrue(versionSpec.satisfiedBy(new Version("0.0.1")));
-    assertTrue(versionSpec.cutoff().isEmpty());
+    assertTrue(versionsSpec.discovery().isEmpty());
   }
 }

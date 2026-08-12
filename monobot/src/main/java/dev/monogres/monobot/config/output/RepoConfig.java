@@ -6,10 +6,13 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import dev.monogres.monobot.config.Metadata;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
-/// Every property here is read through a getter, and Jackson derives getter order from
-/// `Class.getDeclaredMethods()`, whose order the JVM explicitly does not specify. Declaring the
-/// order keeps repo.json reproducible; see [VersionContext] for the same hazard.
-@JsonPropertyOrder({"sources", "versions", "metadata", "version"})
+/// One `repo.json`: the index the monogres Bazel build downloads an entry's archives from.
+///
+/// `version`, `sources`, `versions`, `metadata`, in that order, which is the order the catalog is
+/// written in. Jackson derives getter order from `Class.getDeclaredMethods()`, whose order the JVM
+/// explicitly does not specify, so declaring it is what keeps two runs over the same inputs
+/// producing the same bytes.
+@JsonPropertyOrder({"version", "sources", "versions", "metadata"})
 @RegisterForReflection
 public class RepoConfig {
   @JsonProperty("version")
@@ -45,6 +48,8 @@ public class RepoConfig {
     return versions;
   }
 
+  /// No Java caller, and load-bearing all the same: without it Jackson cannot see the field, and
+  /// reading a stored `repo.json` back throws.
   public Sources getSources() {
     return sources;
   }

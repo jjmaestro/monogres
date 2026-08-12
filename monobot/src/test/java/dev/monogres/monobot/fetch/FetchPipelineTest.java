@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.monogres.monobot.config.output.RepoConfig;
 import dev.monogres.monobot.digest.DigestUtils;
 import dev.monogres.monobot.git.GitTag;
 import dev.monogres.monobot.git.TagLister;
@@ -41,10 +42,10 @@ class FetchPipelineTest {
   private static final String GOLDEN = "golden/pipeline-repo.json";
   private static final String COMMIT = "8cf409d1b669e0e3e22fa79bb54027a4b555e822";
 
-  /// The archive's single top-level directory: what GitHub serves for this org, name and commit.
-  /// A literal rather than a call to the [dev.monogres.monobot.git.Repo] that predicts it, because
-  /// a fixture built from the formula agrees with the formula whatever the formula says.
-  private static final String STRIP_PREFIX = "monogres-fixture-8cf409d";
+  /// The archive's single top-level directory, written as a literal rather than materialized from
+  /// the `sources` block that predicts it: a fixture built from the formula agrees with the
+  /// formula whatever the formula says.
+  private static final String STRIP_PREFIX = "fixture-1.2.3";
 
   /// The bytes the golden's sha256 was computed from. Kept verbatim rather than built from
   /// [PipelineFixture#control] so a change to the helper cannot quietly move the digest.
@@ -58,9 +59,17 @@ class FetchPipelineTest {
   private static final String CONFIG =
       """
       {
-        "name": "%s",
-        "url": "https://github.com/monogres/%s",
-        "versions": { "replace": [["^v(.*)$", "$1"]] }
+        "name": "%1$s",
+        "url": "https://github.com/monogres/%1$s",
+        "sources": {
+          "gh": {
+            "tag": "v{version}",
+            "name": "%1$s",
+            "strip_prefix": "{name}-{version}",
+            "url": "https://github.com/monogres/{name}/archive/refs/tags/{tag}.tar.gz"
+          }
+        },
+        "versions": { "discover": { "replace": [["^v(.*)$", "$1"]] } }
       }
       """;
 
@@ -72,9 +81,10 @@ class FetchPipelineTest {
 
   @Inject ObjectMapper objectMapper;
 
-  /// Commit to the archive it names, so the [SourceArchive] stand-in can serve whichever version
-  /// the pipeline asks for. The path it is handed carries the commit and nothing else.
-  private final Map<String, byte[]> archivesByCommit = new HashMap<>();
+  /// Version to the archive it names, so the [SourceArchive] stand-in can serve whichever version
+  /// the pipeline asks for. The spool is addressed by version, so the directory the path is in
+  /// is what says which one.
+  private final Map<String, byte[]> archivesByVersion = new HashMap<>();
 
   private final List<Path> downloaded = new ArrayList<>();
 
@@ -85,11 +95,11 @@ class FetchPipelineTest {
     }
   }
 
-  private void serve(String extension, String version, String commit) throws IOException {
-    archivesByCommit.put(
-        commit,
+  private void serve(String extension, String version) throws IOException {
+    archivesByVersion.put(
+        version,
         PipelineFixture.controlArchive(
-            extension, extension + "-" + commit, PipelineFixture.control(version, version), 0L));
+            extension, extension + "-" + version, PipelineFixture.control(version, version), 0L));
   }
 
   private void tags(GitTag... gitTags) throws Exception {
@@ -107,17 +117,26 @@ class FetchPipelineTest {
     return out;
   }
 
-  private List<String> metadataKeysIn(String relativeDir, String category) throws IOException {
-    var tree = objectMapper.readTree(PipelineFixture.repoJson(relativeDir).toFile());
-    var out = new ArrayList<String>();
-    tree.get("metadata").get(category).fieldNames().forEachRemaining(out::add);
-    return out;
+  /// The versions the run wrote a control file for, which live beside the entry rather than in it,
+  /// put back into the order the entry lists its versions in.
+  private List<String> controlVersionsIn(String relativeDir) throws IOException {
+    var into = PipelineFixture.repoJson(relativeDir).getParent().resolve("metadata");
+    var written = new ArrayList<String>();
+    try (var entries = Files.list(into)) {
+      entries
+          .filter(version -> Files.exists(version.resolve("control.json")))
+          .forEach(version -> written.add(version.getFileName().toString()));
+    }
+    var order = versionsIn(relativeDir);
+    written.sort((left, right) -> Integer.compare(order.indexOf(left), order.indexOf(right)));
+
+    return written;
   }
 
   @BeforeEach
   void setUp() throws Exception {
     PipelineFixture.resetTree();
-    archivesByCommit.clear();
+    archivesByVersion.clear();
     downloaded.clear();
 
     // Stands in for the download: writes the archive the caller asked for where it asked for it
@@ -127,9 +146,9 @@ class FetchPipelineTest {
             invocation -> {
               Path target = invocation.getArgument(1);
               downloaded.add(target);
-              var commit = target.getFileName().toString().replace(".tar.gz", "");
-              var bytes = archivesByCommit.get(commit);
-              assertNotNull(bytes, "no archive registered for commit " + commit);
+              var version = target.getParent().getFileName().toString();
+              var bytes = archivesByVersion.get(version);
+              assertNotNull(bytes, "no archive registered for version " + version);
               Files.createDirectories(target.getParent());
               Files.write(target, bytes);
               return Future.succeededFuture(DigestUtils.sha256sum(ByteBuffer.wrap(bytes)));
@@ -138,9 +157,9 @@ class FetchPipelineTest {
 
   @Test
   void writesTheGoldenRepoJson() throws Exception {
-    PipelineFixture.writeConfig("extensions/fixture", CONFIG.formatted("fixture", "fixture"));
-    archivesByCommit.put(
-        COMMIT, PipelineFixture.archive(STRIP_PREFIX + "/fixture.control", CONTROL, 0L));
+    PipelineFixture.writeConfig("extensions/fixture", CONFIG.formatted("fixture"));
+    archivesByVersion.put(
+        "1.2.3", PipelineFixture.archive(STRIP_PREFIX + "/fixture.control", CONTROL, 0L));
     tags(new GitTag("v1.2.3", PipelineFixture.objectId(COMMIT)));
 
     run();
@@ -150,39 +169,42 @@ class FetchPipelineTest {
     assertEquals(golden(), Files.readString(written).stripTrailing());
   }
 
-  /// `strip_prefix` is a prediction about the archive a forge serves, and nothing else compares it
-  /// against one: the formula is asserted elsewhere against itself. The fixture archive really
-  /// carries the directory GitHub would have served for this org, name and commit, written as a
-  /// literal, so a formula that stopped agreeing with it shows up here.
+  /// `strip_prefix` is a template in the `sources` block rather than a value per version, so the
+  /// document carries a formula. Materializing it for the version that was fetched and comparing
+  /// that against the directory the archive really holds is what says the formula is right, and
+  /// nothing else in the pipeline compares the two.
   @Test
-  void theStripPrefixIsTheArchiveTopLevelDirectory() throws Exception {
-    PipelineFixture.writeConfig("extensions/fixture", CONFIG.formatted("fixture", "fixture"));
-    archivesByCommit.put(
-        COMMIT, PipelineFixture.archive(STRIP_PREFIX + "/fixture.control", CONTROL, 0L));
+  void theStripPrefixMaterializesToTheArchiveTopLevelDirectory() throws Exception {
+    PipelineFixture.writeConfig("extensions/fixture", CONFIG.formatted("fixture"));
+    archivesByVersion.put(
+        "1.2.3", PipelineFixture.archive(STRIP_PREFIX + "/fixture.control", CONTROL, 0L));
     tags(new GitTag("v1.2.3", PipelineFixture.objectId(COMMIT)));
 
     run();
 
+    var written =
+        objectMapper.readValue(
+            PipelineFixture.repoJson("extensions/fixture").toFile(), RepoConfig.class);
     var predicted =
-        objectMapper
-            .readTree(PipelineFixture.repoJson("extensions/fixture").toFile())
-            .get("versions")
-            .get("1.2.3")
-            .get("strip_prefix")
-            .asText();
+        written
+            .getSources()
+            .templates()
+            .getFirst()
+            .materialize("1.2.3", Map.of())
+            .get("strip_prefix");
 
     assertEquals(1, downloaded.size(), "the run fetched something other than the one tag");
     assertEquals(
         PipelineFixture.rootDirectoryOf(downloaded.get(0)),
         predicted,
-        "the strip prefix the run recorded is not the directory the archive actually carries");
+        "the strip prefix the document spells is not the directory the archive carries");
   }
 
   @Test
   void collectsEveryVersionInOneRunNewestFirst() throws Exception {
-    PipelineFixture.writeConfig("extensions/fixture", CONFIG.formatted("fixture", "fixture"));
+    PipelineFixture.writeConfig("extensions/fixture", CONFIG.formatted("fixture"));
     for (var version : List.of("0.1.0", "0.2.0", "0.3.0")) {
-      serve("fixture", version, PipelineFixture.commitSha("aa" + version.charAt(2)));
+      serve("fixture", version);
     }
     tags(
         new GitTag("v0.3.0", PipelineFixture.objectId("aa3")),
@@ -196,8 +218,8 @@ class FetchPipelineTest {
 
   @Test
   void rejectsTagsThatAreNotSemver() throws Exception {
-    PipelineFixture.writeConfig("extensions/fixture", CONFIG.formatted("fixture", "fixture"));
-    serve("fixture", "1.2.3", PipelineFixture.commitSha("aa3"));
+    PipelineFixture.writeConfig("extensions/fixture", CONFIG.formatted("fixture"));
+    serve("fixture", "1.2.3");
     tags(
         new GitTag("v1.2.3", PipelineFixture.objectId("aa3")),
         new GitTag("vlatest", PipelineFixture.objectId("bb1")),
@@ -210,10 +232,10 @@ class FetchPipelineTest {
   }
 
   @Test
-  void twoDigitComponentsOrderTheSameInVersionsAndMetadata() throws Exception {
-    PipelineFixture.writeConfig("extensions/fixture", CONFIG.formatted("fixture", "fixture"));
-    for (var seed : List.of("ca2", "ca9", "cb0")) {
-      serve("fixture", "1.0.0", PipelineFixture.commitSha(seed));
+  void twoDigitComponentsOrderNumericallyRatherThanAsText() throws Exception {
+    PipelineFixture.writeConfig("extensions/fixture", CONFIG.formatted("fixture"));
+    for (var version : List.of("1.2.0", "1.9.0", "1.10.0")) {
+      serve("fixture", version);
     }
     tags(
         new GitTag("v1.2.0", PipelineFixture.objectId("ca2")),
@@ -224,15 +246,15 @@ class FetchPipelineTest {
 
     var expected = List.of("1.10.0", "1.9.0", "1.2.0");
     assertEquals(expected, versionsIn("extensions/fixture"));
-    assertEquals(expected, metadataKeysIn("extensions/fixture", ".control"));
+    assertEquals(expected, controlVersionsIn("extensions/fixture"));
   }
 
   @Test
   void scansEveryExtensionItFinds() throws Exception {
-    PipelineFixture.writeConfig("extensions/alpha", CONFIG.formatted("alpha", "alpha"));
-    PipelineFixture.writeConfig("extensions/beta", CONFIG.formatted("beta", "beta"));
-    serve("alpha", "1.0.0", PipelineFixture.commitSha("a1"));
-    serve("beta", "2.0.0", PipelineFixture.commitSha("b1"));
+    PipelineFixture.writeConfig("extensions/alpha", CONFIG.formatted("alpha"));
+    PipelineFixture.writeConfig("extensions/beta", CONFIG.formatted("beta"));
+    serve("alpha", "1.0.0");
+    serve("beta", "2.0.0");
     when(tagLister.getTags(any()))
         .thenAnswer(
             invocation -> {
@@ -256,6 +278,8 @@ class FetchPipelineTest {
         {
           "name": "fixture",
           "url": "https://github.com/monogres/fixture",
+          "sources": { "gh": { "url": "https://x/{version}.tar.gz" } },
+          "versions": { "discover": { "replace": [["^v(.*)$", "$1"]] } },
           "disabled": true
         }
         """);
@@ -269,18 +293,24 @@ class FetchPipelineTest {
     assertTrue(downloaded.isEmpty(), "a disabled extension must download nothing");
   }
 
+  /// An archive carrying neither a control file nor PGXN metadata is still an archive with a
+  /// digest, and the digest is what `repo.json` is for. What it carried is written beside it, so
+  /// carrying nothing costs those files and not the entry.
   @Test
-  void writesNothingWhenNoArchiveCarriesMetadata() throws Exception {
-    PipelineFixture.writeConfig("extensions/fixture", CONFIG.formatted("fixture", "fixture"));
-    archivesByCommit.put(
-        PipelineFixture.commitSha("aa3"),
-        PipelineFixture.archive("fixture-aa3/README.md", "nothing to see", 0L));
+  void anArchiveCarryingNoMetadataIsStillCatalogued() throws Exception {
+    PipelineFixture.writeConfig("extensions/fixture", CONFIG.formatted("fixture"));
+    archivesByVersion.put(
+        "1.2.3", PipelineFixture.archive("fixture-1.2.3/README.md", "nothing to see", 0L));
     tags(new GitTag("v1.2.3", PipelineFixture.objectId("aa3")));
 
     run();
 
+    assertEquals(List.of("1.2.3"), versionsIn("extensions/fixture"));
     assertFalse(
-        Files.exists(PipelineFixture.repoJson("extensions/fixture")),
-        "an archive with neither META.json nor a control file must produce no repo.json");
+        Files.exists(
+            PipelineFixture.repoJson("extensions/fixture")
+                .getParent()
+                .resolve("metadata/1.2.3/control.json")),
+        "an archive with no control file must leave no control.json behind");
   }
 }

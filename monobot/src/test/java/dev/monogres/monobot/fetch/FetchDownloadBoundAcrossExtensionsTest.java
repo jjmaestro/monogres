@@ -44,9 +44,17 @@ class FetchDownloadBoundAcrossExtensionsTest {
   private static final String CONFIG =
       """
       {
-        "name": "%s",
-        "url": "https://github.com/monogres/%s",
-        "versions": { "replace": [["^v(.*)$", "$1"]] }
+        "name": "%1$s",
+        "url": "https://github.com/monogres/%1$s",
+        "sources": {
+          "gh": {
+            "tag": "v{version}",
+            "name": "%1$s",
+            "strip_prefix": "{name}-{version}",
+            "url": "https://github.com/monogres/{name}/archive/refs/tags/{tag}.tar.gz"
+          }
+        },
+        "versions": { "discover": { "replace": [["^v(.*)$", "$1"]] } }
       }
       """;
 
@@ -70,8 +78,7 @@ class FetchDownloadBoundAcrossExtensionsTest {
     pending.clear();
 
     for (var extension : EXTENSIONS) {
-      PipelineFixture.writeConfig(
-          "extensions/" + extension, CONFIG.formatted(extension, extension));
+      PipelineFixture.writeConfig("extensions/" + extension, CONFIG.formatted(extension));
     }
 
     when(tagLister.getTags(any()))
@@ -128,15 +135,11 @@ class FetchDownloadBoundAcrossExtensionsTest {
 
   private void release(int index) throws Exception {
     var target = asked.get(index);
-    var extension = target.getParent().getFileName().toString();
-    var commit = target.getFileName().toString().replace(".tar.gz", "");
-    var version = "0." + commit.charAt(2) + ".0";
+    var version = target.getParent().getFileName().toString();
+    var extension = target.getParent().getParent().getFileName().toString();
     var bytes =
         PipelineFixture.controlArchive(
-            extension,
-            "monogres-" + extension + "-" + commit.substring(0, 7),
-            PipelineFixture.control(version, version),
-            0L);
+            extension, extension + "-" + version, PipelineFixture.control(version, version), 0L);
     Files.createDirectories(target.getParent());
     Files.write(target, bytes);
     pending.get(index).complete(DigestUtils.sha256sum(ByteBuffer.wrap(bytes)));

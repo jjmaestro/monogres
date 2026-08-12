@@ -31,9 +31,17 @@ class FetchOutputPathTest {
   private static final String CONFIG =
       """
       {
-        "name": "%s",
-        "url": "https://github.com/monogres/%s",
-        "versions": { "replace": [["^v(.*)$", "$1"]] }
+        "name": "%1$s",
+        "url": "https://github.com/monogres/%1$s",
+        "sources": {
+          "gh": {
+            "tag": "v{version}",
+            "name": "%1$s",
+            "strip_prefix": "{name}-{version}",
+            "url": "https://github.com/monogres/{name}/archive/refs/tags/{tag}.tar.gz"
+          }
+        },
+        "versions": { "discover": { "replace": [["^v(.*)$", "$1"]] } }
       }
       """;
 
@@ -53,12 +61,12 @@ class FetchOutputPathTest {
         .thenAnswer(
             invocation -> {
               Path target = invocation.getArgument(1);
-              var commit = target.getFileName().toString().replace(".tar.gz", "");
-              var extension = target.getParent().getFileName().toString();
+              var version = target.getParent().getFileName().toString();
+              var extension = target.getParent().getParent().getFileName().toString();
               var bytes =
                   PipelineFixture.controlArchive(
                       extension,
-                      extension + "-" + commit,
+                      extension + "-" + version,
                       PipelineFixture.control("1.0.0", extension),
                       0L);
               Files.createDirectories(target.getParent());
@@ -67,21 +75,21 @@ class FetchOutputPathTest {
             });
   }
 
+  /// The comment the archive at this path carried, read out of the control file the run wrote
+  /// beside the entry. It names the extension, so it is what says which entry a document is.
   private String commentIn(String relativeDir) throws Exception {
     var written = PipelineFixture.repoJson(relativeDir);
     assertTrue(Files.exists(written), "the pipeline wrote no repo.json at " + written);
+
     return objectMapper
-        .readTree(written.toFile())
-        .get("metadata")
-        .get(".control")
-        .get("1.0.0")
+        .readTree(written.getParent().resolve("metadata/1.0.0/control.json").toFile())
         .get("comment")
         .asText();
   }
 
   @Test
   void outputMirrorsTheConfigPathBelowConfigDir() throws Exception {
-    PipelineFixture.writeConfig("extensions/envvar", CONFIG.formatted("envvar", "envvar"));
+    PipelineFixture.writeConfig("extensions/envvar", CONFIG.formatted("envvar"));
     when(tagLister.getTags(any()))
         .thenReturn(new GitTag[] {new GitTag("v1.0.0", PipelineFixture.objectId("a1"))});
 
@@ -92,8 +100,8 @@ class FetchOutputPathTest {
 
   @Test
   void twoConfigsSharingLeafNameDoNotOverwriteEachOther() throws Exception {
-    PipelineFixture.writeConfig("extensions/envvar", CONFIG.formatted("envvar", "envvar"));
-    PipelineFixture.writeConfig("contrib/envvar", CONFIG.formatted("contrib", "contrib"));
+    PipelineFixture.writeConfig("extensions/envvar", CONFIG.formatted("envvar"));
+    PipelineFixture.writeConfig("contrib/envvar", CONFIG.formatted("contrib"));
     when(tagLister.getTags(any()))
         .thenReturn(new GitTag[] {new GitTag("v1.0.0", PipelineFixture.objectId("a1"))});
 

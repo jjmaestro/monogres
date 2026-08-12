@@ -45,7 +45,15 @@ class FetchDownloadBoundTest {
       {
         "name": "fixture",
         "url": "https://github.com/monogres/fixture",
-        "versions": { "replace": [["^v(.*)$", "$1"]] }
+        "sources": {
+          "gh": {
+            "tag": "v{version}",
+            "name": "fixture",
+            "strip_prefix": "{name}-{version}",
+            "url": "https://github.com/monogres/{name}/archive/refs/tags/{tag}.tar.gz"
+          }
+        },
+        "versions": { "discover": { "replace": [["^v(.*)$", "$1"]] } }
       }
       """;
 
@@ -100,11 +108,10 @@ class FetchDownloadBoundTest {
 
   private void release(int index) throws Exception {
     var target = asked.get(index);
-    var commit = target.getFileName().toString().replace(".tar.gz", "");
-    var version = "0." + commit.charAt(2) + ".0";
+    var version = target.getParent().getFileName().toString();
     var bytes =
         PipelineFixture.controlArchive(
-            "fixture", "fixture-" + commit, PipelineFixture.control(version, version), 0L);
+            "fixture", "fixture-" + version, PipelineFixture.control(version, version), 0L);
     Files.createDirectories(target.getParent());
     Files.write(target, bytes);
     pending.get(index).complete(DigestUtils.sha256sum(ByteBuffer.wrap(bytes)));

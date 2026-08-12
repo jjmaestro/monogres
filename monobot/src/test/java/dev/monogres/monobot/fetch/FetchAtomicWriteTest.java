@@ -63,7 +63,7 @@ class FetchAtomicWriteTest {
   void writeThatStopsPartwayLeavesTheStoredDocumentAlone() throws Exception {
     assertThrows(
         RuntimeException.class,
-        () -> fetch().writeConfigFile(directory, "repo.json", new HalfWritable()));
+        () -> fetch().writeDocument(directory, "repo.json", new HalfWritable()));
 
     assertEquals(STORED, Files.readString(target));
   }
@@ -72,7 +72,7 @@ class FetchAtomicWriteTest {
   void writeThatStopsPartwayLeavesNothingBehindInTheDirectory() throws Exception {
     assertThrows(
         RuntimeException.class,
-        () -> fetch().writeConfigFile(directory, "repo.json", new HalfWritable()));
+        () -> fetch().writeDocument(directory, "repo.json", new HalfWritable()));
 
     try (var entries = Files.list(directory)) {
       assertEquals(List.of(target), entries.toList(), "the write left a file beside repo.json");
@@ -81,7 +81,7 @@ class FetchAtomicWriteTest {
 
   @Test
   void completedWriteReplacesTheStoredDocument() throws Exception {
-    fetch().writeConfigFile(directory, "repo.json", List.of("replaced"));
+    fetch().writeDocument(directory, "repo.json", List.of("replaced"));
 
     assertEquals("[\"replaced\"]\n", Files.readString(target));
     try (var entries = Files.list(directory)) {

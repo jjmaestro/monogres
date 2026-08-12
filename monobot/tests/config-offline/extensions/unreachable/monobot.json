@@ -1,4 +1,19 @@
 {
   "name": "unreachable",
-  "url": "https://github.com/ongres/monobot-no-such-repository"
+  "url": "https://github.com/ongres/monobot-no-such-repository",
+  "sources": {
+    "gh": {
+      "tag": "v{version}",
+      "gh_org": "ongres",
+      "name": "monobot-no-such-repository",
+      "filename": "{tag}",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/{gh_org}/{name}/archive/refs/tags/{filename}.tar.gz"
+    }
+  },
+  "versions": {
+    "discover": {
+      "replace": [["^v(.*)$", "$1"]]
+    }
+  }
 }

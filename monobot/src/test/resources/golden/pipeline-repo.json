@@ -1,29 +1,17 @@
 {
+  "version": 1,
   "sources": {
-    "github.com": {
-      "url": "https://api.github.com/repos/monogres/fixture/tarball/{commit}",
-      "type": "tar.gz"
+    "gh": {
+      "tag": "v{version}",
+      "name": "fixture",
+      "strip_prefix": "{name}-{version}",
+      "url": "https://github.com/monogres/{name}/archive/refs/tags/{tag}.tar.gz"
     }
   },
   "versions": {
     "1.2.3": {
-      "tag": "v1.2.3",
-      "sha256": "a368ed4acab124596fc167c76836182f0a403ff558a8d8845b88b9dcea107c45",
-      "strip_prefix": "monogres-fixture-8cf409d",
-      "commit": "8cf409d1b669e0e3e22fa79bb54027a4b555e822",
-      "short_commit": "8cf409d"
+      "sha256": "e58e7446baf416e361c75e9e2218a21ae73d9a6ec09bc9959571a5b70192ee69"
     }
   },
-  "metadata": {
-    ".control": {
-      "1.2.3": {
-        "default_version": "1.2.3",
-        "comment": "a fixture extension",
-        "superuser": true,
-        "trusted": false,
-        "relocatable": false
-      }
-    }
-  },
-  "version": 1
+  "metadata": {}
 }

@@ -39,9 +39,17 @@ class FetchStoredConfigTest {
   private static final String CONFIG =
       """
       {
-        "name": "%s",
-        "url": "https://github.com/monogres/%s",
-        "versions": { "replace": [["^v(.*)$", "$1"]] }
+        "name": "%1$s",
+        "url": "https://github.com/monogres/%1$s",
+        "sources": {
+          "gh": {
+            "tag": "v{version}",
+            "name": "%1$s",
+            "strip_prefix": "{name}-{version}",
+            "url": "https://github.com/monogres/{name}/archive/refs/tags/{tag}.tar.gz"
+          }
+        },
+        "versions": { "discover": { "replace": [["^v(.*)$", "$1"]] } }
       }
       """;
 
@@ -63,14 +71,13 @@ class FetchStoredConfigTest {
 
   @Inject ObjectMapper objectMapper;
 
-  private final Map<String, byte[]> archivesByCommit = new HashMap<>();
+  private final Map<String, byte[]> archivesByVersion = new HashMap<>();
 
-  private void serve(String extension, String version, String seed) throws IOException {
-    var commit = PipelineFixture.commitSha(seed);
-    archivesByCommit.put(
-        commit,
+  private void serve(String extension, String version) throws IOException {
+    archivesByVersion.put(
+        version,
         PipelineFixture.controlArchive(
-            extension, extension + "-" + commit, PipelineFixture.control(version, version), 0L));
+            extension, extension + "-" + version, PipelineFixture.control(version, version), 0L));
   }
 
   private static void awaitSettled(Future<Void> future) throws Exception {
@@ -91,7 +98,7 @@ class FetchStoredConfigTest {
   @BeforeEach
   void setUp() throws Exception {
     PipelineFixture.resetTree();
-    archivesByCommit.clear();
+    archivesByVersion.clear();
 
     when(tagLister.getTags(any()))
         .thenAnswer(
@@ -106,9 +113,9 @@ class FetchStoredConfigTest {
         .thenAnswer(
             invocation -> {
               Path target = invocation.getArgument(1);
-              var commit = target.getFileName().toString().replace(".tar.gz", "");
-              var bytes = archivesByCommit.get(commit);
-              assertNotNull(bytes, "no archive registered for commit " + commit);
+              var version = target.getParent().getFileName().toString();
+              var bytes = archivesByVersion.get(version);
+              assertNotNull(bytes, "no archive registered for version " + version);
               Files.createDirectories(target.getParent());
               Files.write(target, bytes);
               return Future.succeededFuture(DigestUtils.sha256sum(ByteBuffer.wrap(bytes)));
@@ -117,11 +124,11 @@ class FetchStoredConfigTest {
 
   @Test
   void oneTornRepoJsonLeavesTheOtherExtensionsAlone() throws Exception {
-    PipelineFixture.writeConfig("extensions/alpha", CONFIG.formatted("alpha", "alpha"));
-    PipelineFixture.writeConfig("extensions/beta", CONFIG.formatted("beta", "beta"));
+    PipelineFixture.writeConfig("extensions/alpha", CONFIG.formatted("alpha"));
+    PipelineFixture.writeConfig("extensions/beta", CONFIG.formatted("beta"));
     PipelineFixture.writeRepoJson("extensions/beta", TORN_REPO_JSON);
-    serve("alpha", "1.0.0", "a1");
-    serve("beta", "2.0.0", "b1");
+    serve("alpha", "1.0.0");
+    serve("beta", "2.0.0");
 
     awaitSettled(scan.run());
 
@@ -134,9 +141,9 @@ class FetchStoredConfigTest {
 
   @Test
   void oneMalformedMonobotJsonLeavesTheOtherExtensionsAlone() throws Exception {
-    PipelineFixture.writeConfig("extensions/alpha", CONFIG.formatted("alpha", "alpha"));
+    PipelineFixture.writeConfig("extensions/alpha", CONFIG.formatted("alpha"));
     PipelineFixture.writeConfig("extensions/beta", "{ \"name\": \"beta\", ");
-    serve("alpha", "1.0.0", "a1");
+    serve("alpha", "1.0.0");
 
     awaitSettled(scan.run());
 
@@ -148,7 +155,7 @@ class FetchStoredConfigTest {
 
   @Test
   void theRunReportsAnUnreadableStoredDocument() throws Exception {
-    PipelineFixture.writeConfig("extensions/beta", CONFIG.formatted("beta", "beta"));
+    PipelineFixture.writeConfig("extensions/beta", CONFIG.formatted("beta"));
     PipelineFixture.writeRepoJson("extensions/beta", TORN_REPO_JSON);
 
     var scanFuture = scan.run();

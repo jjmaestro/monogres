@@ -128,15 +128,18 @@ class VersionTest {
     assertEquals(new Version("1.2.3").hashCode(), new Version("1.2.3").hashCode());
   }
 
+  /// Newest first is what almost every catalog entry carries and what a discovered version is
+  /// inserted as, but babelfish reads `4.0` then `5.1`. So the map keeps what it was given and the
+  /// caller decides the order, rather than a comparator turning one entry around.
   @Test
-  void versionsIsNewestFirst() {
+  void versionsKeepsTheOrderItWasGiven() {
     var versions = new Versions();
     versions.put(new Version("1.9.0"), null);
     versions.put(new Version("1.10.0"), null);
     versions.put(new Version("0.1.0"), null);
 
     assertEquals(
-        List.of("1.10.0", "1.9.0", "0.1.0"),
+        List.of("1.9.0", "1.10.0", "0.1.0"),
         versions.keySet().stream().map(Version::version).toList());
   }
 }

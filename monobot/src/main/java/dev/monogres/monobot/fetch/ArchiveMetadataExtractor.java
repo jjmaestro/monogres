@@ -1,10 +1,8 @@
 package dev.monogres.monobot.fetch;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.monogres.monobot.config.Metadata;
-import dev.monogres.monobot.config.MetadataContext;
-import dev.monogres.monobot.config.output.Version;
 import dev.monogres.monobot.postgres.extensions.control.Control;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
@@ -74,39 +72,27 @@ public class ArchiveMetadataExtractor {
     }
   }
 
-  private MetadataContext controlContext(Version version, byte[] controlBytes, Metadata metadata) {
-    var metadataContext =
-        metadata.containsKey(POSTGRES_CONTROL_FILE_EXTENSION)
-            ? metadata.get(POSTGRES_CONTROL_FILE_EXTENSION)
-            : new MetadataContext();
-
+  /// The control file as the directives it declares, which is what a reader of it wants: the
+  /// grammar is Postgres's and parsing it is the one thing here that needs to know that grammar.
+  public JsonNode controlOf(byte[] controlBytes) {
     var control = Control.fromBytes(controlBytes);
     try {
       // It is simpler to use mapper.readTree(control). But it does not respect null serialization
       // preferences
-      var controlJsonNode = objectMapper.readTree(objectMapper.writeValueAsString(control));
-      metadataContext.put(version.version(), controlJsonNode);
+      return objectMapper.readTree(objectMapper.writeValueAsString(control));
     } catch (JsonProcessingException e) {
       throw new RuntimeException(e);
     }
-
-    return metadataContext;
   }
 
-  private MetadataContext metaJsonContext(Version version, byte[] metaJson, Metadata metadata) {
-    var metadataContext =
-        metadata.containsKey(PGXN_META_JSON_FILENAME)
-            ? metadata.get(PGXN_META_JSON_FILENAME)
-            : new MetadataContext();
-
+  /// PGXN metadata as the archive carried it. Read only to be written back, so that whatever a
+  /// consumer wants out of it is there rather than whatever monobot thought to model.
+  public JsonNode metaJsonOf(byte[] metaJson) {
     try {
-      var jsonNode = objectMapper.readTree(metaJson);
-      metadataContext.put(version.version(), jsonNode);
+      return objectMapper.readTree(metaJson);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
-
-    return metadataContext;
   }
 
   /// Everything one archive answers for, taken in one pass over it.
@@ -186,7 +172,7 @@ public class ArchiveMetadataExtractor {
           metaJson =
               choose(
                   metaJson, entry, extractFromArchive(tarIn, entry, MAX_SIZE_BYTES_PGXN_META_JSON));
-        } else if (fileName.equals(name + POSTGRES_CONTROL_FILE_EXTENSION)) {
+        } else if (name != null && fileName.equals(name + POSTGRES_CONTROL_FILE_EXTENSION)) {
           control =
               choose(
                   control,
@@ -202,16 +188,5 @@ public class ArchiveMetadataExtractor {
         lastModified,
         metaJson == null ? null : metaJson.bytes(),
         control == null ? null : control.bytes());
-  }
-
-  public void addContents(Version version, ArchiveContents contents, Metadata metadata) {
-    if (contents.metaJson() != null) {
-      metadata.put(
-          PGXN_META_JSON_FILENAME, metaJsonContext(version, contents.metaJson(), metadata));
-    }
-    if (contents.control() != null) {
-      metadata.put(
-          POSTGRES_CONTROL_FILE_EXTENSION, controlContext(version, contents.control(), metadata));
-    }
   }
 }

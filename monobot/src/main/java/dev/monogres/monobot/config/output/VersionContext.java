@@ -1,58 +1,43 @@
 package dev.monogres.monobot.config.output;
 
-import com.fasterxml.jackson.annotation.JsonGetter;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.fasterxml.jackson.annotation.JsonSetter;
-import dev.monogres.monobot.git.ObjectIdUtils;
 import io.quarkus.runtime.annotations.RegisterForReflection;
-import org.eclipse.jgit.lib.ObjectId;
+import java.util.LinkedHashMap;
+import java.util.SequencedMap;
 
-/// `tag`, `sha256` and `strip_prefix` are serialized from fields while `commit` and
-/// `short_commit` come from getters, and Jackson derives the latter from
-/// `Class.getDeclaredMethods()`, whose order the JVM explicitly does not specify. Without a
-/// declared order the two commit keys swap between runs, so repo.json is not reproducible.
-@JsonPropertyOrder({"tag", "sha256", "strip_prefix", "commit", "short_commit"})
+/// What one version carries besides its own string: the placeholders its `sources` block reads and
+/// cannot spell on its own, and the digest of the archive they name.
+///
+/// `sha256` is written last, after whatever the templates owe. The reader materializes the version
+/// context before the source properties, so the order does not change which archive is named; it
+/// is the order the catalog is written in, and the document has to come back byte for byte.
+///
+/// A string map rather than named fields, because what a version owes is decided by the templates
+/// rather than by this: `upstream_version` for hll, `tag` for postgres, `tag` and `tag_dir` for
+/// age, a `commit` where there is no tag at all.
 @RegisterForReflection
-public class VersionContext {
-  @JsonProperty(value = "tag")
-  private String tag;
+public class VersionContext extends LinkedHashMap<String, String> {
 
-  @JsonIgnore private ObjectId objectId;
+  private static final long serialVersionUID = 1L;
 
-  @JsonProperty(value = "sha256")
-  private String archiveSha256;
+  public static final String SHA256 = "sha256";
 
-  @JsonProperty(value = "strip_prefix")
-  private String stripPrefix;
+  public VersionContext() {}
 
-  private VersionContext() {}
-
-  public VersionContext(String tag, ObjectId objectId, String archiveSha256, String stripPrefix) {
-    this.tag = tag;
-    this.objectId = objectId;
-    this.archiveSha256 = archiveSha256;
-    this.stripPrefix = stripPrefix;
+  public VersionContext(SequencedMap<String, String> derived, String sha256) {
+    putAll(derived);
+    put(SHA256, sha256);
   }
 
-  @JsonGetter(value = "commit")
-  public String getCommit() {
-    return objectId.name();
+  public String sha256() {
+    return get(SHA256);
   }
 
-  @JsonGetter(value = "short_commit")
-  public String getShortCommit() {
-    return ObjectIdUtils.shortCommit(objectId);
-  }
+  /// The context without the digest, which is what a `monobot.json` pins and what materializing a
+  /// source block reads.
+  public SequencedMap<String, String> derived() {
+    var derived = new LinkedHashMap<>(this);
+    derived.remove(SHA256);
 
-  @JsonSetter(value = "commit")
-  public void fromObjectId(String objectId) {
-    this.objectId = ObjectId.fromString(objectId);
-  }
-
-  @JsonSetter(value = "strip_prefix")
-  public void setStripPrefix(String stripPrefix) {
-    this.stripPrefix = stripPrefix;
+    return derived;
   }
 }

@@ -1,7 +1,6 @@
 package dev.monogres.monobot.fetch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -22,7 +21,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -45,7 +43,15 @@ class FetchMetadataTest {
       {
         "name": "fixture",
         "url": "https://github.com/monogres/fixture",
-        "versions": { "replace": [["^v(.*)$", "$1"]] }
+        "sources": {
+          "gh": {
+            "tag": "v{version}",
+            "name": "fixture",
+            "strip_prefix": "{name}-{version}",
+            "url": "https://github.com/monogres/{name}/archive/refs/tags/{tag}.tar.gz"
+          }
+        },
+        "versions": { "discover": { "replace": [["^v(.*)$", "$1"]] } }
       }
       """;
 
@@ -77,12 +83,12 @@ class FetchMetadataTest {
 
   @Inject ObjectMapper objectMapper;
 
-  private final Map<String, byte[]> archivesByCommit = new HashMap<>();
+  private final Map<String, byte[]> archivesByVersion = new HashMap<>();
 
   @BeforeEach
   void setUp() throws Exception {
     PipelineFixture.resetTree();
-    archivesByCommit.clear();
+    archivesByVersion.clear();
     PipelineFixture.writeConfig(EXTENSION_DIR, CONFIG);
 
     when(tagLister.getTags(any()))
@@ -92,9 +98,9 @@ class FetchMetadataTest {
         .thenAnswer(
             invocation -> {
               Path target = invocation.getArgument(1);
-              var commit = target.getFileName().toString().replace(".tar.gz", "");
-              var bytes = archivesByCommit.get(commit);
-              assertNotNull(bytes, "no archive registered for commit " + commit);
+              var version = target.getParent().getFileName().toString();
+              var bytes = archivesByVersion.get(version);
+              assertNotNull(bytes, "no archive registered for version " + version);
               Files.createDirectories(target.getParent());
               Files.write(target, bytes);
               return Future.succeededFuture(DigestUtils.sha256sum(ByteBuffer.wrap(bytes)));
@@ -102,7 +108,7 @@ class FetchMetadataTest {
   }
 
   private void serve(Map<String, String> entries) throws IOException {
-    archivesByCommit.put(PipelineFixture.commitSha("aa1"), PipelineFixture.archive(entries, 0L));
+    archivesByVersion.put("1.0.0", PipelineFixture.archive(entries, 0L));
   }
 
   private void run() throws Exception {
@@ -118,23 +124,25 @@ class FetchMetadataTest {
     return entries;
   }
 
-  private List<String> metadataCategories() throws IOException {
-    var out = new ArrayList<String>();
-    objectMapper
-        .readTree(PipelineFixture.repoJson(EXTENSION_DIR).toFile())
-        .get("metadata")
-        .fieldNames()
-        .forEachRemaining(out::add);
-
-    return out;
+  /// The files the run wrote beside the entry for this version, which is where what an archive
+  /// carried goes now that `repo.json` is an index of archives rather than of their contents.
+  private List<String> extractedFiles() throws IOException {
+    var into = PipelineFixture.repoJson(EXTENSION_DIR).getParent().resolve("metadata/1.0.0");
+    if (!Files.isDirectory(into)) {
+      return List.of();
+    }
+    try (var files = Files.list(into)) {
+      return files.map(file -> file.getFileName().toString()).sorted().toList();
+    }
   }
 
-  private JsonNode metadata(String category) throws IOException {
-    return objectMapper
-        .readTree(PipelineFixture.repoJson(EXTENSION_DIR).toFile())
-        .get("metadata")
-        .get(category)
-        .get("1.0.0");
+  private JsonNode extracted(String filename) throws IOException {
+    return objectMapper.readTree(
+        PipelineFixture.repoJson(EXTENSION_DIR)
+            .getParent()
+            .resolve("metadata/1.0.0")
+            .resolve(filename)
+            .toFile());
   }
 
   @Test
@@ -143,8 +151,8 @@ class FetchMetadataTest {
 
     run();
 
-    assertEquals(List.of(".control"), metadataCategories());
-    assertEquals("a fixture extension", metadata(".control").get("comment").asText());
+    assertEquals(List.of("control.json"), extractedFiles());
+    assertEquals("a fixture extension", extracted("control.json").get("comment").asText());
   }
 
   /// The PGXN branch. A distribution that ships only a META.json is catalogued from it, verbatim.
@@ -154,9 +162,9 @@ class FetchMetadataTest {
 
     run();
 
-    assertEquals(List.of("META.json"), metadataCategories());
-    assertEquals("postgresql", metadata("META.json").get("license").asText());
-    assertEquals("1.0.0", metadata("META.json").get("meta-spec").get("version").asText());
+    assertEquals(List.of("META.json"), extractedFiles());
+    assertEquals("postgresql", extracted("META.json").get("license").asText());
+    assertEquals("1.0.0", extracted("META.json").get("meta-spec").get("version").asText());
   }
 
   @Test
@@ -165,20 +173,24 @@ class FetchMetadataTest {
 
     run();
 
-    assertEquals(List.of(".control", "META.json"), metadataCategories());
-    assertEquals("a fixture extension", metadata(".control").get("comment").asText());
-    assertEquals("postgresql", metadata("META.json").get("license").asText());
+    assertEquals(List.of("META.json", "control.json"), extractedFiles());
+    assertEquals("a fixture extension", extracted("control.json").get("comment").asText());
+    assertEquals("postgresql", extracted("META.json").get("license").asText());
   }
 
+  /// An archive carrying neither is still an archive with a digest, and the digest is what
+  /// `repo.json` is for. What an archive carried is written beside the entry, so carrying nothing
+  /// costs those files and not the entry.
   @Test
-  void neitherLeavesTheExtensionOutOfTheCatalog() throws Exception {
+  void neitherStillLeavesTheVersionInTheCatalog() throws Exception {
     serve(entries("README.md", "nothing here"));
 
     run();
 
-    assertFalse(
+    assertTrue(
         Files.exists(PipelineFixture.repoJson(EXTENSION_DIR)),
-        "a version the archive says nothing about is not a catalog entry");
+        "a version whose archive says nothing about it is still a version");
+    assertEquals(List.of(), extractedFiles());
   }
 
   /// `requires` is a comma-separated list in the file and an array in the catalog, which is the
@@ -189,7 +201,7 @@ class FetchMetadataTest {
 
     run();
 
-    var requires = metadata(".control").get("requires");
+    var requires = extracted("control.json").get("requires");
     assertTrue(requires.isArray(), "requires reached the catalog as " + requires.getNodeType());
     assertEquals(
         List.of("plpgsql", "hstore"), List.of(requires.get(0).asText(), requires.get(1).asText()));

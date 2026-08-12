@@ -39,9 +39,17 @@ class FetchArchiveFailureTest {
   private static final String CONFIG =
       """
       {
-        "name": "%s",
-        "url": "https://github.com/monogres/%s",
-        "versions": { "replace": [["^v(.*)$", "$1"]] }
+        "name": "%1$s",
+        "url": "https://github.com/monogres/%1$s",
+        "sources": {
+          "gh": {
+            "tag": "v{version}",
+            "name": "%1$s",
+            "strip_prefix": "{name}-{version}",
+            "url": "https://github.com/monogres/{name}/archive/refs/tags/{tag}.tar.gz"
+          }
+        },
+        "versions": { "discover": { "replace": [["^v(.*)$", "$1"]] } }
       }
       """;
 
@@ -57,18 +65,17 @@ class FetchArchiveFailureTest {
 
   @Inject ObjectMapper objectMapper;
 
-  private final Map<String, byte[]> archivesByCommit = new HashMap<>();
+  private final Map<String, byte[]> archivesByVersion = new HashMap<>();
 
-  private void serve(String extension, String version, String seed) throws IOException {
-    var commit = PipelineFixture.commitSha(seed);
-    archivesByCommit.put(
-        commit,
+  private void serve(String extension, String version) throws IOException {
+    archivesByVersion.put(
+        version,
         PipelineFixture.controlArchive(
-            extension, extension + "-" + commit, PipelineFixture.control(version, version), 0L));
+            extension, extension + "-" + version, PipelineFixture.control(version, version), 0L));
   }
 
-  private void serveUnreadable(String seed) {
-    archivesByCommit.put(PipelineFixture.commitSha(seed), NOT_AN_ARCHIVE);
+  private void serveUnreadable(String version) {
+    archivesByVersion.put(version, NOT_AN_ARCHIVE);
   }
 
   private void run() throws Exception {
@@ -87,15 +94,15 @@ class FetchArchiveFailureTest {
   @BeforeEach
   void setUp() throws Exception {
     PipelineFixture.resetTree();
-    archivesByCommit.clear();
+    archivesByVersion.clear();
 
     when(sourceArchive.sha256UrlFile(any(), any()))
         .thenAnswer(
             invocation -> {
               Path target = invocation.getArgument(1);
-              var commit = target.getFileName().toString().replace(".tar.gz", "");
-              var bytes = archivesByCommit.get(commit);
-              assertNotNull(bytes, "no archive registered for commit " + commit);
+              var version = target.getParent().getFileName().toString();
+              var bytes = archivesByVersion.get(version);
+              assertNotNull(bytes, "no archive registered for version " + version);
               Files.createDirectories(target.getParent());
               Files.write(target, bytes);
               return Future.succeededFuture(DigestUtils.sha256sum(ByteBuffer.wrap(bytes)));
@@ -104,10 +111,10 @@ class FetchArchiveFailureTest {
 
   @Test
   void theVersionsAroundAnUnreadableArchiveAreStillCatalogued() throws Exception {
-    PipelineFixture.writeConfig("extensions/fixture", CONFIG.formatted("fixture", "fixture"));
-    serve("fixture", "0.1.0", "aa1");
-    serveUnreadable("aa2");
-    serve("fixture", "0.3.0", "aa3");
+    PipelineFixture.writeConfig("extensions/fixture", CONFIG.formatted("fixture"));
+    serve("fixture", "0.1.0");
+    serveUnreadable("0.2.0");
+    serve("fixture", "0.3.0");
     when(tagLister.getTags(any()))
         .thenReturn(
             new GitTag[] {
@@ -123,10 +130,10 @@ class FetchArchiveFailureTest {
 
   @Test
   void anUnreadableArchiveInOneExtensionLeavesTheOthersAlone() throws Exception {
-    PipelineFixture.writeConfig("extensions/alpha", CONFIG.formatted("alpha", "alpha"));
-    PipelineFixture.writeConfig("extensions/beta", CONFIG.formatted("beta", "beta"));
-    serve("alpha", "1.0.0", "a1");
-    serveUnreadable("b1");
+    PipelineFixture.writeConfig("extensions/alpha", CONFIG.formatted("alpha"));
+    PipelineFixture.writeConfig("extensions/beta", CONFIG.formatted("beta"));
+    serve("alpha", "1.0.0");
+    serveUnreadable("2.0.0");
     when(tagLister.getTags(any()))
         .thenAnswer(
             invocation -> {
